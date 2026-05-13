@@ -1,0 +1,15 @@
+/************************************************************************
+ PedalForge — Minimal FAUST Architecture File
+
+ This architecture includes FaustTypes.h for the base classes (dsp, UI, Meta)
+ and provides the injection points for the FAUST compiler.
+
+ Each generated header has its own include guard (e.g. __overdrive_H__)
+ provided by the FAUST compiler, so no additional guard is needed here.
+ ************************************************************************/
+
+#include "source/engine/FaustTypes.h"
+
+<<includeIntrinsic>>
+
+<<includeclass>>

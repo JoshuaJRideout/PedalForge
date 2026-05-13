@@ -1,0 +1,32 @@
+# Build
+build/
+cmake-build-*/
+
+# FAUST generated C++
+faust/generated/*.h
+!faust/generated/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.xcodeproj/
+*.xcworkspace/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Compiled objects
+*.o
+*.a
+*.dylib
+*.so
+
+# Test binaries
+test_dijkstra
+
+# Plugin builds
+*.vst3/
+*.component/
+*.app/
