@@ -1706,3 +1706,4 @@ private:
 #include "LogicNodeLibrary.h"
 #include "MidiNodeLibrary.h"
 #include "ControlNodeLibrary.h"
+#include "PeripheralNodeLibrary.h"

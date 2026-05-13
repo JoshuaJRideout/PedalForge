@@ -170,6 +170,13 @@ juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
     if (type == "ctrl_knob" || type == "ctrl_fader" || type == "ctrl_button"
         || type == "ctrl_toggle" || type == "ctrl_selector" || type == "ctrl_xy")
         return juce::Colour (0xFFE8A855);
+    // Displays & Lights — soft cyan
+    if (type == "disp_led" || type == "disp_rgb_led" || type == "disp_display"
+        || type == "disp_vu" || type == "disp_tuner")
+        return juce::Colour (0xFF22D3EE);
+    // I/O Peripherals — indigo (matches I/O category)
+    if (type == "io_expression" || type == "io_footswitch" || type == "io_cv_in" || type == "io_cv_out")
+        return juce::Colour (0xFF818CF8);
     return juce::Colour (0xFF6B7280);
 }
 
@@ -619,6 +626,10 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     io.addItem(4, "Audio Input"); io.addItem(5, "Audio Output"); 
     io.addSeparator();
     io.addItem(6, "MIDI Input"); io.addItem(7, "MIDI Output");
+    io.addSeparator();
+    io.addItem(350, "Expression Pedal"); io.addItem(351, "Footswitch");
+    io.addSeparator();
+    io.addItem(352, "CV Input"); io.addItem(353, "CV Output");
     menu.addSubMenu("I/O", io);
     
     juce::PopupMenu u; u.addItem(1,"Gain"); u.addItem(2,"Mix"); u.addItem(3,"Split"); menu.addSubMenu("Utility",u);
@@ -713,6 +724,15 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     cs.addItem(305,"XY Pad");
     menu.addSubMenu("Controls (Pedal UI)",cs);
 
+    // ─── Displays & Lights ───
+    juce::PopupMenu dp;
+    dp.addItem(320,"LED"); dp.addItem(321,"RGB LED");
+    dp.addSeparator();
+    dp.addItem(322,"Display (Numeric)"); dp.addItem(323,"VU Meter");
+    dp.addSeparator();
+    dp.addItem(324,"Tuner Display");
+    menu.addSubMenu("Displays & Lights",dp);
+
     float cx = cp.x, cy = cp.y;
     menu.showMenuAsync ({}, [this, cx, cy](int r) {
         juce::String t;
@@ -765,6 +785,12 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             // Controls
             case 300: t="ctrl_knob"; break; case 301: t="ctrl_fader"; break; case 302: t="ctrl_button"; break;
             case 303: t="ctrl_toggle"; break; case 304: t="ctrl_selector"; break; case 305: t="ctrl_xy"; break;
+            // Displays & Lights
+            case 320: t="disp_led"; break; case 321: t="disp_rgb_led"; break;
+            case 322: t="disp_display"; break; case 323: t="disp_vu"; break; case 324: t="disp_tuner"; break;
+            // I/O Peripherals
+            case 350: t="io_expression"; break; case 351: t="io_footswitch"; break;
+            case 352: t="io_cv_in"; break; case 353: t="io_cv_out"; break;
             default: return;
         }
         editor.addNodeAt (t, cx, cy);
