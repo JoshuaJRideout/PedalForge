@@ -683,18 +683,25 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     sc.addItem(130,"Expression (E2)");
     menu.addSubMenu("Scripting",sc);
 
+    juce::PopupMenu miRx;
+    miRx.addItem(140,"Note"); miRx.addItem(141,"CC"); miRx.addItem(250,"CC 14-bit");
+    miRx.addItem(142,"Pitch Bend"); miRx.addItem(143,"Clock");
+    miRx.addSeparator();
+    miRx.addItem(251,"Program Change"); miRx.addItem(252,"Channel Pressure"); miRx.addItem(253,"Poly Pressure");
+    miRx.addSeparator();
+    miRx.addItem(254,"Song Position"); miRx.addItem(255,"Transport");
+
+    juce::PopupMenu miTx;
+    miTx.addItem(256,"Note Gen"); miTx.addItem(257,"CC Gen");
+    miTx.addItem(261,"Pitch Bend Gen");
+    miTx.addSeparator();
+    miTx.addItem(258,"Program Change Gen"); miTx.addItem(259,"Pressure Gen"); miTx.addItem(260,"Poly Pressure Gen");
+    miTx.addSeparator();
+    miTx.addItem(262,"Transport Gen");
+
     juce::PopupMenu mi;
-    mi.addSectionHeader ("Receivers");
-    mi.addItem(140,"MIDI Note"); mi.addItem(141,"MIDI CC"); mi.addItem(250,"MIDI CC 14-bit");
-    mi.addItem(142,"MIDI Pitch Bend"); mi.addItem(143,"MIDI Clock");
-    mi.addItem(251,"Program Change"); mi.addItem(252,"Channel Pressure"); mi.addItem(253,"Poly Pressure");
-    mi.addItem(254,"Song Position"); mi.addItem(255,"Transport");
-    mi.addSeparator();
-    mi.addSectionHeader ("Generators");
-    mi.addItem(256,"Note Gen (CV→MIDI)"); mi.addItem(257,"CC Gen (CV→MIDI)");
-    mi.addItem(258,"Program Change Gen"); mi.addItem(259,"Pressure Gen");
-    mi.addItem(260,"Poly Pressure Gen"); mi.addItem(261,"Pitch Bend Gen");
-    mi.addItem(262,"Transport Gen");
+    mi.addSubMenu("Receive (MIDI to CV)", miRx);
+    mi.addSubMenu("Generate (CV to MIDI)", miTx);
     menu.addSubMenu("MIDI",mi);
 
     // ─── Control Surface ───
