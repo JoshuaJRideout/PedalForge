@@ -166,6 +166,10 @@ juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
         || type == "midi_program_gen" || type == "midi_pressure_gen" || type == "midi_poly_pressure_gen"
         || type == "midi_pitchbend_gen" || type == "midi_transport_gen")
         return juce::Colour (0xFF3B82F6);
+    // Control Surface — warm peach (these export to the pedal face)
+    if (type == "ctrl_knob" || type == "ctrl_fader" || type == "ctrl_button"
+        || type == "ctrl_toggle" || type == "ctrl_selector" || type == "ctrl_xy")
+        return juce::Colour (0xFFE8A855);
     return juce::Colour (0xFF6B7280);
 }
 
@@ -693,6 +697,15 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     mi.addItem(262,"Transport Gen");
     menu.addSubMenu("MIDI",mi);
 
+    // ─── Control Surface ───
+    menu.addSeparator();
+    juce::PopupMenu cs;
+    cs.addItem(300,"Knob"); cs.addItem(301,"Fader"); cs.addItem(302,"Button (Momentary)");
+    cs.addItem(303,"Toggle (Latching)"); cs.addItem(304,"Selector (Multi-Position)");
+    cs.addSeparator();
+    cs.addItem(305,"XY Pad");
+    menu.addSubMenu("Controls (Pedal UI)",cs);
+
     float cx = cp.x, cy = cp.y;
     menu.showMenuAsync ({}, [this, cx, cy](int r) {
         juce::String t;
@@ -742,6 +755,9 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             case 258: t="midi_program_gen"; break; case 259: t="midi_pressure_gen"; break;
             case 260: t="midi_poly_pressure_gen"; break; case 261: t="midi_pitchbend_gen"; break;
             case 262: t="midi_transport_gen"; break;
+            // Controls
+            case 300: t="ctrl_knob"; break; case 301: t="ctrl_fader"; break; case 302: t="ctrl_button"; break;
+            case 303: t="ctrl_toggle"; break; case 304: t="ctrl_selector"; break; case 305: t="ctrl_xy"; break;
             default: return;
         }
         editor.addNodeAt (t, cx, cy);

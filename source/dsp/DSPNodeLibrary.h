@@ -1705,3 +1705,4 @@ private:
 #include "MathNodeLibrary.h"
 #include "LogicNodeLibrary.h"
 #include "MidiNodeLibrary.h"
+#include "ControlNodeLibrary.h"

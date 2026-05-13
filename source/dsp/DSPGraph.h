@@ -131,6 +131,13 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "midi_poly_pressure_gen") return std::make_unique<MidiPolyPressureGenNode>();
     if (type == "midi_pitchbend_gen") return std::make_unique<MidiPitchBendGenNode>();
     if (type == "midi_transport_gen") return std::make_unique<MidiTransportGenNode>();
+    // Control Surface
+    if (type == "ctrl_knob")    return std::make_unique<KnobNode>();
+    if (type == "ctrl_fader")   return std::make_unique<FaderNode>();
+    if (type == "ctrl_button")  return std::make_unique<ButtonNode>();
+    if (type == "ctrl_toggle")  return std::make_unique<ToggleNode>();
+    if (type == "ctrl_selector") return std::make_unique<SelectorNode>();
+    if (type == "ctrl_xy")      return std::make_unique<XYPadNode>();
     return nullptr;
 }
 
