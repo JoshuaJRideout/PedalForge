@@ -237,7 +237,27 @@ inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
 
 //==============================================================================
 // ─── DISPLAY / GADGET DRAWING ───────────────────────────────────────────────
+// Custom images replace the FRAME/BEZEL only. Functional overlays (glow,
+// segments, bars, text, trace) always draw on top.
 //==============================================================================
+
+/** Helper: draw custom image as frame, or fall back to default dark bezel. */
+inline bool drawFrameOrDefault (juce::Graphics& g, juce::Rectangle<float> area,
+                                 const CustomStyles* custom,
+                                 juce::Colour defaultBg = juce::Colour (0xFF0A0A0A),
+                                 juce::Colour defaultBorder = juce::Colour (0xFF2A2A2A))
+{
+    if (custom && custom->imageMain.isNotEmpty())
+    {
+        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
+        if (!img.isNull()) { drawImageScaled (g, img, area, custom->stretchImage); return true; }
+    }
+    g.setColour (defaultBg);
+    g.fillRoundedRectangle (area, 3.0f);
+    g.setColour (defaultBorder);
+    g.drawRoundedRectangle (area, 3.0f, 1.0f);
+    return false;
+}
 
 /**
  * 7-Segment digit helper — draws a single digit 0-9 in classic LED segment style.
@@ -287,25 +307,19 @@ inline void drawSevenSegDigit (juce::Graphics& g, juce::Rectangle<float> area,
  * 7-Segment Display — draws multiple digits showing a number.
  */
 inline void draw7Seg (juce::Graphics& g, juce::Rectangle<float> area, float value,
-                      int numDigits = 3, juce::Colour segColour = juce::Colour (0xFFFF3333))
+                      int numDigits = 3, juce::Colour segColour = juce::Colour (0xFFFF3333),
+                      const CustomStyles* custom = nullptr)
 {
-    // Dark bezel background
-    g.setColour (juce::Colour (0xFF0A0A0A));
-    g.fillRoundedRectangle (area, 3.0f);
-    g.setColour (juce::Colour (0xFF2A2A2A));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
-
+    drawFrameOrDefault (g, area, custom);
     auto inner = area.reduced (3.0f);
     float digitW = inner.getWidth() / (float) numDigits;
     int intVal = juce::jlimit (0, (int)std::pow(10, numDigits) - 1, (int)std::abs(value));
-
+    juce::Colour col = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : segColour;
     for (int d = numDigits - 1; d >= 0; --d)
     {
-        int digit = intVal % 10;
-        intVal /= 10;
-        auto digitArea = juce::Rectangle<float> (inner.getX() + d * digitW, inner.getY(),
-                                                  digitW, inner.getHeight());
-        drawSevenSegDigit (g, digitArea.reduced (1.0f), digit, segColour);
+        int digit = intVal % 10; intVal /= 10;
+        drawSevenSegDigit (g, juce::Rectangle<float> (inner.getX() + d * digitW, inner.getY(),
+                                                       digitW, inner.getHeight()).reduced (1.0f), digit, col);
     }
 }
 
@@ -313,16 +327,12 @@ inline void draw7Seg (juce::Graphics& g, juce::Rectangle<float> area, float valu
  * Numeric Display — clean LCD-style numeric readout.
  */
 inline void drawNumericDisplay (juce::Graphics& g, juce::Rectangle<float> area, float value,
-                                const CustomStyles* = nullptr)
+                                const CustomStyles* custom = nullptr)
 {
-    // LCD background
-    g.setColour (juce::Colour (0xFF1A2A1A));
-    g.fillRoundedRectangle (area, 3.0f);
-    g.setColour (juce::Colour (0xFF3A4A3A));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
-
+    drawFrameOrDefault (g, area, custom, juce::Colour (0xFF1A2A1A), juce::Colour (0xFF3A4A3A));
     float fontSize = juce::jmax (8.0f, area.getHeight() * 0.55f);
-    g.setColour (juce::Colour (0xFF33FF66)); // green LCD text
+    juce::Colour textCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF33FF66);
+    g.setColour (textCol);
     g.setFont (juce::FontOptions (fontSize).withStyle ("Bold"));
     g.drawText (juce::String (value, 1), area.reduced (4, 0), juce::Justification::centredRight);
 }
@@ -331,13 +341,9 @@ inline void drawNumericDisplay (juce::Graphics& g, juce::Rectangle<float> area, 
  * VU Meter — bar-graph level meter.
  */
 inline void drawVUMeter (juce::Graphics& g, juce::Rectangle<float> area, float value,
-                         const CustomStyles* = nullptr)
+                         const CustomStyles* custom = nullptr)
 {
-    // Background
-    g.setColour (juce::Colour (0xFF0E0E0E));
-    g.fillRoundedRectangle (area, 3.0f);
-    g.setColour (juce::Colour (0xFF333333));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
+    drawFrameOrDefault (g, area, custom, juce::Colour (0xFF0E0E0E), juce::Colour (0xFF333333));
 
     auto inner = area.reduced (3.0f);
     float level = juce::jlimit (0.0f, 1.0f, value);
@@ -367,11 +373,9 @@ inline void drawVUMeter (juce::Graphics& g, juce::Rectangle<float> area, float v
  */
 inline void drawOscilloscope (juce::Graphics& g, juce::Rectangle<float> area,
                               const float* waveform, int numSamples,
-                              const CustomStyles* = nullptr)
+                              const CustomStyles* custom = nullptr)
 {
-    // Screen background
-    g.setColour (juce::Colour (0xFF0A1A0A));
-    g.fillRoundedRectangle (area, 3.0f);
+    drawFrameOrDefault (g, area, custom, juce::Colour (0xFF0A1A0A), juce::Colour (0xFF333333));
 
     // Grid lines
     g.setColour (juce::Colour (0xFF1A3A1A));
@@ -407,42 +411,43 @@ inline void drawOscilloscope (juce::Graphics& g, juce::Rectangle<float> area,
     }
 
     // Glow
-    g.setColour (juce::Colour (0xFF33FF66).withAlpha (0.15f));
+    juce::Colour traceCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF33FF66);
+    g.setColour (traceCol.withAlpha (0.15f));
     g.strokePath (trace, juce::PathStrokeType (3.0f));
     // Main trace
-    g.setColour (juce::Colour (0xFF33FF66));
+    g.setColour (traceCol);
     g.strokePath (trace, juce::PathStrokeType (1.5f));
-
-    // Bezel
-    g.setColour (juce::Colour (0xFF333333));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
 }
 
 /**
  * Indicator Light — auto-coloring green/yellow/red dot.
  */
 inline void drawIndicator (juce::Graphics& g, juce::Rectangle<float> area, float value,
-                           float yellowThresh = 0.6f, float redThresh = 0.85f)
+                           float yellowThresh = 0.6f, float redThresh = 0.85f,
+                           const CustomStyles* custom = nullptr)
 {
     auto cx = area.getCentreX(), cy = area.getCentreY();
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.35f;
-
     juce::Colour col;
     if (value > redThresh)      col = juce::Colour (0xFFFF3333);
     else if (value > yellowThresh) col = juce::Colour (0xFFFFAA33);
     else                         col = juce::Colour (0xFF33FF66);
-
-    // Bezel
-    g.setColour (juce::Colour (0xFF3A3A4A));
-    g.fillEllipse (cx - r * 1.2f, cy - r * 1.2f, r * 2.4f, r * 2.4f);
-    // Glow
-    g.setGradientFill (juce::ColourGradient (col, cx, cy,
-                                              col.withAlpha(0.0f), cx, cy - r * 2, true));
+    // Custom image = bezel, glow still on top
+    if (custom && custom->imageMain.isNotEmpty())
+    {
+        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
+        if (!img.isNull()) drawImageScaled (g, img, area, custom->stretchImage);
+    }
+    else
+    {
+        g.setColour (juce::Colour (0xFF3A3A4A));
+        g.fillEllipse (cx - r * 1.2f, cy - r * 1.2f, r * 2.4f, r * 2.4f);
+    }
+    // Glow + dot always render
+    g.setGradientFill (juce::ColourGradient (col, cx, cy, col.withAlpha(0.0f), cx, cy - r * 2, true));
     g.fillEllipse (cx - r * 1.8f, cy - r * 1.8f, r * 3.6f, r * 3.6f);
-    // Dot
     g.setColour (col);
     g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
-    // Specular
     g.setColour (juce::Colour (0x55FFFFFF));
     g.fillEllipse (cx - r * 0.4f, cy - r * 0.5f, r * 0.8f, r * 0.6f);
 }
@@ -451,28 +456,32 @@ inline void drawIndicator (juce::Graphics& g, juce::Rectangle<float> area, float
  * RGB LED — draws a colored LED circle using R, G, B values.
  */
 inline void drawRGBLED (juce::Graphics& g, juce::Rectangle<float> area,
-                        float r_val, float g_val, float b_val)
+                        float r_val, float g_val, float b_val,
+                        const CustomStyles* custom = nullptr)
 {
     auto cx = area.getCentreX(), cy = area.getCentreY();
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.3f;
     auto col = juce::Colour::fromFloatRGBA (r_val, g_val, b_val, 1.0f);
     bool isOn = (r_val + g_val + b_val) > 0.05f;
-
-    // Bezel
-    g.setColour (juce::Colour (0xFF3A3A4A));
-    g.fillEllipse (cx - r * 1.3f, cy - r * 1.3f, r * 2.6f, r * 2.6f);
-
-    if (isOn)
+    // Custom image = bezel
+    if (custom && custom->imageMain.isNotEmpty())
     {
-        g.setGradientFill (juce::ColourGradient (col, cx, cy,
-                                                  col.withAlpha(0.0f), cx, cy - r * 2.5f, true));
-        g.fillEllipse (cx - r * 2, cy - r * 2, r * 4, r * 4);
-        g.setColour (col.brighter(0.2f));
+        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
+        if (!img.isNull()) drawImageScaled (g, img, area, custom->stretchImage);
     }
     else
     {
-        g.setColour (juce::Colour (0xFF222222));
+        g.setColour (juce::Colour (0xFF3A3A4A));
+        g.fillEllipse (cx - r * 1.3f, cy - r * 1.3f, r * 2.6f, r * 2.6f);
     }
+    // Glow + LED always render on top
+    if (isOn)
+    {
+        g.setGradientFill (juce::ColourGradient (col, cx, cy, col.withAlpha(0.0f), cx, cy - r * 2.5f, true));
+        g.fillEllipse (cx - r * 2, cy - r * 2, r * 4, r * 4);
+        g.setColour (col.brighter(0.2f));
+    }
+    else { g.setColour (juce::Colour (0xFF222222)); }
     g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
     g.setColour (juce::Colour (0x55FFFFFF));
     g.fillEllipse (cx - r * 0.4f, cy - r * 0.5f, r * 0.8f, r * 0.6f);
@@ -482,29 +491,20 @@ inline void drawRGBLED (juce::Graphics& g, juce::Rectangle<float> area,
  * Text Screen — simple text display.
  */
 inline void drawTextScreen (juce::Graphics& g, juce::Rectangle<float> area,
-                            const juce::StringArray& lines, int highlightLine = -1)
+                            const juce::StringArray& lines, int highlightLine = -1,
+                            const CustomStyles* custom = nullptr)
 {
-    // LCD background
-    g.setColour (juce::Colour (0xFF0A0A1A));
-    g.fillRoundedRectangle (area, 3.0f);
-    g.setColour (juce::Colour (0xFF333344));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
-
+    drawFrameOrDefault (g, area, custom, juce::Colour (0xFF0A0A1A), juce::Colour (0xFF333344));
     auto inner = area.reduced (4.0f);
     int numLines = juce::jmax (1, lines.size());
     float lineH = inner.getHeight() / (float) numLines;
     float fontSize = juce::jmax (7.0f, lineH * 0.8f);
-
+    juce::Colour textCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF88BBFF);
     for (int i = 0; i < lines.size(); ++i)
     {
-        auto lineRect = juce::Rectangle<float> (inner.getX(), inner.getY() + i * lineH,
-                                                 inner.getWidth(), lineH);
-        if (i == highlightLine)
-        {
-            g.setColour (juce::Colour (0xFF334466));
-            g.fillRect (lineRect);
-        }
-        g.setColour (juce::Colour (0xFF88BBFF));
+        auto lineRect = juce::Rectangle<float> (inner.getX(), inner.getY() + i * lineH, inner.getWidth(), lineH);
+        if (i == highlightLine) { g.setColour (juce::Colour (0xFF334466)); g.fillRect (lineRect); }
+        g.setColour (textCol);
         g.setFont (juce::FontOptions (fontSize));
         g.drawText (lines[i], lineRect.reduced(2, 0), juce::Justification::centredLeft);
     }
@@ -514,39 +514,28 @@ inline void drawTextScreen (juce::Graphics& g, juce::Rectangle<float> area,
  * Pixel Display — draws a pixel grid.
  */
 inline void drawPixelDisplay (juce::Graphics& g, juce::Rectangle<float> area,
-                              const float* pixelData, int pw, int ph, bool colorMode = false)
+                              const float* pixelData, int pw, int ph, bool colorMode = false,
+                              const CustomStyles* custom = nullptr)
 {
-    // Screen background
-    g.setColour (juce::Colour (0xFF050505));
-    g.fillRoundedRectangle (area, 3.0f);
-
+    drawFrameOrDefault (g, area, custom, juce::Colour (0xFF050505), juce::Colour (0xFF333333));
     if (!pixelData) return;
     auto inner = area.reduced (2.0f);
     float cellW = inner.getWidth() / (float) pw;
     float cellH = inner.getHeight() / (float) ph;
-
+    juce::Colour pixCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF33FF66);
     for (int y = 0; y < ph; ++y)
     {
         for (int x = 0; x < pw; ++x)
         {
             float val = pixelData[y * pw + x];
             if (val < 0.01f) continue;
-
             float px = inner.getX() + x * cellW;
             float py = inner.getY() + y * cellH;
-
-            if (colorMode)
-                g.setColour (juce::Colour::fromHSV (val, 0.9f, 0.9f, 1.0f));
-            else
-                g.setColour (juce::Colour (0xFF33FF66).withAlpha (juce::jlimit (0.0f, 1.0f, val)));
-
+            if (colorMode) g.setColour (juce::Colour::fromHSV (val, 0.9f, 0.9f, 1.0f));
+            else g.setColour (pixCol.withAlpha (juce::jlimit (0.0f, 1.0f, val)));
             g.fillRect (px, py, cellW - 0.5f, cellH - 0.5f);
         }
     }
-
-    // Bezel
-    g.setColour (juce::Colour (0xFF333333));
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
 }
 
 //==============================================================================
@@ -562,15 +551,15 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
     else if (type == "footswitch")  drawFootswitch (g, area, value, custom);
     else if (type == "fader")       drawFader (g, area, value, custom);
     // Display types
-    else if (type == "7seg")        draw7Seg (g, area, value * 999.0f);
-    else if (type == "display")     drawNumericDisplay (g, area, value);
-    else if (type == "vu_meter")    drawVUMeter (g, area, value);
-    else if (type == "indicator")   drawIndicator (g, area, value);
-    else if (type == "oscilloscope") drawOscilloscope (g, area, nullptr, 0);
-    else if (type == "rgb_led")     drawRGBLED (g, area, value, value * 0.5f, 1.0f - value);
-    else if (type == "text_screen") { juce::StringArray dummy {"Ready"}; drawTextScreen (g, area, dummy); }
-    else if (type == "console")     { juce::StringArray dummy {"[log]"}; drawTextScreen (g, area, dummy); }
-    else if (type == "pixel_display") drawPixelDisplay (g, area, nullptr, 32, 16);
+    else if (type == "7seg")        draw7Seg (g, area, value * 999.0f, 3, juce::Colour (0xFFFF3333), custom);
+    else if (type == "display")     drawNumericDisplay (g, area, value, custom);
+    else if (type == "vu_meter")    drawVUMeter (g, area, value, custom);
+    else if (type == "indicator")   drawIndicator (g, area, value, 0.6f, 0.85f, custom);
+    else if (type == "oscilloscope") drawOscilloscope (g, area, nullptr, 0, custom);
+    else if (type == "rgb_led")     drawRGBLED (g, area, value, value * 0.5f, 1.0f - value, custom);
+    else if (type == "text_screen") { juce::StringArray d {"Ready"}; drawTextScreen (g, area, d, -1, custom); }
+    else if (type == "console")     { juce::StringArray d {"[log]"}; drawTextScreen (g, area, d, -1, custom); }
+    else if (type == "pixel_display") drawPixelDisplay (g, area, nullptr, 32, 16, false, custom);
     else { g.setColour (juce::Colours::grey); g.drawRect (area, 1.0f); }
 }
 
