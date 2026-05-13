@@ -368,6 +368,26 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             HardwareDrawing::drawLED (g, ctrlBounds, val, &styles);
         else if (ctrl.type == "fader")
             HardwareDrawing::drawFader (g, ctrlBounds, val, &styles);
+        // Display / Gadget types
+        else if (ctrl.type == "7seg")
+            HardwareDrawing::draw7Seg (g, ctrlBounds, val * 999.0f);
+        else if (ctrl.type == "display")
+            HardwareDrawing::drawNumericDisplay (g, ctrlBounds, val);
+        else if (ctrl.type == "vu_meter")
+            HardwareDrawing::drawVUMeter (g, ctrlBounds, val);
+        else if (ctrl.type == "indicator")
+            HardwareDrawing::drawIndicator (g, ctrlBounds, val);
+        else if (ctrl.type == "oscilloscope")
+            HardwareDrawing::drawOscilloscope (g, ctrlBounds, nullptr, 0);
+        else if (ctrl.type == "rgb_led")
+            HardwareDrawing::drawRGBLED (g, ctrlBounds, val, val * 0.5f, 1.0f - val);
+        else if (ctrl.type == "text_screen" || ctrl.type == "console")
+        {
+            juce::StringArray lines { ctrl.label.isNotEmpty() ? ctrl.label : "Ready" };
+            HardwareDrawing::drawTextScreen (g, ctrlBounds, lines);
+        }
+        else if (ctrl.type == "pixel_display")
+            HardwareDrawing::drawPixelDisplay (g, ctrlBounds, nullptr, 32, 16);
 
         // Label
         if (ctrl.label.isNotEmpty() && sc > 0.3f)

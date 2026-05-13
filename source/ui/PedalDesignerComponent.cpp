@@ -67,11 +67,24 @@ class PedalDesignerComponent::HardwarePalette : public juce::Component
 public:
     HardwarePalette()
     {
+        // ── Controls ──
         items.push_back (std::make_unique<HardwareItem> ("knob",       "Knob"));
         items.push_back (std::make_unique<HardwareItem> ("switch",     "Switch"));
-        items.push_back (std::make_unique<HardwareItem> ("led",        "LED"));
-        items.push_back (std::make_unique<HardwareItem> ("footswitch", "Stomp"));
         items.push_back (std::make_unique<HardwareItem> ("fader",      "Fader"));
+        items.push_back (std::make_unique<HardwareItem> ("footswitch", "Stomp"));
+        // ── Lights ──
+        items.push_back (std::make_unique<HardwareItem> ("led",        "LED"));
+        items.push_back (std::make_unique<HardwareItem> ("rgb_led",    "RGB LED"));
+        items.push_back (std::make_unique<HardwareItem> ("indicator",  "Indicator"));
+        // ── Screens ──
+        items.push_back (std::make_unique<HardwareItem> ("7seg",       "7-Seg"));
+        items.push_back (std::make_unique<HardwareItem> ("display",    "Display"));
+        items.push_back (std::make_unique<HardwareItem> ("text_screen","Text"));
+        items.push_back (std::make_unique<HardwareItem> ("console",    "Console"));
+        items.push_back (std::make_unique<HardwareItem> ("pixel_display","Pixels"));
+        // ── Instruments ──
+        items.push_back (std::make_unique<HardwareItem> ("vu_meter",   "VU Meter"));
+        items.push_back (std::make_unique<HardwareItem> ("oscilloscope","Scope"));
         for (auto& item : items) addAndMakeVisible (*item);
     }
 
@@ -87,11 +100,19 @@ public:
 
     void resized() override
     {
-        int y = 50, imgSize = 60, centerX = getWidth() / 2 - imgSize / 2;
-        for (auto& item : items)
+        int cols = 2;
+        int imgSize = 56;
+        int pad = 10;
+        int startY = 40;
+        int colW = getWidth() / cols;
+
+        for (int i = 0; i < (int) items.size(); ++i)
         {
-            item->setBounds (centerX, y, imgSize, imgSize);
-            y += imgSize + 16;
+            int col = i % cols;
+            int row = i / cols;
+            int x = col * colW + (colW - imgSize) / 2;
+            int y = startY + row * (imgSize + pad);
+            items[(size_t) i]->setBounds (x, y, imgSize, imgSize);
         }
     }
 
@@ -147,13 +168,27 @@ public:
     // Component sizes per type (aligned to grid)
     static float sizeForType (const juce::String& type)
     {
-        if (type == "fader") return 40.0f; // height; width handled separately
-        if (type == "led")   return 20.0f;
+        if (type == "fader") return 40.0f;
+        if (type == "led" || type == "rgb_led" || type == "indicator") return 20.0f;
+        // Screens — need height
+        if (type == "7seg") return 30.0f;
+        if (type == "display") return 28.0f;
+        if (type == "text_screen" || type == "console") return 50.0f;
+        if (type == "pixel_display") return 40.0f;
+        if (type == "vu_meter") return 60.0f;
+        if (type == "oscilloscope") return 50.0f;
         return 40.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
     {
         if (type == "fader") return 100.0f;
+        // Screens are wider than tall
+        if (type == "7seg") return 70.0f;
+        if (type == "display") return 70.0f;
+        if (type == "text_screen" || type == "console") return 80.0f;
+        if (type == "pixel_display") return 80.0f;
+        if (type == "vu_meter") return 20.0f; // tall and narrow
+        if (type == "oscilloscope") return 80.0f;
         return sizeForType (type);
     }
 
@@ -799,8 +834,11 @@ public:
             float cy = snapToGrid (cp.y - tok[3].getFloatValue() * ph);
             juce::String lbl = tok[1].substring(0,1).toUpperCase() + tok[1].substring(1)
                              + " " + juce::String ((int)placedHardware.size() + 1);
-            // Default values: knobs/faders at 0.5, switches/footswitches/LEDs off
-            float defVal = (tok[1] == "knob" || tok[1] == "fader") ? 0.5f : 0.0f;
+            // Default values: knobs/faders at 0.5, displays at 0.5 (shows mid), switches/lights off
+            float defVal = 0.0f;
+            if (tok[1] == "knob" || tok[1] == "fader" || tok[1] == "display"
+                || tok[1] == "7seg" || tok[1] == "vu_meter")
+                defVal = 0.5f;
             juce::String ctrlID = tok[1] + "_" + juce::String ((int)placedHardware.size() + 1);
             placedHardware.push_back ({ tok[1], cx, cy, pw, ph, lbl, "", defVal, ctrlID });
             setSelection ({(int) placedHardware.size() - 1});
