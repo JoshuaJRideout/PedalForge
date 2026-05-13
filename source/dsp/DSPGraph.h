@@ -126,6 +126,11 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "midi_transport") return std::make_unique<MidiTransportNode>();
     if (type == "midi_note_gen") return std::make_unique<MidiNoteGenNode>();
     if (type == "midi_cc_gen")  return std::make_unique<MidiCCGenNode>();
+    if (type == "midi_program_gen") return std::make_unique<MidiProgramGenNode>();
+    if (type == "midi_pressure_gen") return std::make_unique<MidiPressureGenNode>();
+    if (type == "midi_poly_pressure_gen") return std::make_unique<MidiPolyPressureGenNode>();
+    if (type == "midi_pitchbend_gen") return std::make_unique<MidiPitchBendGenNode>();
+    if (type == "midi_transport_gen") return std::make_unique<MidiTransportGenNode>();
     return nullptr;
 }
 

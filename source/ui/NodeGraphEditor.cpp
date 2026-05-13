@@ -162,7 +162,9 @@ juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
     if (type == "midi_note" || type == "midi_cc" || type == "midi_pitchbend" || type == "midi_clock"
         || type == "midi_program" || type == "midi_pressure" || type == "midi_poly_pressure"
         || type == "midi_cc14" || type == "midi_song_pos" || type == "midi_transport"
-        || type == "midi_note_gen" || type == "midi_cc_gen")
+        || type == "midi_note_gen" || type == "midi_cc_gen"
+        || type == "midi_program_gen" || type == "midi_pressure_gen" || type == "midi_poly_pressure_gen"
+        || type == "midi_pitchbend_gen" || type == "midi_transport_gen")
         return juce::Colour (0xFF3B82F6);
     return juce::Colour (0xFF6B7280);
 }
@@ -686,6 +688,9 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     mi.addSeparator();
     mi.addSectionHeader ("Generators");
     mi.addItem(256,"Note Gen (CV→MIDI)"); mi.addItem(257,"CC Gen (CV→MIDI)");
+    mi.addItem(258,"Program Change Gen"); mi.addItem(259,"Pressure Gen");
+    mi.addItem(260,"Poly Pressure Gen"); mi.addItem(261,"Pitch Bend Gen");
+    mi.addItem(262,"Transport Gen");
     menu.addSubMenu("MIDI",mi);
 
     float cx = cp.x, cy = cp.y;
@@ -734,6 +739,9 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             case 251: t="midi_program"; break; case 252: t="midi_pressure"; break; case 253: t="midi_poly_pressure"; break;
             case 254: t="midi_song_pos"; break; case 255: t="midi_transport"; break;
             case 256: t="midi_note_gen"; break; case 257: t="midi_cc_gen"; break;
+            case 258: t="midi_program_gen"; break; case 259: t="midi_pressure_gen"; break;
+            case 260: t="midi_poly_pressure_gen"; break; case 261: t="midi_pitchbend_gen"; break;
+            case 262: t="midi_transport_gen"; break;
             default: return;
         }
         editor.addNodeAt (t, cx, cy);
