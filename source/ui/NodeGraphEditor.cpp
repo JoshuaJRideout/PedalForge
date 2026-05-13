@@ -159,7 +159,10 @@ juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
     if (type == "expression")
         return juce::Colour (0xFFE879F9);
     // MIDI — electric blue
-    if (type == "midi_note" || type == "midi_cc" || type == "midi_pitchbend" || type == "midi_clock")
+    if (type == "midi_note" || type == "midi_cc" || type == "midi_pitchbend" || type == "midi_clock"
+        || type == "midi_program" || type == "midi_pressure" || type == "midi_poly_pressure"
+        || type == "midi_cc14" || type == "midi_song_pos" || type == "midi_transport"
+        || type == "midi_note_gen" || type == "midi_cc_gen")
         return juce::Colour (0xFF3B82F6);
     return juce::Colour (0xFF6B7280);
 }
@@ -244,10 +247,37 @@ void NodeGraphEditor::GraphCanvas::drawNode (juce::Graphics& g, int nodeID, DSPN
     g.drawRoundedRectangle (bounds, 6.0f, visual.selected ? 2.5f : 1.0f);
 
     // Ports
+    auto portColour = [](NodePort::Type t) -> juce::Colour {
+        switch (t) {
+            case NodePort::Audio:   return juce::Colour (0xFF60A5FA); // blue
+            case NodePort::Control: return juce::Colour (0xFF4ADE80); // green
+            case NodePort::Midi:    return juce::Colour (0xFFFBBF24); // yellow
+            case NodePort::Gate:    return juce::Colour (0xFFF87171); // red
+            default:                return juce::Colour (0xFFAAAAAA);
+        }
+    };
     for (int i = 0; i < (int)node->getInputPorts().size(); ++i)
     {
         auto pp = editor.getPortPosition (nodeID, false, i);
-        g.setColour (juce::Colour (0xFF4ADE80));
+        auto& port = node->getInputPorts()[i];
+        auto pc = portColour (port.type);
+        
+        // Dim incompatible ports during wire drag
+        if (editor.canvas.draggingWire && editor.canvas.wireStart.isOutput)
+        {
+            auto* srcNode = editor.graph.getNode (editor.canvas.wireStart.nodeID);
+            if (srcNode)
+            {
+                auto& srcPorts = srcNode->getOutputPorts();
+                if (editor.canvas.wireStart.portIndex < (int)srcPorts.size())
+                {
+                    if (!NodePort::areCompatible (srcPorts[editor.canvas.wireStart.portIndex].type, port.type))
+                        pc = pc.withAlpha (0.15f);
+                }
+            }
+        }
+        
+        g.setColour (pc);
         g.fillEllipse (pp.x - portR, pp.y - portR, portR * 2, portR * 2);
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.setFont (juce::FontOptions (9.0f));
@@ -256,7 +286,25 @@ void NodeGraphEditor::GraphCanvas::drawNode (juce::Graphics& g, int nodeID, DSPN
     for (int i = 0; i < (int)node->getOutputPorts().size(); ++i)
     {
         auto pp = editor.getPortPosition (nodeID, true, i);
-        g.setColour (juce::Colour (0xFFF97316));
+        auto& port = node->getOutputPorts()[i];
+        auto pc = portColour (port.type);
+        
+        // Dim incompatible ports during wire drag
+        if (editor.canvas.draggingWire && !editor.canvas.wireStart.isOutput)
+        {
+            auto* srcNode = editor.graph.getNode (editor.canvas.wireStart.nodeID);
+            if (srcNode)
+            {
+                auto& srcPorts = srcNode->getInputPorts();
+                if (editor.canvas.wireStart.portIndex < (int)srcPorts.size())
+                {
+                    if (!NodePort::areCompatible (port.type, srcPorts[editor.canvas.wireStart.portIndex].type))
+                        pc = pc.withAlpha (0.15f);
+                }
+            }
+        }
+        
+        g.setColour (pc);
         g.fillEllipse (pp.x - portR, pp.y - portR, portR * 2, portR * 2);
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.setFont (juce::FontOptions (9.0f));
@@ -293,16 +341,23 @@ void NodeGraphEditor::GraphCanvas::drawConnection (juce::Graphics& g, const Node
     }
     else
     {
-        // Determine wire type from source port
-        bool isControl = false;
+        // Determine wire colour from source port type
+        NodePort::Type portType = NodePort::Audio;
         if (auto* srcNode = editor.graph.getNode (conn.sourceNodeID))
         {
             auto& ports = srcNode->getOutputPorts();
             if (conn.sourcePort < (int) ports.size())
-                isControl = (ports[conn.sourcePort].type == NodePort::Control);
+                portType = ports[conn.sourcePort].type;
         }
-        juce::Colour wireCol = isControl ? juce::Colour (0xBB4ADE80)  // green for control
-                                         : juce::Colour (0xBB60A5FA); // blue for audio
+        
+        juce::Colour wireCol;
+        switch (portType) {
+            case NodePort::Audio:   wireCol = juce::Colour (0xBB60A5FA); break; // blue
+            case NodePort::Control: wireCol = juce::Colour (0xBB4ADE80); break; // green
+            case NodePort::Midi:    wireCol = juce::Colour (0xBBFBBF24); break; // yellow
+            case NodePort::Gate:    wireCol = juce::Colour (0xBBF87171); break; // red
+            default:                wireCol = juce::Colour (0xBBAAAA00); break;
+        }
         g.setColour (wireCol);
         g.strokePath (path, juce::PathStrokeType (2.5f));
     }
@@ -320,7 +375,24 @@ void NodeGraphEditor::GraphCanvas::drawWirePreview (juce::Graphics& g) const
         path.cubicTo (sp.x + dist, sp.y, ep.x - dist, ep.y, ep.x, ep.y);
     else
         path.cubicTo (sp.x - dist, sp.y, ep.x + dist, ep.y, ep.x, ep.y);
-    g.setColour (juce::Colour (0x99FFFFFF));
+    
+    // Color the preview wire by the source port type
+    juce::Colour previewCol (0x99FFFFFF);
+    if (auto* srcNode = editor.graph.getNode (wireStart.nodeID))
+    {
+        auto& ports = wireStart.isOutput ? srcNode->getOutputPorts() : srcNode->getInputPorts();
+        if (wireStart.portIndex < (int)ports.size())
+        {
+            switch (ports[wireStart.portIndex].type) {
+                case NodePort::Audio:   previewCol = juce::Colour (0xCC60A5FA); break;
+                case NodePort::Control: previewCol = juce::Colour (0xCC4ADE80); break;
+                case NodePort::Midi:    previewCol = juce::Colour (0xCCFBBF24); break;
+                case NodePort::Gate:    previewCol = juce::Colour (0xCCF87171); break;
+                default: break;
+            }
+        }
+    }
+    g.setColour (previewCol);
     g.strokePath (path, juce::PathStrokeType (2.0f));
 }
 
@@ -606,8 +678,14 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     menu.addSubMenu("Scripting",sc);
 
     juce::PopupMenu mi;
-    mi.addItem(140,"MIDI Note"); mi.addItem(141,"MIDI CC");
+    mi.addSectionHeader ("Receivers");
+    mi.addItem(140,"MIDI Note"); mi.addItem(141,"MIDI CC"); mi.addItem(250,"MIDI CC 14-bit");
     mi.addItem(142,"MIDI Pitch Bend"); mi.addItem(143,"MIDI Clock");
+    mi.addItem(251,"Program Change"); mi.addItem(252,"Channel Pressure"); mi.addItem(253,"Poly Pressure");
+    mi.addItem(254,"Song Position"); mi.addItem(255,"Transport");
+    mi.addSeparator();
+    mi.addSectionHeader ("Generators");
+    mi.addItem(256,"Note Gen (CV→MIDI)"); mi.addItem(257,"CC Gen (CV→MIDI)");
     menu.addSubMenu("MIDI",mi);
 
     float cx = cp.x, cy = cp.y;
@@ -651,8 +729,11 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             // Scripting
             case 130: t="expression"; break;
             // MIDI
-            case 140: t="midi_note"; break; case 141: t="midi_cc"; break;
+            case 140: t="midi_note"; break; case 141: t="midi_cc"; break; case 250: t="midi_cc14"; break;
             case 142: t="midi_pitchbend"; break; case 143: t="midi_clock"; break;
+            case 251: t="midi_program"; break; case 252: t="midi_pressure"; break; case 253: t="midi_poly_pressure"; break;
+            case 254: t="midi_song_pos"; break; case 255: t="midi_transport"; break;
+            case 256: t="midi_note_gen"; break; case 257: t="midi_cc_gen"; break;
             default: return;
         }
         editor.addNodeAt (t, cx, cy);

@@ -118,6 +118,14 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "midi_cc")      return std::make_unique<MidiCCNode>();
     if (type == "midi_pitchbend") return std::make_unique<MidiPitchBendNode>();
     if (type == "midi_clock")   return std::make_unique<MidiClockNode>();
+    if (type == "midi_program") return std::make_unique<MidiProgramChangeNode>();
+    if (type == "midi_pressure") return std::make_unique<MidiChannelPressureNode>();
+    if (type == "midi_poly_pressure") return std::make_unique<MidiPolyPressureNode>();
+    if (type == "midi_cc14")    return std::make_unique<MidiCC14Node>();
+    if (type == "midi_song_pos") return std::make_unique<MidiSongPositionNode>();
+    if (type == "midi_transport") return std::make_unique<MidiTransportNode>();
+    if (type == "midi_note_gen") return std::make_unique<MidiNoteGenNode>();
+    if (type == "midi_cc_gen")  return std::make_unique<MidiCCGenNode>();
     return nullptr;
 }
 
@@ -180,11 +188,24 @@ public:
     //==========================================================================
     // Connection management
 
-    /** Connect source node's output port to dest node's input port. */
+    /** Connect source node's output port to dest node's input port.
+        Returns false if types are incompatible or connection is invalid. */
     bool connect (int srcID, int srcPort, int dstID, int dstPort)
     {
         // Validate nodes exist
-        if (nodes.find (srcID) == nodes.end() || nodes.find (dstID) == nodes.end())
+        auto srcIt = nodes.find (srcID);
+        auto dstIt = nodes.find (dstID);
+        if (srcIt == nodes.end() || dstIt == nodes.end())
+            return false;
+
+        // Validate port indices
+        auto& srcPorts = srcIt->second->getOutputPorts();
+        auto& dstPorts = dstIt->second->getInputPorts();
+        if (srcPort >= (int)srcPorts.size() || dstPort >= (int)dstPorts.size())
+            return false;
+
+        // Enforce type compatibility
+        if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
             return false;
 
         // Don't allow duplicate connections

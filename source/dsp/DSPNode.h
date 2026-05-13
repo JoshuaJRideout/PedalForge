@@ -53,11 +53,22 @@ struct NodeParam
  */
 struct NodePort
 {
-    enum Type { Audio, Control };
+    enum Type { Audio, Control, Midi, Gate };
 
     juce::String name;
     Type type = Audio;
     int channels = 1; // 1 = mono, 2 = stereo
+
+    /** Check if two port types are compatible for connection. */
+    static bool areCompatible (Type src, Type dst)
+    {
+        if (src == dst) return true;
+        // Control and Gate are interchangeable (gate is a subset of control)
+        if ((src == Control && dst == Gate) || (src == Gate && dst == Control)) return true;
+        // Audio can accept Control (for CV-to-audio modulation)
+        if (src == Control && dst == Audio) return true;
+        return false;
+    }
 };
 
 //==============================================================================

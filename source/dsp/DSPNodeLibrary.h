@@ -53,9 +53,9 @@ class MidiInputNode : public DSPNode
 public:
     MidiInputNode() : DSPNode ("midi_input", "MIDI In")
     {
-        addOutput ("pitch", NodePort::Control);
-        addOutput ("velocity", NodePort::Control);
-        addOutput ("gate", NodePort::Control);
+        addOutput ("pitch", NodePort::Midi);
+        addOutput ("velocity", NodePort::Midi);
+        addOutput ("gate", NodePort::Midi);
         addParam ("channel", "Channel", 0.0f, 16.0f, 0.0f); // 0 = omni
     }
 
@@ -103,9 +103,9 @@ class MidiOutputNode : public DSPNode
 public:
     MidiOutputNode() : DSPNode ("midi_output", "MIDI Out")
     {
-        addInput ("pitch", NodePort::Control);
-        addInput ("velocity", NodePort::Control);
-        addInput ("gate", NodePort::Control);
+        addInput ("pitch", NodePort::Midi);
+        addInput ("velocity", NodePort::Midi);
+        addInput ("gate", NodePort::Midi);
         addParam ("channel", "Channel", 1.0f, 16.0f, 1.0f);
     }
 
@@ -827,8 +827,8 @@ class ANDGateNode : public DSPNode
 public:
     ANDGateNode() : DSPNode ("and_gate", "AND Gate")
     {
-        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
-        addOutput ("out", NodePort::Control);
+        addInput ("a", NodePort::Gate); addInput ("b", NodePort::Gate);
+        addOutput ("out", NodePort::Gate);
     }
     void process (const float** in, int numIn, float** out, int, int n) override
     {
@@ -846,8 +846,8 @@ class ORGateNode : public DSPNode
 public:
     ORGateNode() : DSPNode ("or_gate", "OR Gate")
     {
-        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
-        addOutput ("out", NodePort::Control);
+        addInput ("a", NodePort::Gate); addInput ("b", NodePort::Gate);
+        addOutput ("out", NodePort::Gate);
     }
     void process (const float** in, int numIn, float** out, int, int n) override
     {
@@ -865,8 +865,8 @@ class NOTGateNode : public DSPNode
 public:
     NOTGateNode() : DSPNode ("not_gate", "NOT Gate")
     {
-        addInput ("in", NodePort::Control);
-        addOutput ("out", NodePort::Control);
+        addInput ("in", NodePort::Gate);
+        addOutput ("out", NodePort::Gate);
     }
     void process (const float** in, int, float** out, int, int n) override
     {
@@ -880,8 +880,8 @@ class XORGateNode : public DSPNode
 public:
     XORGateNode() : DSPNode ("xor_gate", "XOR Gate")
     {
-        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
-        addOutput ("out", NodePort::Control);
+        addInput ("a", NodePort::Gate); addInput ("b", NodePort::Gate);
+        addOutput ("out", NodePort::Gate);
     }
     void process (const float** in, int numIn, float** out, int, int n) override
     {
@@ -1646,7 +1646,7 @@ public:
     {
         addOutput ("pulse", NodePort::Control);
         addOutput ("beat", NodePort::Control);
-        addOutput ("running", NodePort::Control);
+        addOutput ("running", NodePort::Gate);
     }
 
     void process (const float**, int, float** out, int, int n) override
@@ -1704,3 +1704,4 @@ private:
 #include "MemoryNodeLibrary.h"
 #include "MathNodeLibrary.h"
 #include "LogicNodeLibrary.h"
+#include "MidiNodeLibrary.h"

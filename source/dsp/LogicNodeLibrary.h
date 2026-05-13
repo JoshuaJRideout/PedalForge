@@ -6,8 +6,8 @@
 class NANDGateNode : public DSPNode {
 public:
     NANDGateNode() : DSPNode("nand_gate", "NAND Gate") {
-        addInput("a", NodePort::Control); addInput("b", NodePort::Control);
-        addOutput("out", NodePort::Control);
+        addInput("a", NodePort::Gate); addInput("b", NodePort::Gate);
+        addOutput("out", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -23,8 +23,8 @@ public:
 class NORGateNode : public DSPNode {
 public:
     NORGateNode() : DSPNode("nor_gate", "NOR Gate") {
-        addInput("a", NodePort::Control); addInput("b", NodePort::Control);
-        addOutput("out", NodePort::Control);
+        addInput("a", NodePort::Gate); addInput("b", NodePort::Gate);
+        addOutput("out", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -40,8 +40,8 @@ public:
 class XNORGateNode : public DSPNode {
 public:
     XNORGateNode() : DSPNode("xnor_gate", "XNOR Gate") {
-        addInput("a", NodePort::Control); addInput("b", NodePort::Control);
-        addOutput("out", NodePort::Control);
+        addInput("a", NodePort::Gate); addInput("b", NodePort::Gate);
+        addOutput("out", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -53,7 +53,7 @@ public:
     }
 };
 
-// Buffer
+// Buffer (passes signal through — useful as a logic buffer or signal repeater)
 class BufferNode : public DSPNode {
 public:
     BufferNode() : DSPNode("buffer", "Buffer") {
@@ -65,12 +65,12 @@ public:
     }
 };
 
-// Pulse (Outputs 1 for duration when Triggered)
+// Pulse (Outputs 1 for a set duration when triggered by a rising edge)
 class PulseNode : public DSPNode {
 public:
     PulseNode() : DSPNode("pulse", "Pulse") {
-        addInput("trig", NodePort::Control);
-        addOutput("out", NodePort::Control);
+        addInput("trig", NodePort::Gate);
+        addOutput("out", NodePort::Gate);
         addParam("duration", "Duration (s)", 0.001f, 10.0f, 0.1f);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
@@ -90,11 +90,11 @@ private:
     float pulseTimer = 0;
 };
 
-// Controlled Buffer / Gate
+// Controlled Buffer / Gate (passes signal only when gate is high)
 class GateBufferNode : public DSPNode {
 public:
     GateBufferNode() : DSPNode("gate_buffer", "Controlled Buffer") {
-        addInput("in", NodePort::Control); addInput("gate", NodePort::Control);
+        addInput("in", NodePort::Control); addInput("gate", NodePort::Gate);
         addOutput("out", NodePort::Control);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
@@ -110,8 +110,8 @@ public:
 class SRLatchNode : public DSPNode {
 public:
     SRLatchNode() : DSPNode("sr_latch", "SR Latch") {
-        addInput("s", NodePort::Control); addInput("r", NodePort::Control);
-        addOutput("q", NodePort::Control);
+        addInput("s", NodePort::Gate); addInput("r", NodePort::Gate);
+        addOutput("q", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -131,7 +131,7 @@ private:
 class DLatchNode : public DSPNode {
 public:
     DLatchNode() : DSPNode("d_latch", "D Latch") {
-        addInput("d", NodePort::Control); addInput("en", NodePort::Control);
+        addInput("d", NodePort::Control); addInput("en", NodePort::Gate);
         addOutput("q", NodePort::Control);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
@@ -150,8 +150,8 @@ private:
 class DFlipFlopNode : public DSPNode {
 public:
     DFlipFlopNode() : DSPNode("d_ff", "D Flip-Flop") {
-        addInput("d", NodePort::Control); addInput("clk", NodePort::Control);
-        addOutput("q", NodePort::Control);
+        addInput("d", NodePort::Control); addInput("clk", NodePort::Gate);
+        addOutput("q", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -171,8 +171,8 @@ private:
 class TFlipFlopNode : public DSPNode {
 public:
     TFlipFlopNode() : DSPNode("t_ff", "T Flip-Flop") {
-        addInput("t", NodePort::Control); addInput("clk", NodePort::Control);
-        addOutput("q", NodePort::Control);
+        addInput("t", NodePort::Gate); addInput("clk", NodePort::Gate);
+        addOutput("q", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
@@ -193,8 +193,8 @@ private:
 class JKFlipFlopNode : public DSPNode {
 public:
     JKFlipFlopNode() : DSPNode("jk_ff", "JK Flip-Flop") {
-        addInput("j", NodePort::Control); addInput("k", NodePort::Control); addInput("clk", NodePort::Control);
-        addOutput("q", NodePort::Control);
+        addInput("j", NodePort::Gate); addInput("k", NodePort::Gate); addInput("clk", NodePort::Gate);
+        addOutput("q", NodePort::Gate);
     }
     void process(const float** in, int numIn, float** out, int numOut, int n) override {
         if (numOut == 0) return;
