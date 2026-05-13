@@ -244,6 +244,358 @@ private:
     int lastCrossingSample = 0;
 };
 
+/**
+ * 7-Segment Display — Classic digital readout for numbers.
+ * Great for BPM counters, patch numbers, tap tempo displays.
+ * Shows integer or decimal values in retro LED-segment style.
+ */
+class SevenSegNode : public DSPNode
+{
+public:
+    SevenSegNode() : DSPNode ("disp_7seg", "7-Segment Display")
+    {
+        addInput ("value", NodePort::Control);
+        addParam ("digits", "Digits", 1.0f, 8.0f, 3.0f);
+        addParam ("decimal_pos", "Decimal Position", 0.0f, 7.0f, 0.0f); // 0 = no decimal
+        addParam ("hue", "Color Hue (0=red,120=grn)", 0.0f, 360.0f, 0.0f);
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        if (numIn > 0 && in[0])
+            displayValue = in[0][n - 1];
+    }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "7seg"; }
+
+    float displayValue = 0.0f;
+};
+
+/**
+ * Text Screen — Displays a text string on the pedal face.
+ * The text is set via the properties panel (param).
+ * Can also be driven by a control signal to select from preset strings.
+ */
+class TextScreenNode : public DSPNode
+{
+public:
+    TextScreenNode() : DSPNode ("disp_text", "Text Screen")
+    {
+        addInput ("select", NodePort::Control); // selects which line to highlight/show
+        addParam ("line_count", "Lines", 1.0f, 8.0f, 2.0f);
+        addParam ("font_size", "Font Size", 8.0f, 32.0f, 14.0f);
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        if (numIn > 0 && in[0])
+            selectedLine = (int) in[0][n - 1];
+    }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "text_screen"; }
+
+    // Text lines stored here — set via properties panel
+    juce::StringArray textLines { "Line 1", "Line 2" };
+    int selectedLine = 0;
+};
+
+/**
+ * Console Screen — Multi-line text display with scrolling.
+ * Like a terminal window on the pedal face.
+ * New messages push old ones up. Great for debug or status logging.
+ */
+class ConsoleScreenNode : public DSPNode
+{
+public:
+    ConsoleScreenNode() : DSPNode ("disp_console", "Console Screen")
+    {
+        addInput ("trigger", NodePort::Gate); // rising edge pushes current value as new line
+        addInput ("value", NodePort::Control);
+        addParam ("rows", "Rows", 2.0f, 16.0f, 6.0f);
+        addParam ("columns", "Columns", 10.0f, 40.0f, 20.0f);
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        if (numIn < 2) return;
+        bool trig = (in[0]) && in[0][n - 1] > 0.5f;
+        if (trig && !lastTrig)
+        {
+            float val = in[1] ? in[1][n - 1] : 0.0f;
+            int maxRows = (int) getParam("rows")->get();
+            lines.add (juce::String (val, 2));
+            while (lines.size() > maxRows)
+                lines.remove (0);
+        }
+        lastTrig = trig;
+    }
+
+    void reset() override { lines.clear(); lastTrig = false; }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "console"; }
+
+    juce::StringArray lines;
+
+private:
+    bool lastTrig = false;
+};
+
+/**
+ * Oscilloscope — Real-time waveform display.
+ * Captures a rolling buffer of samples and displays the trace.
+ * Supports audio signals and control signals for different time scales.
+ */
+class OscilloscopeNode : public DSPNode
+{
+public:
+    static constexpr int kBufferSize = 512;
+
+    OscilloscopeNode() : DSPNode ("disp_scope", "Oscilloscope")
+    {
+        addInput ("signal", NodePort::Audio);
+        addInput ("trigger", NodePort::Gate); // optional external trigger
+        addParam ("time_div", "Time Scale", 0.1f, 50.0f, 1.0f); // ms per division
+        addParam ("gain", "Vertical Gain", 0.1f, 10.0f, 1.0f);
+        addParam ("trigger_level", "Trigger Level", -1.0f, 1.0f, 0.0f);
+        std::memset (waveform, 0, sizeof (waveform));
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        if (numIn < 1 || !in[0]) return;
+        float gain = getParam("gain")->get();
+        float trigLevel = getParam("trigger_level")->get();
+        bool hasExtTrig = (numIn > 1 && in[1]);
+
+        for (int i = 0; i < n; ++i)
+        {
+            float sample = in[0][i] * gain;
+
+            // Trigger detection
+            if (!triggered)
+            {
+                if (hasExtTrig)
+                {
+                    if (in[1][i] > 0.5f && !lastTrigState)
+                        triggered = true;
+                    lastTrigState = in[1][i] > 0.5f;
+                }
+                else
+                {
+                    if (lastSample <= trigLevel && sample > trigLevel)
+                        triggered = true;
+                }
+                lastSample = sample;
+                continue;
+            }
+
+            // Capture samples into display buffer
+            if (writePos < kBufferSize)
+            {
+                waveform[writePos++] = sample;
+            }
+            else
+            {
+                // Buffer full — freeze display, wait for next trigger
+                triggered = false;
+                writePos = 0;
+                displayReady = true;
+            }
+            lastSample = sample;
+        }
+    }
+
+    void reset() override
+    {
+        std::memset (waveform, 0, sizeof (waveform));
+        writePos = 0;
+        triggered = false;
+        displayReady = false;
+    }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "oscilloscope"; }
+
+    float waveform[kBufferSize];
+    bool displayReady = false;
+
+private:
+    int writePos = 0;
+    bool triggered = false;
+    bool lastTrigState = false;
+    float lastSample = 0.0f;
+};
+
+/**
+ * Pixel Display — Addressable pixel grid for custom graphics.
+ * X, Y, and Color inputs let you draw pixel-by-pixel.
+ * A write trigger commits the current pixel.
+ */
+class PixelDisplayNode : public DSPNode
+{
+public:
+    static constexpr int kWidth = 32;
+    static constexpr int kHeight = 16;
+
+    PixelDisplayNode() : DSPNode ("disp_pixel", "Pixel Display")
+    {
+        addInput ("x", NodePort::Control);
+        addInput ("y", NodePort::Control);
+        addInput ("color", NodePort::Control); // 0-1 = hue, or brightness for mono
+        addInput ("write", NodePort::Gate);    // rising edge writes pixel
+        addInput ("clear", NodePort::Gate);    // rising edge clears screen
+        addParam ("mode", "Mode (0=mono,1=color)", 0.0f, 1.0f, 0.0f);
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            // Clear
+            bool clr = (numIn > 4 && in[4]) && in[4][i] > 0.5f;
+            if (clr && !lastClear)
+                std::memset (pixels, 0, sizeof (pixels));
+            lastClear = clr;
+
+            // Write
+            bool wr = (numIn > 3 && in[3]) && in[3][i] > 0.5f;
+            if (wr && !lastWrite)
+            {
+                int x = (numIn > 0 && in[0]) ? juce::jlimit (0, kWidth - 1, (int)(in[0][i] * (kWidth - 1))) : 0;
+                int y = (numIn > 1 && in[1]) ? juce::jlimit (0, kHeight - 1, (int)(in[1][i] * (kHeight - 1))) : 0;
+                float c = (numIn > 2 && in[2]) ? juce::jlimit (0.0f, 1.0f, in[2][i]) : 1.0f;
+                pixels[y][x] = c;
+                dirty = true;
+            }
+            lastWrite = wr;
+        }
+    }
+
+    void reset() override
+    {
+        std::memset (pixels, 0, sizeof (pixels));
+        dirty = true;
+    }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "pixel_display"; }
+
+    float pixels[kHeight][kWidth] = {};
+    bool dirty = true;
+
+private:
+    bool lastWrite = false;
+    bool lastClear = false;
+};
+
+/**
+ * Indicator Light — Simple color-changing indicator based on value thresholds.
+ * Changes color based on ranges: green (normal), yellow (warning), red (alert).
+ * Simpler than LED — no brightness control, just automatic color zones.
+ */
+class IndicatorNode : public DSPNode
+{
+public:
+    IndicatorNode() : DSPNode ("disp_indicator", "Indicator Light")
+    {
+        addInput ("value", NodePort::Control);
+        addParam ("yellow_thresh", "Yellow Threshold", 0.0f, 1.0f, 0.6f);
+        addParam ("red_thresh", "Red Threshold", 0.0f, 1.0f, 0.85f);
+    }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        if (numIn > 0 && in[0])
+            currentValue = juce::jlimit (0.0f, 1.0f, in[0][n - 1]);
+    }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "indicator"; }
+
+    float currentValue = 0.0f;
+    // UI reads currentValue, compares to thresholds, and picks green/yellow/red
+};
+
+/**
+ * Sound Emitter — Plays a tone or makes a sound when triggered.
+ * Great for click tracks, metronome ticks, alert beeps, or fun sound effects.
+ * Generates its own audio — wire the output to the audio chain or a mixer.
+ */
+class SoundEmitterNode : public DSPNode
+{
+public:
+    SoundEmitterNode() : DSPNode ("disp_sound", "Sound Emitter")
+    {
+        addInput ("trigger", NodePort::Gate);
+        addInput ("pitch", NodePort::Control);   // 0-1 = frequency
+        addOutput ("audio", NodePort::Audio);
+        addParam ("waveform", "Wave (0=sin,1=sq,2=saw,3=click)", 0.0f, 3.0f, 0.0f);
+        addParam ("frequency", "Base Freq (Hz)", 20.0f, 8000.0f, 1000.0f);
+        addParam ("duration", "Duration (ms)", 1.0f, 2000.0f, 50.0f);
+        addParam ("volume", "Volume", 0.0f, 1.0f, 0.5f);
+    }
+
+    void process (const float** in, int numIn, float** out, int, int n) override
+    {
+        float baseFreq = getParam("frequency")->get();
+        float durMs = getParam("duration")->get();
+        float vol = getParam("volume")->get();
+        int wave = (int) getParam("waveform")->get();
+        float durSamples = sr * durMs * 0.001f;
+
+        for (int i = 0; i < n; ++i)
+        {
+            // Trigger detection
+            bool trig = (numIn > 0 && in[0]) && in[0][i] > 0.5f;
+            if (trig && !lastTrig)
+            {
+                playTimer = durSamples;
+                phase = 0.0f;
+            }
+            lastTrig = trig;
+
+            // Pitch modulation
+            float freq = baseFreq;
+            if (numIn > 1 && in[1])
+                freq = baseFreq * std::pow (2.0f, (in[1][i] - 0.5f) * 4.0f); // +/- 2 octaves
+
+            float sample = 0.0f;
+            if (playTimer > 0)
+            {
+                float envelope = juce::jmin (1.0f, playTimer / juce::jmax (1.0f, durSamples * 0.1f)); // fade out last 10%
+                float inc = freq / sr;
+                
+                switch (wave) {
+                    case 0: sample = std::sin (phase * 6.283185f); break; // sine
+                    case 1: sample = (phase < 0.5f) ? 1.0f : -1.0f; break; // square
+                    case 2: sample = 2.0f * phase - 1.0f; break; // saw
+                    case 3: sample = (playTimer > durSamples - 4) ? 1.0f : 0.0f; break; // click
+                    default: break;
+                }
+                sample *= vol * envelope;
+                phase += inc;
+                if (phase >= 1.0f) phase -= 1.0f;
+                playTimer--;
+            }
+
+            out[0][i] = sample;
+        }
+    }
+
+    void reset() override { phase = 0; playTimer = 0; lastTrig = false; }
+
+    bool isDisplayNode() const { return true; }
+    juce::String getDisplayType() const { return "sound_emitter"; }
+
+private:
+    float phase = 0.0f;
+    float playTimer = 0.0f;
+    bool lastTrig = false;
+};
+
 //==============================================================================
 // ─── I/O PERIPHERALS ────────────────────────────────────────────────────────
 //==============================================================================

@@ -170,9 +170,11 @@ juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
     if (type == "ctrl_knob" || type == "ctrl_fader" || type == "ctrl_button"
         || type == "ctrl_toggle" || type == "ctrl_selector" || type == "ctrl_xy")
         return juce::Colour (0xFFE8A855);
-    // Displays & Lights — soft cyan
+    // Displays & Gadgets — soft cyan
     if (type == "disp_led" || type == "disp_rgb_led" || type == "disp_display"
-        || type == "disp_vu" || type == "disp_tuner")
+        || type == "disp_vu" || type == "disp_tuner" || type == "disp_7seg"
+        || type == "disp_text" || type == "disp_console" || type == "disp_scope"
+        || type == "disp_pixel" || type == "disp_indicator" || type == "disp_sound")
         return juce::Colour (0xFF22D3EE);
     // I/O Peripherals — indigo (matches I/O category)
     if (type == "io_expression" || type == "io_footswitch" || type == "io_cv_in" || type == "io_cv_out")
@@ -726,12 +728,25 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
 
     // ─── Displays & Lights ───
     juce::PopupMenu dp;
-    dp.addItem(320,"LED"); dp.addItem(321,"RGB LED");
+    juce::PopupMenu dpLights;
+    dpLights.addItem(320,"LED"); dpLights.addItem(321,"RGB LED"); dpLights.addItem(330,"Indicator Light");
+    dp.addSubMenu("Lights", dpLights);
+
+    juce::PopupMenu dpScreens;
+    dpScreens.addItem(322,"Numeric Display"); dpScreens.addItem(325,"7-Segment Display");
+    dpScreens.addSeparator();
+    dpScreens.addItem(326,"Text Screen"); dpScreens.addItem(327,"Console Screen");
+    dpScreens.addSeparator();
+    dpScreens.addItem(329,"Pixel Display (32x16)");
+    dp.addSubMenu("Screens", dpScreens);
+
+    juce::PopupMenu dpInst;
+    dpInst.addItem(323,"VU Meter"); dpInst.addItem(328,"Oscilloscope"); dpInst.addItem(324,"Tuner");
+    dp.addSubMenu("Instruments", dpInst);
+
     dp.addSeparator();
-    dp.addItem(322,"Display (Numeric)"); dp.addItem(323,"VU Meter");
-    dp.addSeparator();
-    dp.addItem(324,"Tuner Display");
-    menu.addSubMenu("Displays & Lights",dp);
+    dp.addItem(331,"Sound Emitter");
+    menu.addSubMenu("Displays & Gadgets",dp);
 
     float cx = cp.x, cy = cp.y;
     menu.showMenuAsync ({}, [this, cx, cy](int r) {
@@ -785,9 +800,12 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             // Controls
             case 300: t="ctrl_knob"; break; case 301: t="ctrl_fader"; break; case 302: t="ctrl_button"; break;
             case 303: t="ctrl_toggle"; break; case 304: t="ctrl_selector"; break; case 305: t="ctrl_xy"; break;
-            // Displays & Lights
+            // Displays & Gadgets
             case 320: t="disp_led"; break; case 321: t="disp_rgb_led"; break;
             case 322: t="disp_display"; break; case 323: t="disp_vu"; break; case 324: t="disp_tuner"; break;
+            case 325: t="disp_7seg"; break; case 326: t="disp_text"; break; case 327: t="disp_console"; break;
+            case 328: t="disp_scope"; break; case 329: t="disp_pixel"; break;
+            case 330: t="disp_indicator"; break; case 331: t="disp_sound"; break;
             // I/O Peripherals
             case 350: t="io_expression"; break; case 351: t="io_footswitch"; break;
             case 352: t="io_cv_in"; break; case 353: t="io_cv_out"; break;
