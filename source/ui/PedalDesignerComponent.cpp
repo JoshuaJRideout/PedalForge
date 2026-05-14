@@ -19,6 +19,8 @@ struct PlacedHardware
     juce::String imageTrack;      // Path to track/background image (fader slot)
     juce::Colour customColour { juce::Colours::red }; // Color for LED glow
     bool stretchImage = true;     // Whether to stretch image or keep aspect ratio
+    juce::String fontFamily = "Sans";
+    int fontStyle = 1;            // 0=Plain, 1=Bold, 2=Italic, 3=BoldItalic
 };
 
 //==============================================================================
@@ -299,6 +301,8 @@ public:
             ctrl.imageTrack = hw.imageTrack;
             ctrl.customColour = hw.customColour;
             ctrl.stretchImage = hw.stretchImage;
+            ctrl.fontFamily = hw.fontFamily;
+            ctrl.fontStyle = hw.fontStyle;
             design.controls.push_back (ctrl);
 
             // Mapping
@@ -978,12 +982,16 @@ public:
             addChildComponent (cb);
         };
         
-        setupCombo (fontCombo);
-        fontCombo.addItem ("Normal", 1);
-        fontCombo.addItem ("Bold", 2);
-        fontCombo.addItem ("Italic", 3);
-        fontCombo.addItem ("Bold Italic", 4);
-        fontCombo.addItem ("Monospace", 5);
+        setupCombo (fontStyleCombo);
+        fontStyleCombo.addItem ("Normal", 1);
+        fontStyleCombo.addItem ("Bold", 2);
+        fontStyleCombo.addItem ("Italic", 3);
+        fontStyleCombo.addItem ("Bold Italic", 4);
+
+        setupCombo (fontFamilyCombo);
+        fontFamilyCombo.addItem ("Sans Serif", 1);
+        fontFamilyCombo.addItem ("Serif", 2);
+        fontFamilyCombo.addItem ("Monospace", 3);
 
         setupCombo (colourCombo);
         colourCombo.addItem ("Default", 1);
@@ -1081,11 +1089,17 @@ public:
                 // Update combo boxes based on state
                 if (isLabel)
                 {
-                    if (hwPtr->imageMain.contains ("bold italic")) fontCombo.setSelectedId (4, juce::dontSendNotification);
-                    else if (hwPtr->imageMain.contains ("monospace")) fontCombo.setSelectedId (5, juce::dontSendNotification);
-                    else if (hwPtr->imageMain.contains ("bold")) fontCombo.setSelectedId (2, juce::dontSendNotification);
-                    else if (hwPtr->imageMain.contains ("italic")) fontCombo.setSelectedId (3, juce::dontSendNotification);
-                    else fontCombo.setSelectedId (1, juce::dontSendNotification);
+                    int fs = hwPtr->fontStyle;
+                    if (fs == 0) fontStyleCombo.setSelectedId (1, juce::dontSendNotification);
+                    else if (fs == 1) fontStyleCombo.setSelectedId (2, juce::dontSendNotification);
+                    else if (fs == 2) fontStyleCombo.setSelectedId (3, juce::dontSendNotification);
+                    else if (fs == 3) fontStyleCombo.setSelectedId (4, juce::dontSendNotification);
+
+                    juce::String fam = hwPtr->fontFamily;
+                    if (fam == "Sans") fontFamilyCombo.setSelectedId (1, juce::dontSendNotification);
+                    else if (fam == "Serif") fontFamilyCombo.setSelectedId (2, juce::dontSendNotification);
+                    else if (fam == "Monospace") fontFamilyCombo.setSelectedId (3, juce::dontSendNotification);
+                    else fontFamilyCombo.setSelectedId (1, juce::dontSendNotification);
                 }
 
                 auto c = hwPtr->customColour;
@@ -1110,7 +1124,8 @@ public:
                 btnImageTrack.setVisible (showTrack);
                 btnClearImage.setVisible (!isLabel);
 
-                fontCombo.setVisible (isLabel);
+                fontStyleCombo.setVisible (isLabel);
+                fontFamilyCombo.setVisible (isLabel);
                 colourCombo.setVisible (true);
 
                 nameEditor.setVisible (false);
@@ -1142,7 +1157,8 @@ public:
             btnImageTrack.setVisible (false);
             btnClearImage.setVisible (true);
 
-            fontCombo.setVisible (false);
+            fontStyleCombo.setVisible (false);
+            fontFamilyCombo.setVisible (false);
             colourCombo.setVisible (false);
         }
         else
@@ -1155,7 +1171,8 @@ public:
             btnImageMain.setVisible (false);
             btnImageTrack.setVisible (false);
             btnClearImage.setVisible (false);
-            fontCombo.setVisible (false);
+            fontStyleCombo.setVisible (false);
+            fontFamilyCombo.setVisible (false);
             colourCombo.setVisible (false);
             nameEditor.setVisible (false);
             authorEditor.setVisible (false);
@@ -1304,6 +1321,9 @@ public:
         }
         else if (sel.size() == 1)
         {
+            auto* hw = canvas->getSelectedHardware();
+            bool isLabel = hw && hw->type == "label";
+
             // Component mode sizes
             y = 234;
             labelEditor.setBounds (m, y, getWidth()-m*2, 28);
@@ -1312,13 +1332,19 @@ public:
             paramCombo.setBounds   (m, y, getWidth()-m*2, 28);
 
             y = paramCombo.getBottom() + 36;
-            btnImageMain.setBounds (m, y, getWidth()-m*2, 24);
-            fontCombo.setBounds (m, y, getWidth()-m*2, 28);
-            y += 30;
-            btnImageTrack.setBounds (m, y, getWidth()-m*2, 24);
-            colourCombo.setBounds (m, y, getWidth()-m*2, 28);
-            y += 30;
-            btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
+            if (isLabel)
+            {
+                fontFamilyCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
+                fontStyleCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
+                colourCombo.setBounds (m, y, getWidth()-m*2, 28);
+            }
+            else
+            {
+                btnImageMain.setBounds (m, y, getWidth()-m*2, 24); y += 30;
+                btnImageTrack.setBounds (m, y, getWidth()-m*2, 24); y += 30;
+                colourCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
+                btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
+            }
 
             deleteButton.setBounds (m, getHeight()-50, getWidth()-m*2, 32);
         }
@@ -1386,14 +1412,23 @@ public:
                             hw->parameterID = txt.substring (start + 1, end);
                     }
                 }
-                else if (box == &fontCombo)
+                else if (box == &fontStyleCombo)
                 {
-                    int s = fontCombo.getSelectedId();
-                    if (s == 2) hw->imageMain = "bold";
-                    else if (s == 3) hw->imageMain = "italic";
-                    else if (s == 4) hw->imageMain = "bold italic";
-                    else if (s == 5) hw->imageMain = "monospace";
-                    else hw->imageMain = "";
+                    int s = fontStyleCombo.getSelectedId();
+                    if (s == 1) hw->fontStyle = 0; // Normal
+                    else if (s == 2) hw->fontStyle = 1; // Bold
+                    else if (s == 3) hw->fontStyle = 2; // Italic
+                    else if (s == 4) hw->fontStyle = 3; // Bold Italic
+                    
+                    canvas->notifyHardwareChanged();
+                }
+                else if (box == &fontFamilyCombo)
+                {
+                    int s = fontFamilyCombo.getSelectedId();
+                    if (s == 1) hw->fontFamily = "Sans";
+                    else if (s == 2) hw->fontFamily = "Serif";
+                    else if (s == 3) hw->fontFamily = "Monospace";
+                    
                     canvas->notifyHardwareChanged();
                 }
                 else if (box == &colourCombo)
@@ -1418,7 +1453,7 @@ private:
     juce::TextEditor labelEditor;
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor;
-    juce::ComboBox paramCombo, fontCombo, colourCombo;
+    juce::ComboBox paramCombo, fontStyleCombo, fontFamilyCombo, colourCombo;
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
@@ -1535,6 +1570,8 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
             hw.imageTrack = ctrl.imageTrack;
             hw.customColour = ctrl.customColour;
             hw.stretchImage = ctrl.stretchImage;
+            hw.fontFamily = ctrl.fontFamily;
+            hw.fontStyle = ctrl.fontStyle;
 
             // Find parameterID from mappings
             for (const auto& m : design.mappings)

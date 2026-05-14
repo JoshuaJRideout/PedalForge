@@ -42,6 +42,10 @@ struct PedalDesign
         juce::String imageTrack;
         juce::Colour customColour { juce::Colours::red };
         bool stretchImage = true;
+        
+        // Font properties (mostly used by 'label')
+        juce::String fontFamily = "Sans"; // "Sans", "Serif", "Monospace", or specific font name
+        int fontStyle = 1;                // 0=Plain, 1=Bold, 2=Italic, 3=BoldItalic
     };
 
     float chassisW = 200.0f;
@@ -98,7 +102,13 @@ struct PedalDesign
             co->setProperty ("imageMain",    c.imageMain);
             co->setProperty ("imageTrack",   c.imageTrack);
             co->setProperty ("customColour", (juce::int64) c.customColour.getARGB());
-            co->setProperty ("stretchImage", c.stretchImage);
+            if (c.stretchImage != true)
+                co->setProperty ("stretchImage", c.stretchImage);
+            if (c.fontFamily != "Sans")
+                co->setProperty ("fontFamily", c.fontFamily);
+            if (c.fontStyle != 1)
+                co->setProperty ("fontStyle", c.fontStyle);
+
             ctrlArr.add (juce::var (co));
         }
         root->setProperty ("controls", ctrlArr);
@@ -157,6 +167,8 @@ struct PedalDesign
                         if (co->hasProperty("imageTrack"))   c.imageTrack   = co->getProperty ("imageTrack").toString();
                         if (co->hasProperty("customColour")) c.customColour = juce::Colour ((juce::uint32)(juce::int64) co->getProperty ("customColour"));
                         if (co->hasProperty("stretchImage")) c.stretchImage = (bool) co->getProperty ("stretchImage");
+                        if (co->hasProperty("fontFamily"))   c.fontFamily   = co->getProperty ("fontFamily").toString();
+                        if (co->hasProperty("fontStyle"))    c.fontStyle    = (int) co->getProperty ("fontStyle");
                         design.controls.push_back (c);
                     }
                 }

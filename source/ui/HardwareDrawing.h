@@ -11,6 +11,8 @@ struct CustomStyles
     juce::String imageChassis;
     juce::Colour customColour { juce::Colours::red };
     bool stretchImage = true;
+    juce::String fontFamily = "Sans";
+    int fontStyle = 1;
 };
 
 inline void drawImageScaled (juce::Graphics& g, const juce::Image& img, juce::Rectangle<float> area, bool stretch)
@@ -547,12 +549,17 @@ inline void drawTextLabel (juce::Graphics& g, juce::Rectangle<float> area, const
     int styleFlags = juce::Font::plain;
     juce::String fontName = juce::Font::getDefaultSansSerifFontName();
 
-    if (custom && custom->imageMain.isNotEmpty())
+    // Map fontName
+    if (custom && custom->fontFamily == "Serif")           fontName = juce::Font::getDefaultSerifFontName();
+    else if (custom && custom->fontFamily == "Monospace")  fontName = juce::Font::getDefaultMonospacedFontName();
+    else if (custom && custom->fontFamily != "Sans" && custom->fontFamily.isNotEmpty()) fontName = custom->fontFamily;
+
+    if (custom)
     {
-        juce::String styleStr = custom->imageMain.toLowerCase();
-        if (styleStr.contains ("bold")) styleFlags |= juce::Font::bold;
-        if (styleStr.contains ("italic")) styleFlags |= juce::Font::italic;
-        if (styleStr.contains ("monospace")) fontName = juce::Font::getDefaultMonospacedFontName();
+        if (custom->fontStyle == 0) styleFlags = juce::Font::plain;
+        else if (custom->fontStyle == 1) styleFlags = juce::Font::bold;
+        else if (custom->fontStyle == 2) styleFlags = juce::Font::italic;
+        else if (custom->fontStyle == 3) styleFlags = juce::Font::bold | juce::Font::italic;
     }
 
     // Determine size, using area height

@@ -95,10 +95,12 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         if (it != controlValues.end()) val = it->second;
 
         HardwareDrawing::CustomStyles styles;
+        styles.customColour = ctrl.customColour;
         styles.imageMain = ctrl.imageMain;
         styles.imageTrack = ctrl.imageTrack;
-        styles.customColour = ctrl.customColour;
         styles.stretchImage = ctrl.stretchImage;
+        styles.fontFamily = ctrl.fontFamily;
+        styles.fontStyle = ctrl.fontStyle;
 
         if (ctrl.type == "knob")
             HardwareDrawing::drawKnob (g, ctrlBounds, val, &styles);
