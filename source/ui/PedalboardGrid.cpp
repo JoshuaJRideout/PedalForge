@@ -596,6 +596,22 @@ void PedalboardGrid::deselectAll()
     repaint();
 }
 
+void PedalboardGrid::refreshSelectedPedal()
+{
+    if (selectedComponent != nullptr)
+    {
+        // Re-assign size from design footprint in case it was modified
+        selectedComponent->getInstance().gridW = (int)std::ceil (selectedComponent->getInstance().design->chassisW / 50.0f);
+        selectedComponent->getInstance().gridH = (int)std::ceil (selectedComponent->getInstance().design->chassisH / 50.0f);
+        
+        // Sync visual appearance
+        selectedComponent->repaint();
+        detailPanel.showPedal (selectedComponent->getInstance(), engine);
+        resized();
+        repaint();
+    }
+}
+
 //==============================================================================
 void PedalboardGrid::snapPedalToGrid (PedalComponent& comp)
 {

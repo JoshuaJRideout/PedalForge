@@ -255,10 +255,23 @@ public:
     void savePedalDesign()
     {
         if (pedalName.isEmpty()) pedalName = "Untitled Pedal";
-        exportPedalDesign();
+        
+        PedalDesign design = buildPedalDesign();
+        
+        // Save to designs directory
+        auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                              .getChildFile ("PedalForge").getChildFile ("designs");
+        designsDir.createDirectory();
+
+        auto file = designsDir.getChildFile (pedalName.replace (" ", "_") + ".json");
+        design.saveToFile (file);
+
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                                                 "Saved!",
+                                                 "Pedal design saved to:\n" + file.getFullPathName());
     }
 
-    void exportPedalDesign()
+    PedalDesign buildPedalDesign() const
     {
         PedalDesign design;
         design.name = pedalName;
@@ -302,17 +315,7 @@ public:
         if (onGetEffectsGraph)
             design.effectsGraph = onGetEffectsGraph();
 
-        // Save to designs directory
-        auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                              .getChildFile ("PedalForge").getChildFile ("designs");
-        designsDir.createDirectory();
-
-        auto file = designsDir.getChildFile (pedalName.replace (" ", "_") + ".json");
-        design.saveToFile (file);
-
-        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
-                                                 "Saved!",
-                                                 "Pedal design saved to:\n" + file.getFullPathName());
+        return design;
     }
 
     void updateGridLabel()
@@ -1562,4 +1565,11 @@ void PedalDesignerComponent::clearDesign()
     }
     if (properties)
         properties->showForIndices ();
+}
+
+PedalDesign PedalDesignerComponent::getDesign() const
+{
+    if (canvas)
+        return canvas->buildPedalDesign();
+    return PedalDesign();
 }

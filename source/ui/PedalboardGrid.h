@@ -76,6 +76,9 @@ public:
     void selectPedal (PedalComponent* comp);
     void deselectAll();
 
+    /** Force the grid to refresh the detail panel for the selected pedal. */
+    void refreshSelectedPedal();
+
     /** Callback fired when a pedal is selected/deselected. */
     std::function<void(PedalInstance*)> onPedalSelected;
 

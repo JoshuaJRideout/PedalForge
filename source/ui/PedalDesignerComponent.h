@@ -22,6 +22,9 @@ public:
     /** Load a PedalDesign's visual layout into the canvas. */
     void loadDesign (const PedalDesign& design);
 
+    /** Get the current PedalDesign from the canvas. */
+    PedalDesign getDesign() const;
+
     /** Clear the canvas for a new design. */
     void clearDesign();
 

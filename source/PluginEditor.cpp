@@ -124,6 +124,18 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
         bool isForge      = tabForge.getToggleState();
         bool isEffects    = tabEffects.getToggleState();
 
+        // Before we switch views, grab the potentially modified design from the Pedal Forge
+        // and push it back to the active pedal instance on the pedalboard!
+        if (activePedal != nullptr && activePedal->design != nullptr)
+        {
+            auto updatedDesign = pedalDesigner.getDesign();
+            // Preserve the original category/colour if unchanged, but update the object
+            *(activePedal->design) = updatedDesign;
+            
+            // Force the grid and detail panel to rebuild based on the new design
+            grid.refreshSelectedPedal();
+        }
+
         // Pedalboard view
         grid.setVisible (isPedalboard);
         palette.setVisible (isPedalboard);
