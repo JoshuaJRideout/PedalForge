@@ -142,14 +142,11 @@ void PedalboardGrid::timerCallback()
                         auto params = proc->getParameters();
                         for (const auto& mapping : instance.design->mappings)
                         {
-                            juce::String nodeIDStr = mapping.nodeParam.upToFirstOccurrenceOf (".", false, false);
-                            juce::String paramID = mapping.nodeParam.fromFirstOccurrenceOf (".", false, false);
-                            
                             for (auto* p : params)
                             {
                                 if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
                                 {
-                                    if (ranged->getParameterID() == paramID)
+                                    if (ranged->getParameterID() == mapping.nodeParam)
                                     {
                                         float val = ranged->convertFrom0to1 (ranged->getValue());
                                         juce::String text = ranged->getText (ranged->getValue(), 32);

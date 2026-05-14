@@ -141,9 +141,20 @@ void PedalDetailPanel::resized()
 
         for (auto& entry : knobEntries)
         {
+            // Find if this paramId is mapped to any control
+            juce::String mappedControlID;
+            for (const auto& mapping : selectedInstance->design->mappings)
+            {
+                if (mapping.nodeParam == entry.paramId)
+                {
+                    mappedControlID = mapping.controlID;
+                    break;
+                }
+            }
+            
             for (const auto& ctrl : selectedInstance->design->controls)
             {
-                if (ctrl.controlID == entry.paramId)
+                if (ctrl.controlID == mappedControlID)
                 {
                     // Calculate bounds matching HardwareDrawing
                     float scaledX = offX + ctrl.x * sc;

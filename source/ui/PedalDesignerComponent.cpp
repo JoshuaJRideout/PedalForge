@@ -1374,7 +1374,14 @@ public:
                     if (s == 1) // "(none)"
                         hw->parameterID = "";
                     else
-                        hw->parameterID = paramCombo.getText();
+                    {
+                        // Extract the [fullID] from the display string
+                        juce::String txt = paramCombo.getText();
+                        int start = txt.lastIndexOfChar ('[');
+                        int end = txt.lastIndexOfChar (']');
+                        if (start >= 0 && end > start)
+                            hw->parameterID = txt.substring (start + 1, end);
+                    }
                 }
                 else if (box == &fontCombo)
                 {
@@ -1429,7 +1436,7 @@ private:
                     continue;
                 for (const auto& param : node->getParams())
                 {
-                    juce::String fullID = juce::String (nodeID) + "." + param.id;
+                    juce::String fullID = juce::String (nodeID) + "_" + param.id;
                     juce::String display = node->getName() + " : " + param.name;
                     paramCombo.addItem (display + "  [" + fullID + "]", itemID);
                     if (hw && hw->parameterID == fullID)
