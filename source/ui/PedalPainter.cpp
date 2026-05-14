@@ -153,17 +153,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         }
     }
 
-    // Name at bottom
-    float nameFontSize = juce::jmax (6.0f, drawH * 0.06f);
-    auto nameRect = juce::Rectangle<float> (
-        chassisRect.getX() + drawW * 0.1f,
-        chassisRect.getBottom() - drawH * 0.15f,
-        drawW * 0.8f, drawH * 0.08f);
-    g.setColour (juce::Colours::black.withAlpha (0.12f * alpha));
-    g.fillRoundedRectangle (nameRect, 2.0f);
-    g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (alpha));
-    g.setFont (juce::FontOptions (nameFontSize).withStyle ("Bold"));
-    g.drawText (design->name, nameRect, juce::Justification::centred, true);
+
 }
 
 } // namespace PedalPainter
