@@ -95,7 +95,11 @@ PedalPalette::PedalPalette()
     // Factory pedals
     for (auto& info : getFactoryPedals())
     {
-        auto item = std::make_unique<PaletteItem> (info);
+        std::shared_ptr<PedalDesign> defaultDesign = nullptr;
+        if (info.designFactory)
+            defaultDesign = info.designFactory();
+            
+        auto item = std::make_unique<PaletteItem> (info, defaultDesign);
         content.addAndMakeVisible (*item);
         content.items.push_back (std::move (item));
     }

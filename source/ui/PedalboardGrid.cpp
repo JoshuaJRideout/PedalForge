@@ -350,38 +350,47 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName,
                 inst->category = info.category;
                 inst->numKnobs = info.numKnobs;
 
-                inst->design = std::make_shared<PedalDesign>();
-                inst->design->name = inst->name;
-                inst->design->category = inst->category;
-                inst->design->chassisColour = inst->colour;
-                
-                // Fetch DSP graph for JSON and create knobs for parameters
-                if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
+                if (info.designFactory)
                 {
-                    inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+                    inst->design = info.designFactory();
+                    if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
+                        inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+                }
+                else
+                {
+                    inst->design = std::make_shared<PedalDesign>();
+                    inst->design->name = inst->name;
+                    inst->design->category = inst->category;
+                    inst->design->chassisColour = inst->colour;
                     
-                    float x = 20, y = 40;
-                    for (auto* param : proc->getParameters())
+                    // Fetch DSP graph for JSON and create knobs for parameters
+                    if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
                     {
-                        if (auto* pf = dynamic_cast<juce::AudioParameterFloat*> (param))
+                        inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+                        
+                        float x = 20, y = 40;
+                        for (auto* param : proc->getParameters())
                         {
-                            PedalDesign::Control ctrl;
-                            ctrl.type = "knob";
-                            ctrl.label = pf->name;
-                            ctrl.controlID = pf->paramID;
-                            ctrl.x = x;
-                            ctrl.y = y;
-                            ctrl.width = 50;
-                            ctrl.height = 50;
-                            inst->design->controls.push_back (ctrl);
+                            if (auto* pf = dynamic_cast<juce::AudioParameterFloat*> (param))
+                            {
+                                PedalDesign::Control ctrl;
+                                ctrl.type = "knob";
+                                ctrl.label = pf->name;
+                                ctrl.controlID = "knob_" + juce::String (inst->design->controls.size() + 1);
+                                ctrl.x = x;
+                                ctrl.y = y;
+                                ctrl.width = 40;
+                                ctrl.height = 40;
+                                inst->design->controls.push_back (ctrl);
 
-                            PedalDesign::Mapping m;
-                            m.controlID = ctrl.controlID;
-                            m.nodeParam = pf->paramID;
-                            inst->design->mappings.push_back (m);
+                                PedalDesign::Mapping m;
+                                m.controlID = ctrl.controlID;
+                                m.nodeParam = pf->paramID;
+                                inst->design->mappings.push_back (m);
 
-                            x += 60;
-                            if (x > 140) { x = 20; y += 70; }
+                                x += 50;
+                                if (x > 150) { x = 20; y += 60; }
+                            }
                         }
                     }
                 }
