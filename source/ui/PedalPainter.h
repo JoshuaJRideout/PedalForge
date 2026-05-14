@@ -20,25 +20,9 @@
  */
 namespace PedalPainter
 {
-    struct PedalVisual
-    {
-        juce::String name;
-        juce::String category;
-        juce::Colour colour;
-        bool bypassed = false;
-        int  numKnobs = 3;
-
-        // Optional: normalised knob values [0..1] for drawing indicator dots
-        std::vector<float> knobValues;
-    };
-
-    /** Paint a guitar pedal into the given bounds. */
-    void paint (juce::Graphics& g, juce::Rectangle<float> bounds,
-                const PedalVisual& visual, float alpha = 1.0f);
-
-    /** Paint a pedal using its PedalDesign layout (custom designed pedal). */
+    /** Paint a pedal using its PedalDesign layout. If design is null, draws a fallback "NO DESIGN" box. */
     void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
-                      const PedalDesign& design,
+                      const PedalDesign* design,
                       const std::map<juce::String, float>& controlValues,
                       bool bypassed, float alpha = 1.0f);
 }

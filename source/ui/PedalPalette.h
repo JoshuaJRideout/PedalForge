@@ -31,7 +31,7 @@ private:
     class PaletteItem : public juce::Component
     {
     public:
-        PaletteItem (const PedalInfo& info);
+        PaletteItem (const PedalInfo& info, std::shared_ptr<PedalDesign> design = nullptr);
 
         void paint (juce::Graphics& g) override;
         void mouseDown (const juce::MouseEvent& e) override;
@@ -39,6 +39,7 @@ private:
 
     private:
         PedalInfo info;
+        std::shared_ptr<PedalDesign> design;
         bool dragStarted = false;
     };
 

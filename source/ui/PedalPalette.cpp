@@ -6,8 +6,8 @@
 //==============================================================================
 // PaletteItem — mini pedal thumbnail using shared PedalPainter
 //==============================================================================
-PedalPalette::PaletteItem::PaletteItem (const PedalInfo& pedalInfo)
-    : info (pedalInfo)
+PedalPalette::PaletteItem::PaletteItem (const PedalInfo& pedalInfo, std::shared_ptr<PedalDesign> d)
+    : info (pedalInfo), design(d)
 {
 }
 
@@ -37,18 +37,16 @@ void PedalPalette::PaletteItem::paint (juce::Graphics& g)
         itemBounds.getCentreY() - pedalH * 0.5f,
         pedalW, pedalH);
 
-    PedalPainter::PedalVisual visual;
-    visual.name     = info.name;
-    visual.category = info.category;
-    visual.colour   = info.colour;
-    visual.bypassed = false;
-    visual.numKnobs = info.numKnobs;
-
-    // Hover highlight: brighten a touch
-    if (isMouseOver())
-        visual.colour = visual.colour.brighter (0.15f);
-
-    PedalPainter::paint (g, bounds, visual, 1.0f);
+    std::map<juce::String, float> dummyValues;
+    PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, false, 1.0f);
+    
+    // Draw the name of the pedal below or on top so they know what it is if it has no design
+    if (design == nullptr)
+    {
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (12.0f).withStyle("Bold"));
+        g.drawText (info.name, bounds.withTrimmedTop(15), juce::Justification::centredTop);
+    }
 }
 
 void PedalPalette::PaletteItem::mouseDown (const juce::MouseEvent& /*e*/)
@@ -158,7 +156,7 @@ void PedalPalette::loadUserDesigns()
         info.colour = design->chassisColour;
         info.factory = nullptr; // Custom designs don't have a processor factory (yet)
 
-        auto item = std::make_unique<PaletteItem> (info);
+        auto item = std::make_unique<PaletteItem> (info, design);
         content.addAndMakeVisible (*item);
         content.items.push_back (std::move (item));
 

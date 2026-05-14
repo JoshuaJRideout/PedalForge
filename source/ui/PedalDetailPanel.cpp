@@ -73,148 +73,14 @@ void PedalDetailPanel::paint (juce::Graphics& g)
         pedalArea.getY() + (availH - pedalH) * 0.5f,
         pedalW, pedalH);
 
-    // Build the visual
-    PedalPainter::PedalVisual visual;
-    visual.name      = selectedInstance->name;
-    visual.category  = selectedInstance->category;
-    visual.colour    = selectedInstance->colour;
-    visual.bypassed  = selectedInstance->bypassed;
-    visual.numKnobs  = selectedInstance->numKnobs;
+    PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->bypassed, 1.0f);
 
-    // Get live knob values
-    if (engineRef != nullptr)
+    // If there is no design, draw the fallback name
+    if (selectedInstance->design == nullptr)
     {
-        if (auto* node = engineRef->getGraph().getNodeForId (selectedInstance->nodeID))
-        {
-            auto* proc = node->getProcessor();
-            for (auto* param : proc->getParameters())
-            {
-                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
-                    visual.knobValues.push_back (rp->getValue());
-            }
-        }
-    }
-
-    PedalPainter::paint (g, pedalRect, visual, 1.0f);
-
-    //==========================================================================
-    // Draw parameter labels below the pedal
-    //==========================================================================
-    if (engineRef != nullptr && ! knobEntries.empty())
-    {
-        float bodyY  = pedalRect.getY() + pedalRect.getHeight() * 0.04f;
-        float bodyH  = pedalRect.getHeight() * 0.92f;
-        float bodyX  = pedalRect.getX() + pedalRect.getWidth() * 0.04f;
-        float bodyW  = pedalRect.getWidth() * 0.92f;
-
-        float knobZoneTop = bodyY + bodyH * 0.22f;
-        float knobZoneBot = bodyY + bodyH * 0.52f;
-
-        int numKnobs = (int) knobEntries.size();
-
-        auto* node = engineRef->getGraph().getNodeForId (selectedInstance->nodeID);
-        if (node != nullptr)
-        {
-            auto* proc = node->getProcessor();
-
-            if (numKnobs <= 3)
-            {
-                float knobMidY = (knobZoneTop + knobZoneBot) * 0.5f;
-                float spacing = bodyW / (float) (numKnobs + 1);
-
-                for (int i = 0; i < numKnobs; ++i)
-                {
-                    float kx = bodyX + spacing * (float) (i + 1);
-                    float maxKnobR = juce::jmin (bodyW * 0.14f,
-                                                  (knobZoneBot - knobZoneTop) * 0.35f);
-
-                    // Parameter name above the knob
-                    float labelW = spacing * 0.9f;
-                    auto labelRect = juce::Rectangle<float> (
-                        kx - labelW * 0.5f, knobMidY - maxKnobR - 14.0f,
-                        labelW, 12.0f);
-                    g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.5f));
-                    g.setFont (juce::FontOptions (juce::jmax (7.0f, pedalW * 0.04f)));
-                    g.drawText (knobEntries[(size_t) i].paramName, labelRect,
-                                juce::Justification::centred, true);
-
-                    // Value below the knob
-                    for (auto* param : proc->getParameters())
-                    {
-                        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
-                        {
-                            if (rp->getParameterID() == knobEntries[(size_t) i].paramId)
-                            {
-                                float val = rp->convertFrom0to1 (rp->getValue());
-                                auto valRect = juce::Rectangle<float> (
-                                    kx - labelW * 0.5f, knobMidY + maxKnobR + 2.0f,
-                                    labelW, 12.0f);
-                                g.setColour (PedalForgeLookAndFeel::textMuted);
-                                g.setFont (juce::FontOptions (juce::jmax (7.0f, pedalW * 0.035f)));
-                                g.drawText (juce::String (val, 1), valRect,
-                                            juce::Justification::centred, true);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Two rows of knobs — show labels similarly
-                int topRow = (numKnobs + 1) / 2;
-                int botRow = numKnobs - topRow;
-                float topY = knobZoneTop + (knobZoneBot - knobZoneTop) * 0.3f;
-                float botY = knobZoneTop + (knobZoneBot - knobZoneTop) * 0.75f;
-                float smallR = juce::jmin (bodyW * 0.14f,
-                                            (knobZoneBot - knobZoneTop) * 0.35f) * 0.85f;
-
-                auto drawLabelsForRow = [&] (int startIdx, int count, float rowY, float rowSpacing)
-                {
-                    for (int i = 0; i < count; ++i)
-                    {
-                        int idx = startIdx + i;
-                        if (idx >= numKnobs) break;
-                        float kx = bodyX + rowSpacing * (float) (i + 1);
-                        float labelW = rowSpacing * 0.9f;
-
-                        // Name
-                        auto labelRect = juce::Rectangle<float> (
-                            kx - labelW * 0.5f, rowY - smallR - 12.0f,
-                            labelW, 11.0f);
-                        g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.5f));
-                        g.setFont (juce::FontOptions (juce::jmax (6.0f, pedalW * 0.035f)));
-                        g.drawText (knobEntries[(size_t) idx].paramName, labelRect,
-                                    juce::Justification::centred, true);
-
-                        // Value
-                        for (auto* param : proc->getParameters())
-                        {
-                            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
-                            {
-                                if (rp->getParameterID() == knobEntries[(size_t) idx].paramId)
-                                {
-                                    float val = rp->convertFrom0to1 (rp->getValue());
-                                    auto valRect = juce::Rectangle<float> (
-                                        kx - labelW * 0.5f, rowY + smallR + 1.0f,
-                                        labelW, 11.0f);
-                                    g.setColour (PedalForgeLookAndFeel::textMuted);
-                                    g.setFont (juce::FontOptions (juce::jmax (6.0f, pedalW * 0.03f)));
-                                    g.drawText (juce::String (val, 1), valRect,
-                                                juce::Justification::centred, true);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                };
-
-                float topSpacing = bodyW / (float) (topRow + 1);
-                float botSpacing = bodyW / (float) (botRow + 1);
-                drawLabelsForRow (0, topRow, topY, topSpacing);
-                drawLabelsForRow (topRow, botRow, botY, botSpacing);
-            }
-        }
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (14.0f).withStyle("Bold"));
+        g.drawText (selectedInstance->name, pedalRect.withTrimmedTop(20), juce::Justification::centredTop);
     }
 }
 
@@ -233,9 +99,9 @@ void PedalDetailPanel::resized()
     removeButton.setBounds (bottom.removeFromTop (28));
 
     //==========================================================================
-    // Position invisible rotary sliders over the painted knob locations
+    // Position invisible rotary sliders over the designed hardware locations
     //==========================================================================
-    if (selectedInstance != nullptr && ! knobEntries.empty())
+    if (selectedInstance != nullptr && selectedInstance->design != nullptr && ! knobEntries.empty())
     {
         auto pedalArea = bounds.reduced (12, 0);
         pedalArea.removeFromTop (8);
@@ -256,61 +122,45 @@ void PedalDetailPanel::resized()
             pedalH = pedalW / desiredRatio;
         }
 
-        float pedalX = pedalArea.getCentreX() - pedalW * 0.5f;
-        float pedalY = pedalArea.getY() + (availH - pedalH) * 0.5f;
+        auto pedalRect = juce::Rectangle<float> (
+            pedalArea.getCentreX() - pedalW * 0.5f,
+            pedalArea.getY() + (availH - pedalH) * 0.5f,
+            pedalW, pedalH);
+            
+        float margin = juce::jmin (pedalRect.getWidth(), pedalRect.getHeight()) * 0.04f;
+        auto body = pedalRect.reduced (margin);
+        
+        float scaleX = body.getWidth() / selectedInstance->design->chassisW;
+        float scaleY = body.getHeight() / selectedInstance->design->chassisH;
+        float sc = juce::jmin (scaleX, scaleY);
 
-        // Body dimensions (matching PedalPainter's layout)
-        float margin = juce::jmin (pedalW, pedalH) * 0.04f;
-        float bodyX = pedalX + margin;
-        float bodyY = pedalY + margin;
-        float bodyW = pedalW - margin * 2;
-        float bodyH = pedalH - margin * 2;
+        float drawW = selectedInstance->design->chassisW * sc;
+        float drawH = selectedInstance->design->chassisH * sc;
+        float offX = body.getX() + (body.getWidth() - drawW) * 0.5f;
+        float offY = body.getY() + (body.getHeight() - drawH) * 0.5f;
 
-        float knobZoneTop = bodyY + bodyH * 0.22f;
-        float knobZoneBot = bodyY + bodyH * 0.52f;
-
-        int numKnobs = (int) knobEntries.size();
-        float maxKnobR = juce::jmin (bodyW * 0.14f, (knobZoneBot - knobZoneTop) * 0.35f);
-
-        if (numKnobs <= 3)
+        for (auto& entry : knobEntries)
         {
-            float knobMidY = (knobZoneTop + knobZoneBot) * 0.5f;
-            float spacing = bodyW / (float) (numKnobs + 1);
-
-            for (int i = 0; i < numKnobs; ++i)
+            for (const auto& ctrl : selectedInstance->design->controls)
             {
-                float kx = bodyX + spacing * (float) (i + 1);
-                float hitR = maxKnobR * 1.4f; // Slightly larger hit area
-                knobEntries[(size_t) i].knob->setBounds (
-                    (int) (kx - hitR), (int) (knobMidY - hitR),
-                    (int) (hitR * 2), (int) (hitR * 2));
-            }
-        }
-        else
-        {
-            int topRow = (numKnobs + 1) / 2;
-            int botRow = numKnobs - topRow;
-            float topY = knobZoneTop + (knobZoneBot - knobZoneTop) * 0.3f;
-            float botY = knobZoneTop + (knobZoneBot - knobZoneTop) * 0.75f;
-            float smallR = maxKnobR * 0.85f;
-            float hitR = smallR * 1.4f;
-
-            float topSpacing = bodyW / (float) (topRow + 1);
-            for (int i = 0; i < topRow; ++i)
-            {
-                float kx = bodyX + topSpacing * (float) (i + 1);
-                knobEntries[(size_t) i].knob->setBounds (
-                    (int) (kx - hitR), (int) (topY - hitR),
-                    (int) (hitR * 2), (int) (hitR * 2));
-            }
-            float botSpacing = bodyW / (float) (botRow + 1);
-            for (int i = 0; i < botRow; ++i)
-            {
-                int idx = topRow + i;
-                float kx = bodyX + botSpacing * (float) (i + 1);
-                knobEntries[(size_t) idx].knob->setBounds (
-                    (int) (kx - hitR), (int) (botY - hitR),
-                    (int) (hitR * 2), (int) (hitR * 2));
+                if (ctrl.controlID == entry.paramId)
+                {
+                    // Calculate bounds matching HardwareDrawing
+                    float scaledX = offX + ctrl.x * sc;
+                    float scaledY = offY + ctrl.y * sc;
+                    float scaledW = ctrl.width * sc;
+                    float scaledH = ctrl.height * sc;
+                    
+                    // We expand the bounds slightly for a better hit area
+                    float hitMargin = juce::jmin (scaledW, scaledH) * 0.2f;
+                    entry.knob->setBounds (
+                        (int)(scaledX - hitMargin), 
+                        (int)(scaledY - hitMargin), 
+                        (int)(scaledW + hitMargin * 2), 
+                        (int)(scaledH + hitMargin * 2)
+                    );
+                    break;
+                }
             }
         }
     }

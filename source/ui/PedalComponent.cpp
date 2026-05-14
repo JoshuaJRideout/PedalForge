@@ -19,41 +19,9 @@ void PedalComponent::paint (juce::Graphics& g)
     float alpha = 1.0f;
     if (dragging) alpha = 0.65f;
 
-    // Check for custom PedalDesign rendering
-    if (instance.design != nullptr)
-    {
-        PedalPainter::paintDesign (g, bounds, *instance.design,
-                                   instance.controlValues, instance.bypassed, alpha);
-    }
-    else
-    {
-        // Generic factory rendering
-        PedalPainter::PedalVisual visual;
-        visual.name      = instance.name;
-        visual.category  = instance.category;
-        visual.colour    = instance.colour;
-        visual.bypassed  = instance.bypassed;
-        visual.numKnobs  = instance.numKnobs;
-
-        if (auto* node = engine.getGraph().getNodeForId (instance.nodeID))
-        {
-            auto* proc = node->getProcessor();
-            for (auto* param : proc->getParameters())
-            {
-                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
-                    visual.knobValues.push_back (rp->getValue());
-            }
-        }
-
-        if (dragging)
-        {
-            auto tint = dragValid ? PedalForgeLookAndFeel::success
-                                  : PedalForgeLookAndFeel::danger;
-            visual.colour = visual.colour.interpolatedWith (tint, 0.45f);
-        }
-
-        PedalPainter::paint (g, bounds, visual, alpha);
-    }
+    // Use PedalPainter::paintDesign (which handles null designs by drawing a fallback outline)
+    PedalPainter::paintDesign (g, bounds, instance.design.get(),
+                               instance.controlValues, instance.bypassed, alpha);
 
     // ── Selection / drag overlays ──
     if (dragging)
