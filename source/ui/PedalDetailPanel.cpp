@@ -46,8 +46,8 @@ void PedalDetailPanel::paint (juce::Graphics& g)
 
     // Reserve bottom for buttons
     pedalArea.removeFromBottom (80);
-    // Reserve top for close button
-    pedalArea.removeFromTop (8);
+    // Reserve top for close button and title
+    pedalArea.removeFromTop (40);
 
     // The pedal visual should be centred and maintain a portrait aspect ratio
     float desiredRatio = 0.55f; // w/h (typical pedal proportion)
@@ -75,13 +75,10 @@ void PedalDetailPanel::paint (juce::Graphics& g)
 
     PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->controlTexts, selectedInstance->bypassed, 1.0f);
 
-    // If there is no design, draw the fallback name
-    if (selectedInstance->design == nullptr)
-    {
-        g.setColour (PedalForgeLookAndFeel::textPrimary);
-        g.setFont (juce::FontOptions (14.0f).withStyle("Bold"));
-        g.drawText (selectedInstance->name, pedalRect.withTrimmedTop(20), juce::Justification::centredTop);
-    }
+    // Draw the title of the pedal at the top
+    g.setColour (PedalForgeLookAndFeel::textPrimary);
+    g.setFont (juce::FontOptions (16.0f).withStyle("Bold"));
+    g.drawText (selectedInstance->name, 12, 10, getWidth() - 48, 24, juce::Justification::centredLeft);
 }
 
 //==============================================================================

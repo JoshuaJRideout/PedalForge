@@ -14,6 +14,9 @@ PedalPalette::PaletteItem::PaletteItem (const PedalInfo& pedalInfo, std::shared_
 void PedalPalette::PaletteItem::paint (juce::Graphics& g)
 {
     auto itemBounds = getLocalBounds().toFloat().reduced (6.0f, 3.0f);
+    
+    // Reserve space for text
+    auto textBounds = itemBounds.removeFromBottom (20.0f);
 
     // Constrain to portrait pedal aspect ratio
     float desiredRatio = 0.55f; // w/h
@@ -41,13 +44,10 @@ void PedalPalette::PaletteItem::paint (juce::Graphics& g)
     std::map<juce::String, juce::String> dummyTexts;
     PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, dummyTexts, false, 1.0f);
     
-    // Draw the name of the pedal below or on top so they know what it is if it has no design
-    if (design == nullptr)
-    {
-        g.setColour (PedalForgeLookAndFeel::textPrimary);
-        g.setFont (juce::FontOptions (12.0f).withStyle("Bold"));
-        g.drawText (info.name, bounds.withTrimmedTop(15), juce::Justification::centredTop);
-    }
+    // Draw the name of the pedal below
+    g.setColour (PedalForgeLookAndFeel::textPrimary);
+    g.setFont (juce::FontOptions (14.0f).withStyle("Bold"));
+    g.drawText (info.name, textBounds, juce::Justification::centred);
 }
 
 void PedalPalette::PaletteItem::mouseDown (const juce::MouseEvent& /*e*/)
