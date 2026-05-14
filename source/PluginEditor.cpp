@@ -131,13 +131,62 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
         // Forge (Pedal Designer) — load active pedal's design if available
         pedalDesigner.setVisible (isForge);
-        if (isForge && activePedal != nullptr && activePedal->design != nullptr)
-            pedalDesigner.loadDesign (*activePedal->design);
+        if (isForge && activePedal != nullptr)
+        {
+            if (activePedal->design != nullptr)
+            {
+                pedalDesigner.loadDesign (*activePedal->design);
+            }
+            else if (auto* proc = dynamic_cast<GraphPedalProcessor*> (processorRef.getGraphEngine().getGraph().getNodeForId (activePedal->nodeID)->getProcessor()))
+            {
+                // Generate a temporary layout for the factory pedal so the user can start editing it
+                PedalDesign tempDesign;
+                tempDesign.name = activePedal->name;
+                tempDesign.category = activePedal->category;
+                tempDesign.chassisColour = activePedal->colour;
+                tempDesign.effectsGraph = juce::JSON::parse (proc->saveGraph());
+                
+                float x = 20, y = 40;
+                for (auto* param : proc->getParameters())
+                {
+                    if (auto* pf = dynamic_cast<juce::AudioParameterFloat*> (param))
+                    {
+                        PedalDesign::Control ctrl;
+                        ctrl.type = "knob";
+                        ctrl.label = pf->name;
+                        ctrl.controlID = pf->paramID;
+                        ctrl.x = x;
+                        ctrl.y = y;
+                        ctrl.width = 50;
+                        ctrl.height = 50;
+                        tempDesign.controls.push_back (ctrl);
+
+                        PedalDesign::Mapping m;
+                        m.controlID = ctrl.controlID;
+                        m.nodeParam = pf->paramID;
+                        tempDesign.mappings.push_back (m);
+
+                        x += 60;
+                        if (x > 140) { x = 20; y += 70; }
+                    }
+                }
+                pedalDesigner.loadDesign (tempDesign);
+            }
+        }
 
         // Effects builder — load active pedal's effects graph if available
         nodeGraphEditor.setVisible (isEffects);
-        if (isEffects && activePedal != nullptr && activePedal->design != nullptr)
-            nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+        if (isEffects && activePedal != nullptr)
+        {
+            if (activePedal->design != nullptr)
+            {
+                nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+            }
+            else if (auto* proc = dynamic_cast<GraphPedalProcessor*> (processorRef.getGraphEngine().getGraph().getNodeForId (activePedal->nodeID)->getProcessor()))
+            {
+                nodeGraphEditor.loadDesign (juce::JSON::parse (proc->saveGraph()));
+            }
+        }
 
         // Re-wire graph pointer (it may have changed after load)
         pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
