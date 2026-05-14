@@ -601,8 +601,9 @@ void PedalboardGrid::refreshSelectedPedal()
     if (selectedComponent != nullptr)
     {
         // Re-assign size from design footprint in case it was modified
-        selectedComponent->getInstance().gridW = (int)std::ceil (selectedComponent->getInstance().design->chassisW / 50.0f);
-        selectedComponent->getInstance().gridH = (int)std::ceil (selectedComponent->getInstance().design->chassisH / 50.0f);
+        // Each 100px of chassis size corresponds to ~1 grid tile
+        selectedComponent->getInstance().gridW = std::max(1, (int)std::round (selectedComponent->getInstance().design->chassisW / 100.0f));
+        selectedComponent->getInstance().gridH = std::max(1, (int)std::round (selectedComponent->getInstance().design->chassisH / 100.0f));
         
         // Sync visual appearance
         selectedComponent->repaint();
