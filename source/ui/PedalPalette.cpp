@@ -74,9 +74,10 @@ void PedalPalette::PaletteItem::mouseDrag (const juce::MouseEvent& e)
 //==============================================================================
 void PedalPalette::PaletteContent::layoutItems (int width)
 {
-    int itemHeight = 100;
-    int gap = 3;
-    int y = 4;
+    // Make the pedals tall enough so they take up most of the sidebar width
+    int itemHeight = 220; 
+    int gap = 12;
+    int y = 8;
 
     for (auto& item : items)
     {
