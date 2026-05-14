@@ -226,13 +226,7 @@ inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
     g.setColour (juce::Colour (0x08FFFFFF));
     for (float yy = area.getY() + 3; yy < area.getBottom() - 3; yy += 4.0f)
         g.drawHorizontalLine ((int) yy, area.getX() + 4, area.getRight() - 4);
-    // Screw holes
-    g.setColour (baseColour.darker (0.6f));
-    float sr = 4.0f, m = 10.0f;
-    g.fillEllipse (area.getX()+m, area.getY()+m, sr*2, sr*2);
-    g.fillEllipse (area.getRight()-m-sr*2, area.getY()+m, sr*2, sr*2);
-    g.fillEllipse (area.getX()+m, area.getBottom()-m-sr*2, sr*2, sr*2);
-    g.fillEllipse (area.getRight()-m-sr*2, area.getBottom()-m-sr*2, sr*2, sr*2);
+
 }
 
 //==============================================================================
