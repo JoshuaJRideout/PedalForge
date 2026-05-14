@@ -635,12 +635,13 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     menu.addSubMenu("I/O", io);
     
     juce::PopupMenu u; u.addItem(1,"Gain"); u.addItem(2,"Mix"); u.addItem(3,"Split"); menu.addSubMenu("Utility",u);
-    juce::PopupMenu f; f.addItem(10,"Low Pass"); f.addItem(11,"High Pass"); f.addItem(12,"All Pass"); f.addItem(13,"Tone Stack"); menu.addSubMenu("Filters",f);
-    juce::PopupMenu dr; dr.addItem(20,"Soft Clip"); dr.addItem(21,"Hard Clip"); menu.addSubMenu("Drive",dr);
-    juce::PopupMenu m; m.addItem(30,"LFO"); menu.addSubMenu("Modulation",m);
+    juce::PopupMenu f; f.addItem(10,"Low Pass"); f.addItem(11,"High Pass"); f.addItem(12,"All Pass"); f.addItem(13,"Tone Stack"); f.addItem(14,"Parametric EQ"); menu.addSubMenu("Filters",f);
+    juce::PopupMenu dr; dr.addItem(20,"Soft Clip"); dr.addItem(21,"Hard Clip"); dr.addItem(22,"Fuzz"); menu.addSubMenu("Drive",dr);
+    juce::PopupMenu m; m.addItem(30,"LFO"); m.addItem(31,"Phaser"); m.addItem(32,"Flanger"); menu.addSubMenu("Modulation",m);
     juce::PopupMenu dl; dl.addItem(40,"Delay"); dl.addItem(41,"Mod Delay"); menu.addSubMenu("Delay",dl);
     juce::PopupMenu dy; dy.addItem(50,"Compressor"); dy.addItem(51,"Noise Gate"); menu.addSubMenu("Dynamics",dy);
     juce::PopupMenu rv; rv.addItem(60,"Reverb"); rv.addItem(61,"IR Convolution"); menu.addSubMenu("Reverb",rv);
+    juce::PopupMenu ut; ut.addItem(68,"Cabinet Sim"); menu.addSubMenu("Guitar Utility",ut);
     
     juce::PopupMenu mf; 
     mf.addItem(65,"RAM / Delay Line"); mf.addItem(66,"File Sampler");
@@ -755,11 +756,13 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             case 1: t="gain"; break; case 2: t="mix"; break; case 3: t="split"; break;
             case 4: t="audio_input"; break; case 5: t="audio_output"; break;
             case 6: t="midi_input"; break; case 7: t="midi_output"; break;
-            case 10: t="lowpass"; break; case 11: t="highpass"; break; case 12: t="allpass"; break; case 13: t="tonestack"; break;
-            case 20: t="softclip"; break; case 21: t="hardclip"; break;
-            case 30: t="lfo"; break; case 40: t="delay"; break; case 41: t="mod_delay"; break;
+            case 10: t="lowpass"; break; case 11: t="highpass"; break; case 12: t="allpass"; break; case 13: t="tonestack"; break; case 14: t="peq"; break;
+            case 20: t="softclip"; break; case 21: t="hardclip"; break; case 22: t="fuzz"; break;
+            case 30: t="lfo"; break; case 31: t="phaser"; break; case 32: t="flanger"; break;
+            case 40: t="delay"; break; case 41: t="mod_delay"; break;
             case 50: t="compressor"; break; case 51: t="noisegate"; break; 
             case 60: t="reverb"; break; case 61: t="ir"; break;
+            case 68: t="cabinet"; break;
             case 65: t="ram"; break; case 66: t="sampler"; break;
             // Synth
             case 70: t="oscillator"; break; case 71: t="noise"; break;

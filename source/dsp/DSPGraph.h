@@ -58,6 +58,11 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "compressor")   return std::make_unique<CompressorNode>();
     if (type == "noisegate")    return std::make_unique<NoiseGateNode>();
     if (type == "reverb")       return std::make_unique<SchroederReverbNode>();
+    if (type == "fuzz")         return std::make_unique<FuzzNode>();
+    if (type == "phaser")       return std::make_unique<PhaserNode>();
+    if (type == "flanger")      return std::make_unique<FlangerNode>();
+    if (type == "peq")          return std::make_unique<ParametricEQNode>();
+    if (type == "cabinet")      return std::make_unique<CabinetSimNode>();
     // Logic (Wiremod)
     if (type == "and_gate")     return std::make_unique<ANDGateNode>();
     if (type == "or_gate")      return std::make_unique<ORGateNode>();

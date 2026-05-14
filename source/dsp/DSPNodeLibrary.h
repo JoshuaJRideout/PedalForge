@@ -818,6 +818,311 @@ private:
 };
 
 //==============================================================================
+// ─── FUZZ ────────────────────────────────────────────────────────────────────
+// Asymmetric hard-clipping fuzz with bias control for classic fuzz character.
+
+class FuzzNode : public DSPNode
+{
+public:
+    FuzzNode() : DSPNode ("fuzz", "Fuzz")
+    {
+        addInput ("in"); addInput ("drive_cv", NodePort::Control);
+        addOutput ("out");
+        addParam ("gain", "Gain", 1.0f, 100.0f, 40.0f);
+        addParam ("bias", "Bias", -0.5f, 0.5f, 0.1f);     // asymmetry
+        addParam ("tone", "Tone", 0.0f, 1.0f, 0.5f);
+    }
+
+    void prepare (double sr, int bs) override
+    {
+        DSPNode::prepare (sr, bs);
+        lpState = 0.0f;
+    }
+
+    void process (const float** in, int numIn, float** out, int, int n) override
+    {
+        float paramG = getParam("gain")->get();
+        float bias   = getParam("bias")->get();
+        float tone   = getParam("tone")->get();
+        float cutoff = 200.0f + tone * 4800.0f;
+        float rc = 1.0f / (2.0f * juce::MathConstants<float>::pi * cutoff);
+        float dt = 1.0f / (float) sr;
+        float alpha = dt / (rc + dt);
+
+        for (int i = 0; i < n; ++i)
+        {
+            float cv = (numIn > 1) ? in[1][i] : 0.0f;
+            float g = (cv != 0.0f) ? juce::jlimit(1.0f, 100.0f, cv) : paramG;
+            float x = in[0][i] * g + bias;
+            // Asymmetric clip: positive clips harder than negative
+            float clipped = (x > 0.0f) ? juce::jmin (x, 0.7f) : juce::jmax (x, -1.0f);
+            // One-pole tone filter
+            lpState += alpha * (clipped - lpState);
+            out[0][i] = lpState;
+        }
+    }
+
+    void reset() override { lpState = 0.0f; }
+
+private:
+    float lpState = 0.0f;
+};
+
+//==============================================================================
+// ─── PHASER ──────────────────────────────────────────────────────────────────
+// 4-stage allpass phaser with LFO modulation input.
+
+class PhaserNode : public DSPNode
+{
+public:
+    PhaserNode() : DSPNode ("phaser", "Phaser")
+    {
+        addInput ("in"); addInput ("mod", NodePort::Control);
+        addOutput ("out");
+        addParam ("rate", "Rate", 0.1f, 10.0f, 0.5f);
+        addParam ("depth", "Depth", 0.0f, 1.0f, 0.7f);
+        addParam ("feedback", "Feedback", 0.0f, 0.95f, 0.3f);
+        addParam ("mix", "Mix", 0.0f, 1.0f, 0.5f);
+    }
+
+    void prepare (double sr, int bs) override
+    {
+        DSPNode::prepare (sr, bs);
+        phase = 0.0f; fbSample = 0.0f;
+        for (auto& s : apState) s = 0.0f;
+    }
+
+    void process (const float** in, int numIn, float** out, int, int n) override
+    {
+        float rate  = getParam("rate")->get();
+        float depth = getParam("depth")->get();
+        float fb    = getParam("feedback")->get();
+        float mix   = getParam("mix")->get();
+        float fs    = (float) sr;
+        float phaseInc = rate / fs;
+
+        for (int i = 0; i < n; ++i)
+        {
+            float mod = (numIn > 1 && in[1][i] != 0.0f) ? in[1][i] : 0.0f;
+            float lfo = std::sin (2.0f * juce::MathConstants<float>::pi * phase) * depth;
+            if (mod != 0.0f) lfo = mod * depth;
+            phase += phaseInc;
+            if (phase >= 1.0f) phase -= 1.0f;
+
+            // Map LFO to allpass coefficient range [0.1 .. 0.9]
+            float coeff = 0.5f + lfo * 0.4f;
+            float x = in[0][i] + fbSample * fb;
+            // 4 cascaded first-order allpass stages
+            for (int s = 0; s < 4; ++s)
+            {
+                float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
+                // Correct allpass: y = -c*x + x_prev + c*y_prev ... simplified:
+                float tmp = x - coeff * apState[s];
+                apState[s] = x + coeff * tmp;
+                x = tmp;
+            }
+            fbSample = x;
+            out[0][i] = in[0][i] * (1.0f - mix) + x * mix;
+        }
+    }
+
+    void reset() override { phase = 0; fbSample = 0; for (auto& s : apState) s = 0; }
+
+private:
+    float phase = 0.0f, fbSample = 0.0f;
+    float apState[4] = {};
+};
+
+//==============================================================================
+// ─── FLANGER ─────────────────────────────────────────────────────────────────
+// Short modulated delay (0.5-5ms) with feedback for classic jet sweep.
+
+class FlangerNode : public DSPNode
+{
+public:
+    FlangerNode() : DSPNode ("flanger", "Flanger")
+    {
+        addInput ("in"); addInput ("mod", NodePort::Control);
+        addOutput ("out");
+        addParam ("rate", "Rate", 0.05f, 5.0f, 0.3f);
+        addParam ("depth", "Depth", 0.0f, 1.0f, 0.7f);
+        addParam ("feedback", "Feedback", -0.95f, 0.95f, 0.5f);
+        addParam ("mix", "Mix", 0.0f, 1.0f, 0.5f);
+    }
+
+    void prepare (double sr, int bs) override
+    {
+        DSPNode::prepare (sr, bs);
+        int maxDelay = (int)(sr * 0.01) + 1; // 10ms max
+        buffer.assign ((size_t) maxDelay, 0.0f);
+        writePos = 0; phase = 0.0f;
+    }
+
+    void process (const float** in, int numIn, float** out, int, int n) override
+    {
+        float rate  = getParam("rate")->get();
+        float depth = getParam("depth")->get();
+        float fb    = getParam("feedback")->get();
+        float mix   = getParam("mix")->get();
+        float fs    = (float) sr;
+        int bufSize = (int) buffer.size();
+        float phaseInc = rate / fs;
+        // Delay range: 0.5ms to 5ms
+        float minDelay = fs * 0.0005f;
+        float maxDelay = fs * 0.005f;
+
+        for (int i = 0; i < n; ++i)
+        {
+            float mod = (numIn > 1 && in[1][i] != 0.0f) ? in[1][i] : 0.0f;
+            float lfo = std::sin (2.0f * juce::MathConstants<float>::pi * phase);
+            if (mod != 0.0f) lfo = mod;
+            phase += phaseInc;
+            if (phase >= 1.0f) phase -= 1.0f;
+
+            float delaySamples = minDelay + (maxDelay - minDelay) * (lfo * depth * 0.5f + 0.5f);
+            // Linear interpolation read
+            float readPos = (float) writePos - delaySamples;
+            if (readPos < 0) readPos += bufSize;
+            int idx0 = (int) readPos;
+            float frac = readPos - idx0;
+            int idx1 = (idx0 + 1) % bufSize;
+            float delayed = buffer[(size_t)(idx0 % bufSize)] * (1.0f - frac) + buffer[(size_t) idx1] * frac;
+
+            buffer[(size_t) writePos] = in[0][i] + delayed * fb;
+            writePos = (writePos + 1) % bufSize;
+            out[0][i] = in[0][i] * (1.0f - mix) + delayed * mix;
+        }
+    }
+
+    void reset() override { std::fill(buffer.begin(), buffer.end(), 0.0f); phase = 0; }
+
+private:
+    std::vector<float> buffer;
+    int writePos = 0;
+    float phase = 0.0f;
+};
+
+//==============================================================================
+// ─── PARAMETRIC EQ ───────────────────────────────────────────────────────────
+// Single bell (peaking) EQ band with freq, gain, and Q controls.
+
+class ParametricEQNode : public DSPNode
+{
+public:
+    ParametricEQNode() : DSPNode ("peq", "Parametric EQ")
+    {
+        addInput ("in");
+        addOutput ("out");
+        addParam ("freq", "Frequency", 20.0f, 20000.0f, 1000.0f);
+        addParam ("gain", "Gain (dB)", -18.0f, 18.0f, 0.0f);
+        addParam ("q", "Q", 0.1f, 10.0f, 1.0f);
+    }
+
+    void prepare (double sr, int bs) override
+    {
+        DSPNode::prepare (sr, bs);
+        x1 = x2 = y1 = y2 = 0.0f;
+        lastFreq = -1; lastGain = -999; lastQ = -1;
+    }
+
+    void process (const float** in, int, float** out, int, int n) override
+    {
+        float freq = getParam("freq")->get();
+        float gainDB = getParam("gain")->get();
+        float q = getParam("q")->get();
+
+        if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+        {
+            recalcCoeffs (freq, gainDB, q);
+            lastFreq = freq; lastGain = gainDB; lastQ = q;
+        }
+
+        for (int i = 0; i < n; ++i)
+        {
+            float x = in[0][i];
+            float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1; x1 = x; y2 = y1; y1 = y;
+            out[0][i] = y;
+        }
+    }
+
+    void reset() override { x1 = x2 = y1 = y2 = 0.0f; }
+
+private:
+    float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    float lastFreq = -1, lastGain = -999, lastQ = -1;
+
+    void recalcCoeffs (float freq, float gainDB, float q)
+    {
+        float fs = (float) sr;
+        float A = std::pow (10.0f, gainDB / 40.0f);
+        float w0 = 2.0f * juce::MathConstants<float>::pi * freq / fs;
+        float sinW = std::sin (w0);
+        float cosW = std::cos (w0);
+        float alpha = sinW / (2.0f * q);
+
+        float a0inv = 1.0f / (1.0f + alpha / A);
+        b0 = (1.0f + alpha * A) * a0inv;
+        b1 = (-2.0f * cosW) * a0inv;
+        b2 = (1.0f - alpha * A) * a0inv;
+        a1 = b1; // same as b1
+        a2 = (1.0f - alpha / A) * a0inv;
+    }
+};
+
+//==============================================================================
+// ─── CABINET SIM ─────────────────────────────────────────────────────────────
+// Simple cabinet simulation using resonant lowpass + presence boost.
+
+class CabinetSimNode : public DSPNode
+{
+public:
+    CabinetSimNode() : DSPNode ("cabinet", "Cabinet Sim")
+    {
+        addInput ("in");
+        addOutput ("out");
+        addParam ("cutoff", "Cutoff", 500.0f, 8000.0f, 4000.0f);
+        addParam ("resonance", "Resonance", 0.0f, 1.0f, 0.3f);
+        addParam ("character", "Character", 0.0f, 1.0f, 0.5f); // dark ↔ bright
+    }
+
+    void prepare (double sr, int bs) override
+    {
+        DSPNode::prepare (sr, bs);
+        lp1 = lp2 = bp = 0.0f;
+    }
+
+    void process (const float** in, int, float** out, int, int n) override
+    {
+        float cutoff = getParam("cutoff")->get();
+        float reso   = getParam("resonance")->get();
+        float character = getParam("character")->get();
+        float fs = (float) sr;
+        float f = 2.0f * std::sin (juce::MathConstants<float>::pi * cutoff / fs);
+        float q = 1.0f - reso * 0.9f;
+
+        for (int i = 0; i < n; ++i)
+        {
+            float x = in[0][i];
+            // State variable filter (SVF)
+            float hp = x - lp1 - q * bp;
+            bp += f * hp;
+            lp1 += f * bp;
+            // Second LP stage for steeper rolloff
+            lp2 += 0.3f * (lp1 - lp2);
+            // Blend: character mixes between dark (lp2) and bright (lp1 + some bp)
+            out[0][i] = lp2 * (1.0f - character) + (lp1 + bp * 0.15f) * character;
+        }
+    }
+
+    void reset() override { lp1 = lp2 = bp = 0.0f; }
+
+private:
+    float lp1 = 0, lp2 = 0, bp = 0;
+};
+
+//==============================================================================
 // ─── LOGIC GATES (Wiremod Tier 1) ────────────────────────────────────────────
 // All logic nodes operate on control signals: >0.5 = true, <=0.5 = false
 // Output: 1.0 = true, 0.0 = false
