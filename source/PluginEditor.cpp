@@ -120,13 +120,15 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     if (button == &tabPedalboard || button == &tabForge
         || button == &tabEffects || button == &tabStore)
     {
+        bool wasForge     = pedalDesigner.isVisible();
+        bool wasEffects   = nodeGraphEditor.isVisible();
         bool isPedalboard = tabPedalboard.getToggleState();
         bool isForge      = tabForge.getToggleState();
         bool isEffects    = tabEffects.getToggleState();
 
-        // Before we switch views, grab the potentially modified design from the Pedal Forge
+        // If we are LEAVING the Forge tab, grab the potentially modified design
         // and push it back to the active pedal instance on the pedalboard!
-        if (activePedal != nullptr && activePedal->design != nullptr)
+        if (wasForge && activePedal != nullptr && activePedal->design != nullptr)
         {
             auto updatedDesign = pedalDesigner.getDesign();
             // Preserve the original category/colour if unchanged, but update the object
@@ -134,6 +136,12 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
             
             // Force the grid and detail panel to rebuild based on the new design
             grid.refreshSelectedPedal();
+        }
+
+        // If we are LEAVING the Effects tab, save the graph layout JSON back to the design
+        if (wasEffects && activePedal != nullptr && activePedal->design != nullptr)
+        {
+            activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
         }
 
         // Pedalboard view
