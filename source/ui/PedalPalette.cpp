@@ -38,7 +38,8 @@ void PedalPalette::PaletteItem::paint (juce::Graphics& g)
         pedalW, pedalH);
 
     std::map<juce::String, float> dummyValues;
-    PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, false, 1.0f);
+    std::map<juce::String, juce::String> dummyTexts;
+    PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, dummyTexts, false, 1.0f);
     
     // Draw the name of the pedal below or on top so they know what it is if it has no design
     if (design == nullptr)

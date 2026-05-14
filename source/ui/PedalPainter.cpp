@@ -12,6 +12,7 @@ namespace PedalPainter
 void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
                   const PedalDesign* design,
                   const std::map<juce::String, float>& controlValues,
+                  const std::map<juce::String, juce::String>& controlTexts,
                   bool bypassed, float alpha)
 {
     if (bounds.getWidth() < 2 || bounds.getHeight() < 2)
@@ -124,13 +125,22 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             HardwareDrawing::drawRGBLED (g, ctrlBounds, val, val * 0.5f, 1.0f - val, &styles);
         else if (ctrl.type == "text_screen" || ctrl.type == "console")
         {
-            juce::StringArray lines { ctrl.label.isNotEmpty() ? ctrl.label : "Ready" };
+            juce::String txt = ctrl.label.isNotEmpty() ? ctrl.label : "Ready";
+            auto textIt = controlTexts.find (ctrl.controlID);
+            if (textIt != controlTexts.end() && textIt->second.isNotEmpty()) txt = textIt->second;
+            juce::StringArray lines;
+            lines.addLines (txt);
             HardwareDrawing::drawTextScreen (g, ctrlBounds, lines, -1, &styles);
         }
         else if (ctrl.type == "pixel_display")
             HardwareDrawing::drawPixelDisplay (g, ctrlBounds, nullptr, 32, 16, false, &styles);
         else if (ctrl.type == "label")
-            HardwareDrawing::drawTextLabel (g, ctrlBounds, ctrl.label, &styles);
+        {
+            juce::String txt = ctrl.label;
+            auto textIt = controlTexts.find (ctrl.controlID);
+            if (textIt != controlTexts.end() && textIt->second.isNotEmpty()) txt = textIt->second;
+            HardwareDrawing::drawTextLabel (g, ctrlBounds, txt, &styles);
+        }
 
         // Default label underneath control (skip for standalone text labels)
         if (ctrl.label.isNotEmpty() && sc > 0.3f && ctrl.type != "label")

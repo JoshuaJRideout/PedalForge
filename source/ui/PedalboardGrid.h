@@ -39,7 +39,8 @@ inline const std::vector<BoardPreset>& getBoardPresets()
  */
 class PedalboardGrid : public juce::Component,
                        public juce::DragAndDropTarget,
-                       public juce::Button::Listener
+                       public juce::Button::Listener,
+                       public juce::Timer
 {
 public:
     PedalboardGrid (AudioGraphEngine& engine);
@@ -47,6 +48,7 @@ public:
 
     void paint (juce::Graphics& g) override;
     void resized() override;
+    void timerCallback() override;
     
     void buttonClicked (juce::Button* button) override;
 

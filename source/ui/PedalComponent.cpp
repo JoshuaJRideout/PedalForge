@@ -21,7 +21,7 @@ void PedalComponent::paint (juce::Graphics& g)
 
     // Use PedalPainter::paintDesign (which handles null designs by drawing a fallback outline)
     PedalPainter::paintDesign (g, bounds, instance.design.get(),
-                               instance.controlValues, instance.bypassed, alpha);
+                               instance.controlValues, instance.controlTexts, instance.bypassed, alpha);
 
     // ── Selection / drag overlays ──
     if (dragging)

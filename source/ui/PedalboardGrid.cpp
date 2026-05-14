@@ -19,6 +19,8 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng)
 
     // Apply default board preset
     setBoardPreset (currentPresetIndex);
+
+    startTimerHz (30);
 }
 
 PedalboardGrid::~PedalboardGrid()
@@ -117,6 +119,65 @@ void PedalboardGrid::paint (juce::Graphics& g)
             g.setColour (PedalForgeLookAndFeel::danger.withAlpha (0.35f));
             g.drawRoundedRectangle (previewRect, 6.0f, 2.0f);
         }
+    }
+}
+
+void PedalboardGrid::timerCallback()
+{
+    bool needsRepaint = false;
+
+    // Iterate over all pedals
+    for (auto* comp : getChildren())
+    {
+        if (auto* pedalComp = dynamic_cast<PedalComponent*> (comp))
+        {
+            auto& instance = pedalComp->getInstance();
+            if (instance.design != nullptr)
+            {
+                auto* node = engine.getGraph().getNodeForId (instance.nodeID);
+                if (node != nullptr)
+                {
+                    if (auto* proc = node->getProcessor())
+                    {
+                        auto params = proc->getParameters();
+                        for (const auto& mapping : instance.design->mappings)
+                        {
+                            juce::String nodeIDStr = mapping.nodeParam.upToFirstOccurrenceOf (".", false, false);
+                            juce::String paramID = mapping.nodeParam.fromFirstOccurrenceOf (".", false, false);
+                            
+                            for (auto* p : params)
+                            {
+                                if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                                {
+                                    if (ranged->getParameterID() == paramID)
+                                    {
+                                        float val = ranged->convertFrom0to1 (ranged->getValue());
+                                        juce::String text = ranged->getText (ranged->getValue(), 32);
+
+                                        // Only repaint if changed
+                                        if (instance.controlValues[mapping.controlID] != val ||
+                                            instance.controlTexts[mapping.controlID] != text)
+                                        {
+                                            instance.controlValues[mapping.controlID] = val;
+                                            instance.controlTexts[mapping.controlID] = text;
+                                            needsRepaint = true;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (needsRepaint)
+    {
+        repaint(); // Repaint the board to update components
+        if (detailPanel.hasSelection())
+            detailPanel.repaint(); // Update the detail panel too!
     }
 }
 

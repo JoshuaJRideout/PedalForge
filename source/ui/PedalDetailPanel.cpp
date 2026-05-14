@@ -73,7 +73,7 @@ void PedalDetailPanel::paint (juce::Graphics& g)
         pedalArea.getY() + (availH - pedalH) * 0.5f,
         pedalW, pedalH);
 
-    PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->bypassed, 1.0f);
+    PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->controlTexts, selectedInstance->bypassed, 1.0f);
 
     // If there is no design, draw the fallback name
     if (selectedInstance->design == nullptr)

@@ -24,5 +24,6 @@ namespace PedalPainter
     void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
                       const PedalDesign* design,
                       const std::map<juce::String, float>& controlValues,
+                      const std::map<juce::String, juce::String>& controlTexts,
                       bool bypassed, float alpha = 1.0f);
 }

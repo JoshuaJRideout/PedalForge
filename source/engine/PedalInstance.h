@@ -34,4 +34,5 @@ struct PedalInstance
 
     // Live control values for custom designs (controlID → value 0..1)
     std::map<juce::String, float> controlValues;
+    std::map<juce::String, juce::String> controlTexts;
 };
