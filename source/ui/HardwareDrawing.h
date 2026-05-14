@@ -539,6 +539,38 @@ inline void drawPixelDisplay (juce::Graphics& g, juce::Rectangle<float> area,
 }
 
 //==============================================================================
+/**
+ * Text Label — A standalone text label placed on the chassis
+ */
+inline void drawTextLabel (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& text, const CustomStyles* custom = nullptr)
+{
+    if (text.isEmpty()) return;
+
+    juce::Colour textCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFFE0E0E0);
+    g.setColour (textCol);
+
+    // Use imageMain as font style ("bold", "italic", "monospace")
+    int styleFlags = juce::Font::plain;
+    juce::String fontName = juce::Font::getDefaultSansSerifFontName();
+
+    if (custom && custom->imageMain.isNotEmpty())
+    {
+        juce::String styleStr = custom->imageMain.toLowerCase();
+        if (styleStr.contains ("bold")) styleFlags |= juce::Font::bold;
+        if (styleStr.contains ("italic")) styleFlags |= juce::Font::italic;
+        if (styleStr.contains ("monospace")) fontName = juce::Font::getDefaultMonospacedFontName();
+    }
+
+    // Determine size, using area height
+    float fontSize = juce::jmax (8.0f, area.getHeight());
+    juce::Font font (fontName, fontSize, styleFlags);
+    g.setFont (font);
+
+    // Draw the text
+    g.drawText (text, area, juce::Justification::centred);
+}
+
+//==============================================================================
 // Unified dispatch
 //==============================================================================
 
@@ -560,6 +592,7 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
     else if (type == "text_screen") { juce::StringArray d {"Ready"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "console")     { juce::StringArray d {"[log]"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "pixel_display") drawPixelDisplay (g, area, nullptr, 32, 16, false, custom);
+    else if (type == "label")       { /* In PedalPainter it draws its own label, but here we can draw it as a preview */ drawTextLabel (g, area, "LABEL", custom); }
     else { g.setColour (juce::Colours::grey); g.drawRect (area, 1.0f); }
 }
 

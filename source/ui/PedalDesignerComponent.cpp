@@ -81,7 +81,8 @@ public:
         items.push_back (std::make_unique<HardwareItem> ("display",    "Display"));
         items.push_back (std::make_unique<HardwareItem> ("text_screen","Text"));
         items.push_back (std::make_unique<HardwareItem> ("console",    "Console"));
-        items.push_back (std::make_unique<HardwareItem> ("pixel_display","Pixels"));
+        // ── Decoration ──
+        items.push_back (std::make_unique<HardwareItem> ("label",      "Label"));
         // ── Instruments ──
         items.push_back (std::make_unique<HardwareItem> ("vu_meter",   "VU Meter"));
         items.push_back (std::make_unique<HardwareItem> ("oscilloscope","Scope"));
@@ -175,6 +176,7 @@ public:
         if (type == "display") return 28.0f;
         if (type == "text_screen" || type == "console") return 50.0f;
         if (type == "pixel_display") return 40.0f;
+        if (type == "label") return 20.0f;
         if (type == "vu_meter") return 60.0f;
         if (type == "oscilloscope") return 50.0f;
         return 40.0f; // knob, switch, footswitch
@@ -187,6 +189,7 @@ public:
         if (type == "display") return 70.0f;
         if (type == "text_screen" || type == "console") return 80.0f;
         if (type == "pixel_display") return 80.0f;
+        if (type == "label") return 80.0f;
         if (type == "vu_meter") return 20.0f; // tall and narrow
         if (type == "oscilloscope") return 80.0f;
         return sizeForType (type);
@@ -964,6 +967,31 @@ public:
         paramCombo.addListener (this);
         addChildComponent (paramCombo);
 
+        auto setupCombo = [this] (juce::ComboBox& cb) {
+            cb.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
+            cb.setColour (juce::ComboBox::textColourId, PedalForgeLookAndFeel::textPrimary);
+            cb.setColour (juce::ComboBox::outlineColourId, PedalForgeLookAndFeel::gridLine);
+            cb.addListener (this);
+            addChildComponent (cb);
+        };
+        
+        setupCombo (fontCombo);
+        fontCombo.addItem ("Normal", 1);
+        fontCombo.addItem ("Bold", 2);
+        fontCombo.addItem ("Italic", 3);
+        fontCombo.addItem ("Bold Italic", 4);
+        fontCombo.addItem ("Monospace", 5);
+
+        setupCombo (colourCombo);
+        colourCombo.addItem ("Default", 1);
+        colourCombo.addItem ("White", 2);
+        colourCombo.addItem ("Black", 3);
+        colourCombo.addItem ("Red", 4);
+        colourCombo.addItem ("Green", 5);
+        colourCombo.addItem ("Blue", 6);
+        colourCombo.addItem ("Yellow", 7);
+        colourCombo.addItem ("Grey", 8);
+
         auto setupButton = [this] (juce::TextButton& btn, auto callback) {
             btn.onClick = callback;
             addChildComponent (btn);
@@ -1045,6 +1073,28 @@ public:
 
                 bool showImages = (hwPtr->type != "led");
                 bool showTrack = (hwPtr->type == "fader");
+                bool isLabel = (hwPtr->type == "label");
+
+                // Update combo boxes based on state
+                if (isLabel)
+                {
+                    if (hwPtr->imageMain.contains ("bold italic")) fontCombo.setSelectedId (4, juce::dontSendNotification);
+                    else if (hwPtr->imageMain.contains ("monospace")) fontCombo.setSelectedId (5, juce::dontSendNotification);
+                    else if (hwPtr->imageMain.contains ("bold")) fontCombo.setSelectedId (2, juce::dontSendNotification);
+                    else if (hwPtr->imageMain.contains ("italic")) fontCombo.setSelectedId (3, juce::dontSendNotification);
+                    else fontCombo.setSelectedId (1, juce::dontSendNotification);
+                }
+
+                auto c = hwPtr->customColour;
+                if (c == juce::Colours::red) colourCombo.setSelectedId (1, juce::dontSendNotification);
+                else if (c == juce::Colours::white) colourCombo.setSelectedId (2, juce::dontSendNotification);
+                else if (c == juce::Colours::black) colourCombo.setSelectedId (3, juce::dontSendNotification);
+                else if (c == juce::Colour(0xFFFF3333)) colourCombo.setSelectedId (4, juce::dontSendNotification);
+                else if (c == juce::Colour(0xFF33FF66)) colourCombo.setSelectedId (5, juce::dontSendNotification);
+                else if (c == juce::Colour(0xFF3366FF)) colourCombo.setSelectedId (6, juce::dontSendNotification);
+                else if (c == juce::Colour(0xFFFFDD33)) colourCombo.setSelectedId (7, juce::dontSendNotification);
+                else if (c == juce::Colours::grey) colourCombo.setSelectedId (8, juce::dontSendNotification);
+                else colourCombo.setSelectedId (1, juce::dontSendNotification);
 
                 labelEditor.setVisible (true);
                 wEditor.setVisible (true);
@@ -1052,10 +1102,13 @@ public:
                 paramCombo.setVisible (true);
                 deleteButton.setVisible (true);
 
-                btnImageMain.setVisible (true);
+                btnImageMain.setVisible (!isLabel);
                 btnImageMain.setButtonText ("Set Image...");
                 btnImageTrack.setVisible (showTrack);
-                btnClearImage.setVisible (true);
+                btnClearImage.setVisible (!isLabel);
+
+                fontCombo.setVisible (isLabel);
+                colourCombo.setVisible (true);
 
                 nameEditor.setVisible (false);
                 authorEditor.setVisible (false);
@@ -1085,6 +1138,9 @@ public:
             btnImageMain.setButtonText ("Set Chassis Image...");
             btnImageTrack.setVisible (false);
             btnClearImage.setVisible (true);
+
+            fontCombo.setVisible (false);
+            colourCombo.setVisible (false);
         }
         else
         {
@@ -1096,6 +1152,8 @@ public:
             btnImageMain.setVisible (false);
             btnImageTrack.setVisible (false);
             btnClearImage.setVisible (false);
+            fontCombo.setVisible (false);
+            colourCombo.setVisible (false);
             nameEditor.setVisible (false);
             authorEditor.setVisible (false);
             descEditor.setVisible (false);
@@ -1252,8 +1310,10 @@ public:
 
             y = paramCombo.getBottom() + 36;
             btnImageMain.setBounds (m, y, getWidth()-m*2, 24);
+            fontCombo.setBounds (m, y, getWidth()-m*2, 28);
             y += 30;
             btnImageTrack.setBounds (m, y, getWidth()-m*2, 24);
+            colourCombo.setBounds (m, y, getWidth()-m*2, 28);
             y += 30;
             btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
 
@@ -1296,7 +1356,7 @@ public:
         }
     }
 
-    void comboBoxChanged (juce::ComboBox*) override
+    void comboBoxChanged (juce::ComboBox* box) override
     {
         if (canvas == nullptr) return;
         auto& sel = canvas->getSelectedIndices();
@@ -1308,11 +1368,37 @@ public:
                 
             if (hw)
             {
-                int s = paramCombo.getSelectedId();
-                if (s == 1) // "(none)"
-                    hw->parameterID = "";
-                else
-                    hw->parameterID = paramCombo.getText();
+                if (box == &paramCombo)
+                {
+                    int s = paramCombo.getSelectedId();
+                    if (s == 1) // "(none)"
+                        hw->parameterID = "";
+                    else
+                        hw->parameterID = paramCombo.getText();
+                }
+                else if (box == &fontCombo)
+                {
+                    int s = fontCombo.getSelectedId();
+                    if (s == 2) hw->imageMain = "bold";
+                    else if (s == 3) hw->imageMain = "italic";
+                    else if (s == 4) hw->imageMain = "bold italic";
+                    else if (s == 5) hw->imageMain = "monospace";
+                    else hw->imageMain = "";
+                    canvas->notifyHardwareChanged();
+                }
+                else if (box == &colourCombo)
+                {
+                    int s = colourCombo.getSelectedId();
+                    if (s == 2) hw->customColour = juce::Colours::white;
+                    else if (s == 3) hw->customColour = juce::Colours::black;
+                    else if (s == 4) hw->customColour = juce::Colour(0xFFFF3333);
+                    else if (s == 5) hw->customColour = juce::Colour(0xFF33FF66);
+                    else if (s == 6) hw->customColour = juce::Colour(0xFF3366FF);
+                    else if (s == 7) hw->customColour = juce::Colour(0xFFFFDD33);
+                    else if (s == 8) hw->customColour = juce::Colours::grey;
+                    else hw->customColour = juce::Colours::red; // Default
+                    canvas->notifyHardwareChanged();
+                }
             }
         }
     }
@@ -1322,7 +1408,7 @@ private:
     juce::TextEditor labelEditor;
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor;
-    juce::ComboBox paramCombo;
+    juce::ComboBox paramCombo, fontCombo, colourCombo;
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };

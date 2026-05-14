@@ -129,9 +129,11 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         }
         else if (ctrl.type == "pixel_display")
             HardwareDrawing::drawPixelDisplay (g, ctrlBounds, nullptr, 32, 16, false, &styles);
+        else if (ctrl.type == "label")
+            HardwareDrawing::drawTextLabel (g, ctrlBounds, ctrl.label, &styles);
 
-        // Label
-        if (ctrl.label.isNotEmpty() && sc > 0.3f)
+        // Default label underneath control (skip for standalone text labels)
+        if (ctrl.label.isNotEmpty() && sc > 0.3f && ctrl.type != "label")
         {
             float fontSize = juce::jmax (6.0f, 9.0f * sc);
             g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.8f * alpha));
