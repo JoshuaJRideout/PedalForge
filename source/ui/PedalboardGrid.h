@@ -94,7 +94,10 @@ public:
     void setRoutingMode (bool active) { 
         routeOverlay.setRoutingVisible (active); 
         if (active)
+        {
             routeOverlay.toFront (false);
+            routeToggle.toFront (false);
+        }
         else
             routeOverlay.toBack();
     }
