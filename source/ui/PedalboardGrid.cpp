@@ -1,6 +1,8 @@
 #include "PedalboardGrid.h"
 #include "LookAndFeel.h"
 #include "../pedals/PedalRegistry.h"
+#include "../dsp/GraphPedalProcessor.h"
+#include "../dsp/PedalDesign.h"
 
 //==============================================================================
 PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng)
@@ -289,6 +291,42 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName,
                 inst->colour = info.colour;
                 inst->category = info.category;
                 inst->numKnobs = info.numKnobs;
+
+                inst->design = std::make_shared<PedalDesign>();
+                inst->design->name = inst->name;
+                inst->design->category = inst->category;
+                inst->design->chassisColour = inst->colour;
+                
+                // Fetch DSP graph for JSON and create knobs for parameters
+                if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
+                {
+                    inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+                    
+                    float x = 20, y = 40;
+                    for (auto* param : proc->getParameters())
+                    {
+                        if (auto* pf = dynamic_cast<juce::AudioParameterFloat*> (param))
+                        {
+                            PedalDesign::Control ctrl;
+                            ctrl.type = "knob";
+                            ctrl.label = pf->name;
+                            ctrl.controlID = pf->paramID;
+                            ctrl.x = x;
+                            ctrl.y = y;
+                            ctrl.width = 50;
+                            ctrl.height = 50;
+                            inst->design->controls.push_back (ctrl);
+
+                            PedalDesign::Mapping m;
+                            m.controlID = ctrl.controlID;
+                            m.nodeParam = pf->paramID;
+                            inst->design->mappings.push_back (m);
+
+                            x += 60;
+                            if (x > 140) { x = 20; y += 70; }
+                        }
+                    }
+                }
             }
 
             rebuildFromEngine();
@@ -335,6 +373,8 @@ void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, int gridX, int 
                 inst->colour = info.colour;
                 inst->category = info.category;
                 inst->numKnobs = info.numKnobs;
+                if (srcInst.design != nullptr)
+                    inst->design = std::make_shared<PedalDesign> (*srcInst.design);
             }
 
             rebuildFromEngine();

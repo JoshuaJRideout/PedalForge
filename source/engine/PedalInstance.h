@@ -29,8 +29,8 @@ struct PedalInstance
     bool bypassed = false;
     int  rotation = 0;          // 0, 90, 180, 270 degrees
 
-    // Custom design (nullptr = use generic PedalPainter rendering)
-    const PedalDesign* design = nullptr;
+    // Custom design
+    std::shared_ptr<PedalDesign> design;
 
     // Live control values for custom designs (controlID → value 0..1)
     std::map<juce::String, float> controlValues;
