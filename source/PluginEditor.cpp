@@ -18,7 +18,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (titleLabel);
 
     // Tabs — all in one radio group
-    for (auto* tab : { &tabBoard, &tabRoute, &tabForge, &tabFX, &tabLibrary, &tabStore })
+    for (auto* tab : { &tabBoard, &tabRoute, &tabPedal, &tabFX, &tabLibrary, &tabStore })
     {
         tab->setRadioGroupId (1);
         tab->setClickingTogglesState (true);
@@ -91,7 +91,7 @@ void PedalForgeEditor::resized()
     tabStore.setBounds   (toolbar.removeFromRight (80).reduced (4, 6));
     tabLibrary.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
     tabFX.setBounds      (toolbar.removeFromRight (60).reduced (4, 6));
-    tabForge.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
+    tabPedal.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
     tabRoute.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
     tabBoard.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
 
@@ -110,21 +110,21 @@ void PedalForgeEditor::resized()
 void PedalForgeEditor::buttonClicked (juce::Button* button)
 {
     // Only handle tab buttons
-    if (button != &tabBoard && button != &tabRoute && button != &tabForge
+    if (button != &tabBoard && button != &tabRoute && button != &tabPedal
         && button != &tabFX && button != &tabLibrary && button != &tabStore)
         return;
 
-    bool wasForge   = pedalDesigner.isVisible();
+    bool wasPedal   = pedalDesigner.isVisible();
     bool wasFX      = nodeGraphEditor.isVisible();
 
     bool isBoard    = tabBoard.getToggleState();
     bool isRoute    = tabRoute.getToggleState();
-    bool isForge    = tabForge.getToggleState();
+    bool isPedal    = tabPedal.getToggleState();
     bool isFX       = tabFX.getToggleState();
     bool isLibrary  = tabLibrary.getToggleState();
 
     // ── Save state when LEAVING a tab ───────────────────────────────
-    if (wasForge && activePedal != nullptr && activePedal->design != nullptr)
+    if (wasPedal && activePedal != nullptr && activePedal->design != nullptr)
     {
         auto updatedDesign = pedalDesigner.getDesign();
         *(activePedal->design) = updatedDesign;
@@ -142,8 +142,8 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     routeView.setVisible (isRoute);
     libraryView.setVisible (isLibrary);
 
-    pedalDesigner.setVisible (isForge);
-    if (isForge && activePedal != nullptr && activePedal->design != nullptr)
+    pedalDesigner.setVisible (isPedal);
+    if (isPedal && activePedal != nullptr && activePedal->design != nullptr)
         pedalDesigner.loadDesign (*activePedal->design);
 
     nodeGraphEditor.setVisible (isFX);
@@ -156,7 +156,7 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     // ── Set Q-menu context for the active tab ───────────────────────
     if (isBoard)       inventory.setContext (InventoryOverlay::Context::Board);
     else if (isRoute)  inventory.setContext (InventoryOverlay::Context::Route);
-    else if (isForge)  inventory.setContext (InventoryOverlay::Context::Forge);
+    else if (isPedal)  inventory.setContext (InventoryOverlay::Context::Forge);
     else if (isFX)     inventory.setContext (InventoryOverlay::Context::FX);
 
     // Close the inventory when switching tabs

@@ -105,6 +105,7 @@ private:
 
         std::function<void (InventoryItem*)> onItemHovered;
         std::function<void (InventoryItem*)> onItemSelected;
+        std::function<void()> onDragStarted;
 
     private:
         struct GridCell : public juce::Component
@@ -120,6 +121,7 @@ private:
 
             std::function<void (InventoryItem*)> onHover;
             std::function<void (InventoryItem*)> onClick;
+            std::function<void()> onDragStart;
         };
 
         juce::Viewport viewport;

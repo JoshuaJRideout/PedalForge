@@ -229,6 +229,11 @@ void InventoryOverlay::ItemGrid::GridCell::mouseDrag (const juce::MouseEvent& e)
                 desc = "hardware:" + item.hardwareType + ":" + juce::String (ratioX) + ":" + juce::String (ratioY);
 
             juce::Image emptyImage (juce::Image::ARGB, 1, 1, true);
+
+            // Hide the overlay BEFORE starting the drag so the workspace
+            // underneath can receive the drop
+            if (onDragStart) onDragStart();
+
             container->startDragging (desc, this, emptyImage, false);
         }
     }
@@ -281,6 +286,7 @@ void InventoryOverlay::ItemGrid::setItems (const std::vector<InventoryItem*>& it
         auto* cell = cells.add (new GridCell (*item));
         cell->onHover = onItemHovered;
         cell->onClick = onItemSelected;
+        cell->onDragStart = onDragStarted;
         content.addAndMakeVisible (cell);
     }
 
@@ -398,6 +404,9 @@ InventoryOverlay::InventoryOverlay()
     {
         previewPanel.showItem (item);
     };
+
+    // When a drag starts, hide the overlay so the workspace can receive the drop
+    itemGrid.onDragStarted = [this] { hide(); };
 
     addChildComponent (categoryPanel);
     addChildComponent (itemGrid);

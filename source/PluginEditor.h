@@ -36,7 +36,7 @@ private:
     juce::Label titleLabel;
     juce::TextButton tabBoard   { "Board" };
     juce::TextButton tabRoute   { "Route" };
-    juce::TextButton tabForge   { "Forge" };
+    juce::TextButton tabPedal   { "Pedal" };
     juce::TextButton tabFX      { "FX" };
     juce::TextButton tabLibrary { "Library" };
     juce::TextButton tabStore   { "Store" };
