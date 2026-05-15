@@ -69,8 +69,8 @@ target_sources(PedalForge PRIVATE
     source/ui/PedalDetailPanel.cpp
     source/ui/PedalPalette.h
     source/ui/PedalPalette.cpp
-    source/ui/AssetLibraryPanel.h
-    source/ui/AssetLibraryPanel.cpp
+    source/ui/InventoryOverlay.h
+    source/ui/InventoryOverlay.cpp
     source/ui/PedalPainter.h
     source/ui/PedalPainter.cpp
     source/ui/PedalDesignerComponent.h

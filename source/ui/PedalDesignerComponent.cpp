@@ -63,65 +63,7 @@ private:
     bool dragStarted = false;
 };
 
-//==============================================================================
-class PedalDesignerComponent::HardwarePalette : public juce::Component
-{
-public:
-    HardwarePalette()
-    {
-        // ── Controls ──
-        items.push_back (std::make_unique<HardwareItem> ("knob",       "Knob"));
-        items.push_back (std::make_unique<HardwareItem> ("switch",     "Switch"));
-        items.push_back (std::make_unique<HardwareItem> ("fader",      "Fader"));
-        items.push_back (std::make_unique<HardwareItem> ("footswitch", "Stomp"));
-        // ── Lights ──
-        items.push_back (std::make_unique<HardwareItem> ("led",        "LED"));
-        items.push_back (std::make_unique<HardwareItem> ("rgb_led",    "RGB LED"));
-        items.push_back (std::make_unique<HardwareItem> ("indicator",  "Indicator"));
-        // ── Screens ──
-        items.push_back (std::make_unique<HardwareItem> ("7seg",       "7-Seg"));
-        items.push_back (std::make_unique<HardwareItem> ("display",    "Display"));
-        items.push_back (std::make_unique<HardwareItem> ("text_screen","Text"));
-        items.push_back (std::make_unique<HardwareItem> ("console",    "Console"));
-        // ── Decoration ──
-        items.push_back (std::make_unique<HardwareItem> ("label",      "Label"));
-        // ── Instruments ──
-        items.push_back (std::make_unique<HardwareItem> ("vu_meter",   "VU Meter"));
-        items.push_back (std::make_unique<HardwareItem> ("oscilloscope","Scope"));
-        for (auto& item : items) addAndMakeVisible (*item);
-    }
 
-    void paint (juce::Graphics& g) override
-    {
-        g.fillAll (PedalForgeLookAndFeel::bgDark);
-        g.setColour (PedalForgeLookAndFeel::gridLine);
-        g.drawVerticalLine (getWidth() - 1, 0, (float) getHeight());
-        g.setColour (PedalForgeLookAndFeel::textSecondary);
-        g.setFont (juce::FontOptions (14.0f).withStyle ("Bold"));
-        g.drawText ("HARDWARE", getLocalBounds().withTrimmedTop(10), juce::Justification::centredTop);
-    }
-
-    void resized() override
-    {
-        int cols = 2;
-        int imgSize = 56;
-        int pad = 10;
-        int startY = 40;
-        int colW = getWidth() / cols;
-
-        for (int i = 0; i < (int) items.size(); ++i)
-        {
-            int col = i % cols;
-            int row = i / cols;
-            int x = col * colW + (colW - imgSize) / 2;
-            int y = startY + row * (imgSize + pad);
-            items[(size_t) i]->setBounds (x, y, imgSize, imgSize);
-        }
-    }
-
-private:
-    std::vector<std::unique_ptr<HardwareItem>> items;
-};
 
 //==============================================================================
 class PedalDesignerComponent::ChassisCanvas : public juce::Component,
@@ -1492,7 +1434,6 @@ private:
 //==============================================================================
  PedalDesignerComponent::PedalDesignerComponent()
 {
-    palette = std::make_unique<HardwarePalette>(); addAndMakeVisible (*palette);
     canvas = std::make_unique<ChassisCanvas>();    addAndMakeVisible (*canvas);
     properties = std::make_unique<PropertiesPanel>(); addAndMakeVisible (*properties);
 
@@ -1511,7 +1452,6 @@ void PedalDesignerComponent::paint (juce::Graphics&) {}
 void PedalDesignerComponent::resized()
 {
     auto area = getLocalBounds();
-    palette->setBounds (area.removeFromLeft (160));
     properties->setBounds (area.removeFromRight (250));
     canvas->setBounds (area);
 }

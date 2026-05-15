@@ -29,11 +29,11 @@ public:
     void clearDesign();
 
 private:
-    class HardwarePalette;
+
     class ChassisCanvas;
     class PropertiesPanel;
 
-    std::unique_ptr<HardwarePalette> palette;
+
     std::unique_ptr<ChassisCanvas> canvas;
     std::unique_ptr<PropertiesPanel> properties;
     DSPGraph* effectsGraph = nullptr;

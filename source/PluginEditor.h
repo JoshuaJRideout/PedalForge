@@ -4,7 +4,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "ui/LookAndFeel.h"
 #include "ui/PedalboardGrid.h"
-#include "ui/AssetLibraryPanel.h"
+#include "ui/InventoryOverlay.h"
 #include "ui/PedalDesignerComponent.h"
 #include "ui/NodeGraphEditor.h"
 #include "preset/PresetBrowser.h"
@@ -29,7 +29,6 @@ private:
     PedalForgeProcessor& processorRef;
 
     PedalForgeLookAndFeel lookAndFeel;
-    AssetLibraryPanel library;
     PedalboardGrid grid;
     PresetBrowser presetBrowser;
 
@@ -43,10 +42,12 @@ private:
     PedalDesignerComponent pedalDesigner;
     NodeGraphEditor nodeGraphEditor;
 
+    // Q-menu style inventory overlay (replaces left sidebar)
+    InventoryOverlay inventory;
+
     // Cross-tab state: currently selected pedal from the pedalboard
     PedalInstance* activePedal = nullptr;
 
-    static constexpr int paletteWidth = 180;
     static constexpr int toolbarHeight = 44;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalForgeEditor)

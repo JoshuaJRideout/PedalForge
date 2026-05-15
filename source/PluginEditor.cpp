@@ -40,12 +40,15 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (tabStore);
 
     // Components
-    addAndMakeVisible (library);
     addAndMakeVisible (grid);
     addAndMakeVisible (presetBrowser);
     
     addChildComponent (pedalDesigner);    // Initially hidden
     addChildComponent (nodeGraphEditor);  // Initially hidden
+
+    // Inventory overlay (Q-menu style, initially hidden)
+    addChildComponent (inventory);
+    addKeyListener (&inventory);
 
     // Wire the Effects Forge graph to the Pedal Forge for parameter mapping
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
@@ -63,6 +66,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
 
 PedalForgeEditor::~PedalForgeEditor()
 {
+    removeKeyListener (&inventory);
     setLookAndFeel (nullptr);
 }
 
@@ -79,10 +83,6 @@ void PedalForgeEditor::paint (juce::Graphics& g)
     // Toolbar bottom border
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (toolbarHeight - 1, 0.0f, (float) getWidth());
-
-    // Library right border (only draw if library is visible)
-    if (library.isVisible())
-        g.drawVerticalLine (paletteWidth, (float) toolbarHeight, (float) getHeight());
 }
 
 void PedalForgeEditor::resized()
@@ -107,11 +107,11 @@ void PedalForgeEditor::resized()
     pedalDesigner.setBounds (bounds);
     nodeGraphEditor.setBounds (bounds);
 
-    // Library sidebar
-    library.setBounds (bounds.removeFromLeft (paletteWidth));
-
-    // Pedalboard grid fills the rest
+    // Pedalboard grid fills the entire content area (no sidebar!)
     grid.setBounds (bounds);
+
+    // Inventory overlay spans the full content area below toolbar
+    inventory.setBounds (bounds);
 }
 
 //==============================================================================
@@ -144,9 +144,8 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
             activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
         }
 
-        // Pedalboard view
+        // Pedalboard view — grid fills the full area now
         grid.setVisible (isPedalboard);
-        library.setVisible (isPedalboard);
         presetBrowser.setVisible (isPedalboard);
 
         // Forge (Pedal Designer) — load active pedal's design if available
@@ -165,6 +164,10 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
         // Re-wire graph pointer (it may have changed after load)
         pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
+
+        // Close the inventory when switching tabs
+        if (inventory.isOpen())
+            inventory.hide();
 
         repaint();
     }
