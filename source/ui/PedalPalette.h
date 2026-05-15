@@ -26,12 +26,15 @@ public:
     /** Reload user designs from the designs directory. */
     void loadUserDesigns();
 
+    /** Clear and reload all pedals. */
+    void refreshPedals();
+
 private:
     //==========================================================================
     class PaletteItem : public juce::Component
     {
     public:
-        PaletteItem (const PedalInfo& info, std::shared_ptr<PedalDesign> design = nullptr);
+        PaletteItem (const PedalInfo& info, std::shared_ptr<PedalDesign> design = nullptr, std::function<void()> onChange = nullptr);
 
         void paint (juce::Graphics& g) override;
         void mouseDown (const juce::MouseEvent& e) override;
@@ -41,6 +44,7 @@ private:
         PedalInfo info;
         std::shared_ptr<PedalDesign> design;
         bool dragStarted = false;
+        std::function<void()> onChange;
     };
 
     /** Container component that holds all palette items for the Viewport. */

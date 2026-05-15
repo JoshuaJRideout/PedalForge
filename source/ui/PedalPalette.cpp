@@ -6,8 +6,8 @@
 //==============================================================================
 // PaletteItem — mini pedal thumbnail using shared PedalPainter
 //==============================================================================
-PedalPalette::PaletteItem::PaletteItem (const PedalInfo& pedalInfo, std::shared_ptr<PedalDesign> d)
-    : info (pedalInfo), design(d)
+PedalPalette::PaletteItem::PaletteItem (const PedalInfo& i, std::shared_ptr<PedalDesign> d, std::function<void()> cb)
+    : info (i), design (d), onChange (cb)
 {
 }
 
@@ -50,8 +50,38 @@ void PedalPalette::PaletteItem::paint (juce::Graphics& g)
     g.drawText (info.name, textBounds, juce::Justification::centred);
 }
 
-void PedalPalette::PaletteItem::mouseDown (const juce::MouseEvent& /*e*/)
+void PedalPalette::PaletteItem::mouseDown (const juce::MouseEvent& e)
 {
+    if (e.mods.isRightButtonDown() || e.mods.isCtrlDown())
+    {
+        // Allow deleting custom designs
+        if (design != nullptr && !design->isFactory && onChange)
+        {
+            juce::PopupMenu menu;
+            menu.addItem (1, "Delete Custom Pedal");
+            menu.showMenuAsync (juce::PopupMenu::Options(), [this] (int result)
+            {
+                if (result == 1)
+                {
+                    // Find the JSON file that matches this design
+                    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                                          .getChildFile ("PedalForge").getChildFile ("designs");
+                    
+                    for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
+                    {
+                        auto d = PedalDesign::loadFromFile (file);
+                        if (d.name == design->name)
+                        {
+                            file.deleteFile();
+                            if (onChange) onChange();
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+        return;
+    }
     dragStarted = false;
 }
 
@@ -93,6 +123,22 @@ void PedalPalette::PaletteContent::layoutItems (int width)
 //==============================================================================
 PedalPalette::PedalPalette()
 {
+    refreshPedals();
+
+    viewport.setViewedComponent (&content, false);
+    viewport.setScrollBarsShown (true, false); // vertical only
+    viewport.setScrollBarThickness (6);
+    addAndMakeVisible (viewport);
+}
+
+void PedalPalette::refreshPedals()
+{
+    content.items.clear();
+    content.removeAllChildren();
+    loadedDesigns.clear();
+
+    auto onChange = [this] { refreshPedals(); };
+
     // Factory pedals
     for (auto& info : getFactoryPedals())
     {
@@ -100,18 +146,15 @@ PedalPalette::PedalPalette()
         if (info.designFactory)
             defaultDesign = info.designFactory();
             
-        auto item = std::make_unique<PaletteItem> (info, defaultDesign);
+        auto item = std::make_unique<PaletteItem> (info, defaultDesign, onChange);
         content.addAndMakeVisible (*item);
         content.items.push_back (std::move (item));
     }
 
     // User-designed pedals from saved designs
     loadUserDesigns();
-
-    viewport.setViewedComponent (&content, false);
-    viewport.setScrollBarsShown (true, false); // vertical only
-    viewport.setScrollBarThickness (6);
-    addAndMakeVisible (viewport);
+    
+    resized();
 }
 
 void PedalPalette::paint (juce::Graphics& g)
@@ -162,7 +205,7 @@ void PedalPalette::loadUserDesigns()
         info.colour = design->chassisColour;
         info.factory = nullptr; // Custom designs don't have a processor factory (yet)
 
-        auto item = std::make_unique<PaletteItem> (info, design);
+        auto item = std::make_unique<PaletteItem> (info, design, [this] { refreshPedals(); });
         content.addAndMakeVisible (*item);
         content.items.push_back (std::move (item));
 
