@@ -78,6 +78,8 @@ target_sources(PedalForge PRIVATE
     source/ui/HardwareDrawing.h
     source/ui/NodeGraphEditor.h
     source/ui/NodeGraphEditor.cpp
+    source/ui/RoutingGraphEditor.h
+    source/ui/RoutingGraphEditor.cpp
 
     # DSP Node Graph Engine
     source/dsp/DSPNode.h

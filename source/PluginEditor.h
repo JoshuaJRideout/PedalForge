@@ -7,6 +7,7 @@
 #include "ui/InventoryOverlay.h"
 #include "ui/PedalDesignerComponent.h"
 #include "ui/NodeGraphEditor.h"
+#include "ui/RoutingGraphEditor.h"
 #include "preset/PresetBrowser.h"
 
 class PedalForgeProcessor;
@@ -43,9 +44,7 @@ private:
 
     PedalDesignerComponent pedalDesigner;
     NodeGraphEditor nodeGraphEditor;
-
-    // Placeholder components for new tabs
-    juce::Component routeView;      // Will become the routing graph
+    RoutingGraphEditor* routingEditor = nullptr;  // created in constructor (needs engine ref)
     juce::Component libraryView;    // Will become the full asset manager
 
     // Q-menu style inventory overlay

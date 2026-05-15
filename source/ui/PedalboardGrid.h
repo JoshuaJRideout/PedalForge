@@ -4,7 +4,6 @@
 #include "../engine/AudioGraphEngine.h"
 #include "PedalComponent.h"
 #include "PedalDetailPanel.h"
-#include "RouteOverlay.h"
 
 //==============================================================================
 /**
@@ -39,7 +38,6 @@ inline const std::vector<BoardPreset>& getBoardPresets()
  */
 class PedalboardGrid : public juce::Component,
                        public juce::DragAndDropTarget,
-                       public juce::Button::Listener,
                        public juce::Timer
 {
 public:
@@ -49,8 +47,6 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
-    
-    void buttonClicked (juce::Button* button) override;
 
     void mouseDown (const juce::MouseEvent& e) override;
 
@@ -68,7 +64,6 @@ public:
     void removePedal (AudioGraphEngine::NodeID nodeId);
     void rebuildFromEngine();
     void snapPedalToGrid (PedalComponent& comp);
-    void updateRoutes();
     bool keyPressed (const juce::KeyPress& key) override;
 
     //==========================================================================
@@ -90,18 +85,6 @@ public:
 
     /** Get the detail panel. */
     PedalDetailPanel& getDetailPanel() { return detailPanel; }
-
-    void setRoutingMode (bool active) { 
-        routeOverlay.setRoutingVisible (active); 
-        if (active)
-        {
-            routeOverlay.toFront (false);
-            routeToggle.toFront (false);
-        }
-        else
-            routeOverlay.toBack();
-    }
-    bool isRoutingVisible() const { return routeOverlay.isRoutingVisible(); }
 
     int getCellSize() const { return cellSize; }
     int getGridCols() const { return gridCols; }
@@ -125,12 +108,9 @@ private:
     
     std::unique_ptr<PedalInstance> clipboardPedal;
 
-    RouteOverlay routeOverlay;
-    PedalDetailPanel detailPanel;
-    
-    juce::ToggleButton routeToggle { "Routing Mode" };
-
     PedalComponent* selectedComponent = nullptr;
+
+    PedalDetailPanel detailPanel;
 
     // Fixed cell size — never changes with window resize
     static constexpr int cellSize = 60;

@@ -6,16 +6,10 @@
 
 //==============================================================================
 PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng)
-    : engine (eng), routeOverlay (eng)
+    : engine (eng)
 {
-    addAndMakeVisible (routeOverlay);
     addAndMakeVisible (detailPanel);
     detailPanel.addListener (&detailListener);
-    
-    routeToggle.setColour (juce::ToggleButton::textColourId, PedalForgeLookAndFeel::textSecondary);
-    routeToggle.setColour (juce::ToggleButton::tickColourId, PedalForgeLookAndFeel::accent);
-    routeToggle.addListener (this);
-    addAndMakeVisible (routeToggle);
 
     // Apply default board preset
     setBoardPreset (currentPresetIndex);
@@ -193,9 +187,6 @@ void PedalboardGrid::resized()
     {
         detailPanel.setVisible (false);
     }
-    
-    // Put routeToggle in the bottom left
-    routeToggle.setBounds (bounds.getX() + 16, bounds.getBottom() - 40, 100, 24);
 
     // Centre the fixed-size board in the remaining area
     int boardW = gridCols * cellSize;
@@ -207,8 +198,6 @@ void PedalboardGrid::resized()
     gridOriginX = juce::jmax (gridOriginX, bounds.getX() + 8);
     gridOriginY = juce::jmax (gridOriginY, bounds.getY() + 8);
 
-    routeOverlay.setBounds (bounds);
-
     // Reposition pedals at fixed cell size
     for (auto& comp : pedalComponents)
     {
@@ -218,7 +207,7 @@ void PedalboardGrid::resized()
                          inst.gridW * cellSize, inst.gridH * cellSize);
     }
 
-    updateRoutes();
+    repaint();
 }
 
 //==============================================================================
@@ -252,7 +241,6 @@ void PedalboardGrid::itemDragEnter (const SourceDetails& details)
     }
 
     showDropPreview = true;
-    routeOverlay.setDragMode (true);
     repaint();
 }
 
@@ -281,14 +269,12 @@ void PedalboardGrid::itemDragMove (const SourceDetails& details)
 void PedalboardGrid::itemDragExit (const SourceDetails& /*details*/)
 {
     showDropPreview = false;
-    routeOverlay.setDragMode (false);
     repaint();
 }
 
 void PedalboardGrid::itemDropped (const SourceDetails& details)
 {
     showDropPreview = false;
-    routeOverlay.setDragMode (false);
 
     auto desc = details.description.toString();
     auto parts = juce::StringArray::fromTokens (desc, ":", "");
@@ -536,8 +522,7 @@ void PedalboardGrid::rebuildFromEngine()
         pedalComponents.push_back (std::move (comp));
     }
 
-    // Z-order: route overlay behind pedals, detail panel on top
-    routeOverlay.toBack();
+    // Z-order: detail panel on top
     for (auto& comp : pedalComponents)
         comp->toFront (false);
     detailPanel.toFront (false);
@@ -555,7 +540,6 @@ void PedalboardGrid::rebuildFromEngine()
         }
     }
 
-    updateRoutes();
     repaint();
 }
 
@@ -634,13 +618,6 @@ void PedalboardGrid::snapPedalToGrid (PedalComponent& comp)
     auto pos = gridToPixel (gp.x, gp.y);
     comp.setBounds (pos.x, pos.y,
                     inst.gridW * cellSize, inst.gridH * cellSize);
-
-    updateRoutes();
-}
-
-void PedalboardGrid::updateRoutes()
-{
-    routeOverlay.rebuild (cellSize, gridOriginX, gridOriginY, gridCols, gridRows);
 }
 
 //==============================================================================
@@ -690,13 +667,4 @@ bool PedalboardGrid::isGridRectFree (int gx, int gy, int gw, int gh,
     }
 
     return true;
-}
-
-//==============================================================================
-void PedalboardGrid::buttonClicked (juce::Button* button)
-{
-    if (button == &routeToggle)
-    {
-        setRoutingMode (routeToggle.getToggleState());
-    }
 }

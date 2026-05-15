@@ -31,10 +31,13 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (grid);
     addAndMakeVisible (presetBrowser);
 
-    addChildComponent (routeView);
     addChildComponent (pedalDesigner);
     addChildComponent (nodeGraphEditor);
     addChildComponent (libraryView);
+
+    // Routing editor (needs engine reference)
+    routingEditor = new RoutingGraphEditor (proc.getGraphEngine());
+    addChildComponent (routingEditor);
 
     // Inventory overlay (Q-menu style, initially hidden)
     addChildComponent (inventory);
@@ -57,6 +60,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
 PedalForgeEditor::~PedalForgeEditor()
 {
     removeKeyListener (&inventory);
+    delete routingEditor;
     setLookAndFeel (nullptr);
 }
 
@@ -97,7 +101,7 @@ void PedalForgeEditor::resized()
 
     // All full-area views share the same bounds
     grid.setBounds (bounds);
-    routeView.setBounds (bounds);
+    if (routingEditor) routingEditor->setBounds (bounds);
     pedalDesigner.setBounds (bounds);
     nodeGraphEditor.setBounds (bounds);
     libraryView.setBounds (bounds);
@@ -139,7 +143,11 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     // ── Show/hide views ─────────────────────────────────────────────
     grid.setVisible (isBoard);
     presetBrowser.setVisible (isBoard || isRoute);
-    routeView.setVisible (isRoute);
+    if (routingEditor)
+    {
+        routingEditor->setVisible (isRoute);
+        if (isRoute) routingEditor->syncFromEngine();
+    }
     libraryView.setVisible (isLibrary);
 
     pedalDesigner.setVisible (isPedal);
