@@ -21,6 +21,10 @@ public:
     InventoryOverlay();
     ~InventoryOverlay() override;
 
+    /** The active workspace determines which items the Q-menu shows. */
+    enum class Context { Board, Route, Forge, FX };
+    void setContext (Context ctx);
+
     void paint (juce::Graphics& g) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent& e) override;
@@ -150,9 +154,10 @@ private:
     std::vector<InventoryItem> allItems;
     std::vector<InventoryItem*> filteredItems;
 
-    juce::String currentMainCategory = "Pedals";
+    juce::String currentMainCategory;
     juce::String currentSubCategory;    // empty = "All"
     juce::String searchQuery;
+    Context context = Context::Board;
 
     void buildItemDatabase();
     void filterItems();

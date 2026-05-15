@@ -17,34 +17,24 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     titleLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textPrimary);
     addAndMakeVisible (titleLabel);
 
-    // Tabs
-    tabPedalboard.setRadioGroupId (1);
-    tabPedalboard.setClickingTogglesState (true);
-    tabPedalboard.setToggleState (true, juce::dontSendNotification);
-    tabPedalboard.addListener (this);
-    addAndMakeVisible (tabPedalboard);
-
-    tabForge.setRadioGroupId (1);
-    tabForge.setClickingTogglesState (true);
-    tabForge.addListener (this);
-    addAndMakeVisible (tabForge);
-
-    tabEffects.setRadioGroupId (1);
-    tabEffects.setClickingTogglesState (true);
-    tabEffects.addListener (this);
-    addAndMakeVisible (tabEffects);
-
-    tabStore.setRadioGroupId (1);
-    tabStore.setClickingTogglesState (true);
-    tabStore.addListener (this);
-    addAndMakeVisible (tabStore);
+    // Tabs — all in one radio group
+    for (auto* tab : { &tabBoard, &tabRoute, &tabForge, &tabFX, &tabLibrary, &tabStore })
+    {
+        tab->setRadioGroupId (1);
+        tab->setClickingTogglesState (true);
+        tab->addListener (this);
+        addAndMakeVisible (*tab);
+    }
+    tabBoard.setToggleState (true, juce::dontSendNotification);
 
     // Components
     addAndMakeVisible (grid);
     addAndMakeVisible (presetBrowser);
-    
-    addChildComponent (pedalDesigner);    // Initially hidden
-    addChildComponent (nodeGraphEditor);  // Initially hidden
+
+    addChildComponent (routeView);
+    addChildComponent (pedalDesigner);
+    addChildComponent (nodeGraphEditor);
+    addChildComponent (libraryView);
 
     // Inventory overlay (Q-menu style, initially hidden)
     addChildComponent (inventory);
@@ -98,17 +88,19 @@ void PedalForgeEditor::resized()
     presetBrowser.setBounds (toolbar.removeFromLeft (350));
 
     // Tabs (right-aligned)
-    tabStore.setBounds      (toolbar.removeFromRight (100).reduced (4, 6));
-    tabEffects.setBounds    (toolbar.removeFromRight (100).reduced (4, 6));
-    tabForge.setBounds      (toolbar.removeFromRight (100).reduced (4, 6));
-    tabPedalboard.setBounds (toolbar.removeFromRight (100).reduced (4, 6));
+    tabStore.setBounds   (toolbar.removeFromRight (80).reduced (4, 6));
+    tabLibrary.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
+    tabFX.setBounds      (toolbar.removeFromRight (60).reduced (4, 6));
+    tabForge.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
+    tabRoute.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
+    tabBoard.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
 
-    // Full-area views (below toolbar, stacked)
+    // All full-area views share the same bounds
+    grid.setBounds (bounds);
+    routeView.setBounds (bounds);
     pedalDesigner.setBounds (bounds);
     nodeGraphEditor.setBounds (bounds);
-
-    // Pedalboard grid fills the entire content area (no sidebar!)
-    grid.setBounds (bounds);
+    libraryView.setBounds (bounds);
 
     // Inventory overlay spans the full content area below toolbar
     inventory.setBounds (bounds);
@@ -117,58 +109,59 @@ void PedalForgeEditor::resized()
 //==============================================================================
 void PedalForgeEditor::buttonClicked (juce::Button* button)
 {
-    if (button == &tabPedalboard || button == &tabForge
-        || button == &tabEffects || button == &tabStore)
+    // Only handle tab buttons
+    if (button != &tabBoard && button != &tabRoute && button != &tabForge
+        && button != &tabFX && button != &tabLibrary && button != &tabStore)
+        return;
+
+    bool wasForge   = pedalDesigner.isVisible();
+    bool wasFX      = nodeGraphEditor.isVisible();
+
+    bool isBoard    = tabBoard.getToggleState();
+    bool isRoute    = tabRoute.getToggleState();
+    bool isForge    = tabForge.getToggleState();
+    bool isFX       = tabFX.getToggleState();
+    bool isLibrary  = tabLibrary.getToggleState();
+
+    // ── Save state when LEAVING a tab ───────────────────────────────
+    if (wasForge && activePedal != nullptr && activePedal->design != nullptr)
     {
-        bool wasForge     = pedalDesigner.isVisible();
-        bool wasEffects   = nodeGraphEditor.isVisible();
-        bool isPedalboard = tabPedalboard.getToggleState();
-        bool isForge      = tabForge.getToggleState();
-        bool isEffects    = tabEffects.getToggleState();
-
-        // If we are LEAVING the Forge tab, grab the potentially modified design
-        // and push it back to the active pedal instance on the pedalboard!
-        if (wasForge && activePedal != nullptr && activePedal->design != nullptr)
-        {
-            auto updatedDesign = pedalDesigner.getDesign();
-            // Preserve the original category/colour if unchanged, but update the object
-            *(activePedal->design) = updatedDesign;
-            
-            // Force the grid and detail panel to rebuild based on the new design
-            grid.refreshSelectedPedal();
-        }
-
-        // If we are LEAVING the Effects tab, save the graph layout JSON back to the design
-        if (wasEffects && activePedal != nullptr && activePedal->design != nullptr)
-        {
-            activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
-        }
-
-        // Pedalboard view — grid fills the full area now
-        grid.setVisible (isPedalboard);
-        presetBrowser.setVisible (isPedalboard);
-
-        // Forge (Pedal Designer) — load active pedal's design if available
-        pedalDesigner.setVisible (isForge);
-        if (isForge && activePedal != nullptr && activePedal->design != nullptr)
-        {
-            pedalDesigner.loadDesign (*activePedal->design);
-        }
-
-        // Effects builder — load active pedal's effects graph if available
-        nodeGraphEditor.setVisible (isEffects);
-        if (isEffects && activePedal != nullptr && activePedal->design != nullptr)
-        {
-            nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
-        }
-
-        // Re-wire graph pointer (it may have changed after load)
-        pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
-
-        // Close the inventory when switching tabs
-        if (inventory.isOpen())
-            inventory.hide();
-
-        repaint();
+        auto updatedDesign = pedalDesigner.getDesign();
+        *(activePedal->design) = updatedDesign;
+        grid.refreshSelectedPedal();
     }
+
+    if (wasFX && activePedal != nullptr && activePedal->design != nullptr)
+    {
+        activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
+    }
+
+    // ── Show/hide views ─────────────────────────────────────────────
+    grid.setVisible (isBoard);
+    presetBrowser.setVisible (isBoard || isRoute);
+    routeView.setVisible (isRoute);
+    libraryView.setVisible (isLibrary);
+
+    pedalDesigner.setVisible (isForge);
+    if (isForge && activePedal != nullptr && activePedal->design != nullptr)
+        pedalDesigner.loadDesign (*activePedal->design);
+
+    nodeGraphEditor.setVisible (isFX);
+    if (isFX && activePedal != nullptr && activePedal->design != nullptr)
+        nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+
+    // Re-wire graph pointer
+    pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
+
+    // ── Set Q-menu context for the active tab ───────────────────────
+    if (isBoard)       inventory.setContext (InventoryOverlay::Context::Board);
+    else if (isRoute)  inventory.setContext (InventoryOverlay::Context::Route);
+    else if (isForge)  inventory.setContext (InventoryOverlay::Context::Forge);
+    else if (isFX)     inventory.setContext (InventoryOverlay::Context::FX);
+
+    // Close the inventory when switching tabs
+    if (inventory.isOpen())
+        inventory.hide();
+
+    repaint();
 }

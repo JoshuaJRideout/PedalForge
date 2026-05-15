@@ -34,15 +34,21 @@ private:
 
     // Toolbar Tabs
     juce::Label titleLabel;
-    juce::TextButton tabPedalboard { "Pedalboard" };
-    juce::TextButton tabForge { "The Forge" };
-    juce::TextButton tabEffects { "Effects" };
-    juce::TextButton tabStore { "Pedal Store" };
+    juce::TextButton tabBoard   { "Board" };
+    juce::TextButton tabRoute   { "Route" };
+    juce::TextButton tabForge   { "Forge" };
+    juce::TextButton tabFX      { "FX" };
+    juce::TextButton tabLibrary { "Library" };
+    juce::TextButton tabStore   { "Store" };
 
     PedalDesignerComponent pedalDesigner;
     NodeGraphEditor nodeGraphEditor;
 
-    // Q-menu style inventory overlay (replaces left sidebar)
+    // Placeholder components for new tabs
+    juce::Component routeView;      // Will become the routing graph
+    juce::Component libraryView;    // Will become the full asset manager
+
+    // Q-menu style inventory overlay
     InventoryOverlay inventory;
 
     // Cross-tab state: currently selected pedal from the pedalboard

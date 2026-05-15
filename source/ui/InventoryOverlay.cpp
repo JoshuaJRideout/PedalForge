@@ -408,6 +408,11 @@ InventoryOverlay::InventoryOverlay()
 
 InventoryOverlay::~InventoryOverlay() = default;
 
+void InventoryOverlay::setContext (Context ctx)
+{
+    context = ctx;
+}
+
 void InventoryOverlay::buildItemDatabase()
 {
     allItems.clear();
@@ -493,20 +498,44 @@ void InventoryOverlay::buildItemDatabase()
         allItems.push_back (std::move (item));
     }
 
-    // ── Build category tree ─────────────────────────────────────────────
-    juce::StringArray mainCats = { "Pedals", "Parts" };
+    // ── Build category tree (context-aware) ─────────────────────────
+    juce::StringArray mainCats;
     std::map<juce::String, juce::StringArray> subCats;
 
-    // Collect unique sub-categories
+    // Determine which main categories to show based on context
+    switch (context)
+    {
+        case Context::Board:
+        case Context::Route:
+            mainCats.add ("Pedals");
+            break;
+        case Context::Forge:
+            mainCats.add ("Parts");
+            break;
+        case Context::FX:
+            mainCats.add ("Nodes");
+            break;
+    }
+
+    // Collect unique sub-categories for visible main categories
     for (auto& item : allItems)
     {
-        auto& subs = subCats[item.mainCategory];
-        if (! subs.contains (item.category))
-            subs.add (item.category);
+        if (mainCats.contains (item.mainCategory))
+        {
+            auto& subs = subCats[item.mainCategory];
+            if (! subs.contains (item.category))
+                subs.add (item.category);
+        }
     }
 
     categoryPanel.setCategories (mainCats, subCats);
-    categoryPanel.selectCategory ("Pedals", "");
+
+    // Select the first main category
+    if (mainCats.size() > 0)
+    {
+        currentMainCategory = mainCats[0];
+        categoryPanel.selectCategory (currentMainCategory, "");
+    }
 
     filterItems();
 }
