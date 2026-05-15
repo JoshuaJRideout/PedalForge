@@ -40,7 +40,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (tabStore);
 
     // Components
-    addAndMakeVisible (palette);
+    addAndMakeVisible (library);
     addAndMakeVisible (grid);
     addAndMakeVisible (presetBrowser);
     
@@ -80,8 +80,8 @@ void PedalForgeEditor::paint (juce::Graphics& g)
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (toolbarHeight - 1, 0.0f, (float) getWidth());
 
-    // Palette right border (only draw if palette is visible)
-    if (palette.isVisible())
+    // Library right border (only draw if library is visible)
+    if (library.isVisible())
         g.drawVerticalLine (paletteWidth, (float) toolbarHeight, (float) getHeight());
 }
 
@@ -107,8 +107,8 @@ void PedalForgeEditor::resized()
     pedalDesigner.setBounds (bounds);
     nodeGraphEditor.setBounds (bounds);
 
-    // Palette sidebar
-    palette.setBounds (bounds.removeFromLeft (paletteWidth));
+    // Library sidebar
+    library.setBounds (bounds.removeFromLeft (paletteWidth));
 
     // Pedalboard grid fills the rest
     grid.setBounds (bounds);
@@ -146,7 +146,7 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
         // Pedalboard view
         grid.setVisible (isPedalboard);
-        palette.setVisible (isPedalboard);
+        library.setVisible (isPedalboard);
         presetBrowser.setVisible (isPedalboard);
 
         // Forge (Pedal Designer) — load active pedal's design if available

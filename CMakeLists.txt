@@ -54,11 +54,7 @@ target_sources(PedalForge PRIVATE
 
     # Pedals
     source/pedals/PedalRegistry.h
-    source/pedals/OverdrivePedal.h
-    source/pedals/DelayPedal.h
-    source/pedals/ReverbPedal.h
-    source/pedals/EQPedal.h
-    source/pedals/CompressorPedal.h
+    source/pedals/FactoryDesigns.h
 
     # UI
     source/ui/LookAndFeel.h
@@ -73,6 +69,8 @@ target_sources(PedalForge PRIVATE
     source/ui/PedalDetailPanel.cpp
     source/ui/PedalPalette.h
     source/ui/PedalPalette.cpp
+    source/ui/AssetLibraryPanel.h
+    source/ui/AssetLibraryPanel.cpp
     source/ui/PedalPainter.h
     source/ui/PedalPainter.cpp
     source/ui/PedalDesignerComponent.h

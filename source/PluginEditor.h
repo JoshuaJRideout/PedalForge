@@ -4,7 +4,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "ui/LookAndFeel.h"
 #include "ui/PedalboardGrid.h"
-#include "ui/PedalPalette.h"
+#include "ui/AssetLibraryPanel.h"
 #include "ui/PedalDesignerComponent.h"
 #include "ui/NodeGraphEditor.h"
 #include "preset/PresetBrowser.h"
@@ -29,7 +29,7 @@ private:
     PedalForgeProcessor& processorRef;
 
     PedalForgeLookAndFeel lookAndFeel;
-    PedalPalette palette;
+    AssetLibraryPanel library;
     PedalboardGrid grid;
     PresetBrowser presetBrowser;
 

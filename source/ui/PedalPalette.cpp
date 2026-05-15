@@ -160,24 +160,11 @@ void PedalPalette::refreshPedals()
 void PedalPalette::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgMid);
-
-    auto header = getLocalBounds().removeFromTop (36);
-    g.setColour (PedalForgeLookAndFeel::bgDark);
-    g.fillRect (header);
-
-    g.setColour (PedalForgeLookAndFeel::textSecondary);
-    g.setFont (juce::FontOptions (12.0f).withStyle ("Bold"));
-    g.drawText ("PEDALS", header.reduced (12, 0), juce::Justification::centredLeft);
-
-    g.setColour (PedalForgeLookAndFeel::gridLine);
-    g.drawHorizontalLine (header.getBottom(), 0.0f, (float) getWidth());
 }
 
 void PedalPalette::resized()
 {
     auto area = getLocalBounds();
-    area.removeFromTop (38);
-
     viewport.setBounds (area);
     content.layoutItems (area.getWidth() - viewport.getScrollBarThickness());
 }
