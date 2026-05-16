@@ -1,9 +1,9 @@
 #include "MidiLearn.h"
-#include "../PluginProcessor.h"
+#include "../engine/AudioGraphEngine.h"
 
 //==============================================================================
-MidiLearnManager::MidiLearnManager (PedalForgeProcessor& proc)
-    : processor (proc)
+MidiLearnManager::MidiLearnManager (AudioGraphEngine& eng)
+    : targetEngine (eng)
 {
 }
 
@@ -91,8 +91,13 @@ void MidiLearnManager::applyCC (int ccNumber, int /*channel*/, float value)
 
     if (it != ccToParam.end())
     {
+        auto mapIt = mappings.find (it->second);
+        if (mapIt == mappings.end()) return;
+        
+        auto& mapping = mapIt->second;
+
         // Find the parameter in the graph and set it
-        auto& graphEngine = processor.getGraphEngine();
+        auto& graphEngine = targetEngine;
 
         for (auto& instance : graphEngine.getPedalInstances())
         {
@@ -106,7 +111,37 @@ void MidiLearnManager::applyCC (int ccNumber, int /*channel*/, float value)
                 {
                     if (rangedParam->getParameterID() == it->second)
                     {
-                        rangedParam->setValueNotifyingHost (value);
+                        float currentVirtual = rangedParam->getValue();
+                        
+                        // If the virtual parameter was moved by GUI, unlatch!
+                        if (mapping.isLatched && mapping.lastVirtualValue >= 0.0f)
+                        {
+                            if (std::abs(currentVirtual - mapping.lastVirtualValue) > 0.001f)
+                                mapping.isLatched = false;
+                        }
+                        
+                        // Pick-up logic
+                        if (!mapping.isLatched)
+                        {
+                            if (mapping.lastPhysicalValue >= 0.0f)
+                            {
+                                // Check if we crossed the virtual value, or got close enough
+                                bool crossedUp = (mapping.lastPhysicalValue <= currentVirtual && value >= currentVirtual);
+                                bool crossedDown = (mapping.lastPhysicalValue >= currentVirtual && value <= currentVirtual);
+                                bool closeEnough = std::abs (value - currentVirtual) < 0.05f;
+
+                                if (crossedUp || crossedDown || closeEnough)
+                                    mapping.isLatched = true;
+                            }
+                            mapping.lastPhysicalValue = value;
+                        }
+
+                        if (mapping.isLatched)
+                        {
+                            rangedParam->setValueNotifyingHost (value);
+                            mapping.lastVirtualValue = value;
+                        }
+                        
                         return;
                     }
                 }

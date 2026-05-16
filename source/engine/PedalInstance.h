@@ -27,6 +27,9 @@ struct PedalInstance
 
     // State
     bool bypassed = false;
+    bool onBoard  = true;       // false = exists in engine but not placed on board grid
+    juce::String boardId;       // Empty = default main board
+    int pageIndex = 0;          // Page within the board
     int  rotation = 0;          // 0, 90, 180, 270 degrees
 
     // Routing-tab canvas position (persisted across tab switches)

@@ -103,5 +103,20 @@ inline std::vector<PedalInfo> getFactoryPedals()
           juce::Colour (0xFFFCD34D),    // amber
           [] { return GraphPedalFactory::createCabinetSim(); },
           [] { return FactoryDesigns::createCabinetSim(); } },
+
+        { "NAM Amp",      "Amp Sim",    1, 2, 2,
+          juce::Colour (0xFF333333),    // dark grey
+          [] { return GraphPedalFactory::createNAMAmp(); },
+          [] { return FactoryDesigns::createNAMAmp(); } },
+
+        { "IR Cabinet",   "Amp/Cab",    1, 2, 2,
+          juce::Colour (0xff555555),
+          [] { return GraphPedalFactory::createIRLoader(); },
+          [] { return FactoryDesigns::createIRLoader(); } },
+
+        { "IR Reverb",    "Reverb",     1, 2, 2,
+          juce::Colour (0xff4a5d85),
+          [] { return GraphPedalFactory::createIRReverb(); },
+          [] { return FactoryDesigns::createIRReverb(); } }
     };
 }

@@ -2,6 +2,7 @@
 
 #include "DSPNode.h"
 #include "DSPNodeLibrary.h"
+#include "NAMNode.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <map>
 #include <memory>
@@ -42,6 +43,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "ir")           return std::make_unique<IRNode>();
     if (type == "sampler")      return std::make_unique<SamplerNode>();
     if (type == "ram")          return std::make_unique<RamNode>();
+    if (type == "nam")          return std::make_unique<NAMNode>("nam", "NAM Amp");
 
     if (type == "gain")         return std::make_unique<GainNode>();
     if (type == "mix")          return std::make_unique<MixNode>();
@@ -86,6 +88,28 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "latch")        return std::make_unique<LatchNode>();
     if (type == "mux")          return std::make_unique<MuxNode>();
     if (type == "constant")     return std::make_unique<ConstantNode>();
+    
+    // Comparison
+    if (type == "cmp_eq")       return std::make_unique<EqualNode>();
+    if (type == "cmp_neq")      return std::make_unique<NotEqualNode>();
+    if (type == "cmp_gt")       return std::make_unique<GreaterThanNode>();
+    if (type == "cmp_lt")       return std::make_unique<LessThanNode>();
+    if (type == "cmp_gte")      return std::make_unique<GreaterOrEqualNode>();
+    if (type == "cmp_lte")      return std::make_unique<LessOrEqualNode>();
+    if (type == "edge_rising")  return std::make_unique<RisingEdgeNode>();
+    if (type == "edge_falling") return std::make_unique<FallingEdgeNode>();
+    if (type == "change_det")   return std::make_unique<ChangeDetectorNode>();
+    if (type == "delta")        return std::make_unique<DeltaNode>();
+    
+    // Time / Triggers
+    if (type == "logic_delay")  return std::make_unique<LogicDelayNode>();
+    if (type == "pulse_width")  return std::make_unique<PulseWidthNode>();
+    if (type == "one_shot")     return std::make_unique<OneShotNode>();
+    if (type == "debounce")     return std::make_unique<DebounceNode>();
+    if (type == "blink")        return std::make_unique<BlinkNode>();
+    if (type == "ramp")         return std::make_unique<RampNode>();
+    if (type == "array")        return std::make_unique<ArrayNode>();
+    
     // Math
     if (type == "add")          return std::make_unique<AddNode>();
     if (type == "subtract")     return std::make_unique<SubtractNode>();
@@ -104,6 +128,25 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "increment")    return std::make_unique<IncrementNode>();
     if (type == "decrement")    return std::make_unique<DecrementNode>();
     if (type == "average")      return std::make_unique<AverageNode>();
+    if (type == "math_sin")     return std::make_unique<SineNode>();
+    if (type == "math_cos")     return std::make_unique<CosineNode>();
+    if (type == "math_tan")     return std::make_unique<TangentNode>();
+    if (type == "math_sinh")    return std::make_unique<SinhNode>();
+    if (type == "math_cosh")    return std::make_unique<CoshNode>();
+    if (type == "math_tanh")    return std::make_unique<TanhNode>();
+    if (type == "math_lerp")    return std::make_unique<LerpNode>();
+    if (type == "math_exp")     return std::make_unique<ExpNode>();
+    if (type == "math_log")     return std::make_unique<LogNode>();
+    
+    // Bitwise / Advanced
+    if (type == "bit_and")      return std::make_unique<BitAndNode>();
+    if (type == "bit_or")       return std::make_unique<BitOrNode>();
+    if (type == "bit_xor")      return std::make_unique<BitXorNode>();
+    if (type == "bit_not")      return std::make_unique<BitNotNode>();
+    if (type == "bit_shl")      return std::make_unique<BitShiftLeftNode>();
+    if (type == "bit_shr")      return std::make_unique<BitShiftRightNode>();
+    if (type == "math_smoothstep") return std::make_unique<SmoothStepNode>();
+    if (type == "accumulator")  return std::make_unique<AccumulatorNode>();
     
     if (type == "ranger")       return std::make_unique<RangerNode>();
     if (type == "smooth")       return std::make_unique<SmoothNode>();
@@ -116,6 +159,12 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "clock")        return std::make_unique<ClockNode>();
     if (type == "counter")      return std::make_unique<CounterNode>();
     if (type == "sequencer")    return std::make_unique<SequencerNode>();
+    
+    // Audio Sensors / Advanced Processing
+    if (type == "pitch_det")    return std::make_unique<PitchDetectorNode>();
+    if (type == "transient_det")return std::make_unique<TransientDetectorNode>();
+    if (type == "zero_cross")   return std::make_unique<ZeroCrossingNode>();
+    if (type == "pid_ctrl")     return std::make_unique<PIDControllerNode>();
     // Scripting
     if (type == "expression")   return std::make_unique<ExpressionNode>();
     // MIDI

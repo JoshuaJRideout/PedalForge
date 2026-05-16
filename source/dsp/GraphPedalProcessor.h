@@ -40,6 +40,14 @@ public:
         rebuildParameters();
     }
 
+    void setNodeFilePath(int nodeID, const juce::String& path)
+    {
+        if (auto* node = dspGraph.getNode(nodeID))
+        {
+            node->setFilePath(path);
+        }
+    }
+
     juce::String saveGraph() const
     {
         return juce::JSON::toString (dspGraph.toJSON());
@@ -588,5 +596,53 @@ namespace GraphPedalFactory
         return proc;
     }
 
+    inline std::unique_ptr<GraphPedalProcessor> createNAMAmp()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("NAM Amp");
+        auto& g = proc->getDSPGraph();
+        int inID   = g.addNode (std::make_unique<AudioInputNode>());
+        int namID  = g.addNode (std::make_unique<NAMNode>("nam", "NAM Amp"));
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>());
+
+        g.connect (inID, 0, namID, 0);
+        g.connect (namID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createIRLoader()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("IR Cabinet");
+        auto& g = proc->getDSPGraph();
+        int inID   = g.addNode (std::make_unique<AudioInputNode>());
+        int irID   = g.addNode (std::make_unique<IRNode>());
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>());
+
+        g.connect (inID, 0, irID, 0);
+        g.connect (inID, 0, irID, 1);
+        g.connect (irID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createIRReverb()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("IR Reverb");
+        auto& g = proc->getDSPGraph();
+        int inID   = g.addNode (std::make_unique<AudioInputNode>());
+        int irID   = g.addNode (std::make_unique<IRNode>());
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>());
+
+        g.getNode(irID)->getParam("mix")->set(0.5f);
+
+        g.connect (inID, 0, irID, 0);
+        g.connect (inID, 0, irID, 1);
+        g.connect (irID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
 }
 

@@ -187,3 +187,172 @@ public:
     bool isControlSurface() const { return true; }
     juce::String getControlType() const { return "xy_pad"; }
 };
+
+//==============================================================================
+class PitchDetectorNode : public DSPNode
+{
+public:
+    PitchDetectorNode() : DSPNode ("pitch_det", "Pitch Detector")
+    {
+        addInput ("in", NodePort::Audio);
+        addOutput ("pitch_cv", NodePort::Control);
+        addOutput ("gate", NodePort::Gate);
+        addParam ("sensitivity", "Sensitivity", 0.0f, 1.0f, 0.5f);
+    }
+    void prepare (double sampleRate, int maxBlockSize) override
+    {
+        DSPNode::prepare (sampleRate, maxBlockSize);
+        sr = sampleRate;
+        pitch = 0.0f;
+        gate = 0.0f;
+    }
+    // Simplistic zero-crossing pitch detector for demo purposes
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        float sens = getParam("sensitivity")->get();
+        float threshold = 0.05f * (1.0f - sens + 0.01f);
+        
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            
+            // Simple envelope
+            env += 0.01f * (std::abs(val) - env);
+            gate = (env > threshold) ? 1.0f : 0.0f;
+            
+            if (val > 0.0f && lastVal <= 0.0f && gate > 0.5f)
+            {
+                if (samplesSinceZero > 10)
+                {
+                    float freq = (float)sr / (float)samplesSinceZero;
+                    // V/Oct roughly: 0V = C0 (16.35Hz)
+                    if (freq > 10.0f && freq < 10000.0f)
+                    {
+                        float vOct = std::log2(freq / 16.3516f);
+                        pitch = vOct;
+                    }
+                }
+                samplesSinceZero = 0;
+            }
+            else
+            {
+                samplesSinceZero++;
+            }
+            
+            lastVal = val;
+            
+            out[0][i] = pitch;
+            if (numOut > 1 && out[1]) out[1][i] = gate;
+        }
+    }
+private:
+    float lastVal = 0.0f;
+    float pitch = 0.0f;
+    float gate = 0.0f;
+    float env = 0.0f;
+    int samplesSinceZero = 0;
+    double sr = 44100.0;
+};
+
+class TransientDetectorNode : public DSPNode
+{
+public:
+    TransientDetectorNode() : DSPNode ("transient_det", "Transient Detector")
+    {
+        addInput ("in", NodePort::Audio);
+        addOutput ("trigger", NodePort::Gate);
+        addParam ("threshold", "Threshold", 0.0f, 1.0f, 0.5f);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        float thresh = getParam("threshold")->get();
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? std::abs(in[0][i]) : 0.0f;
+            
+            float diff = val - env;
+            env += 0.05f * (val - env); // Fast attack, slow release approx
+            
+            if (diff > thresh && !triggered)
+            {
+                out[0][i] = 1.0f;
+                triggered = true;
+            }
+            else
+            {
+                out[0][i] = 0.0f;
+                if (diff < thresh * 0.5f) triggered = false;
+            }
+        }
+    }
+private:
+    float env = 0.0f;
+    bool triggered = false;
+};
+
+class ZeroCrossingNode : public DSPNode
+{
+public:
+    ZeroCrossingNode() : DSPNode ("zero_cross", "Zero-Crossing")
+    {
+        addInput ("in", NodePort::Audio);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = (val > 0.0f && lastVal <= 0.0f) ? 1.0f : 0.0f;
+            lastVal = val;
+        }
+    }
+private:
+    float lastVal = 0.0f;
+};
+
+class PIDControllerNode : public DSPNode
+{
+public:
+    PIDControllerNode() : DSPNode ("pid_ctrl", "PID Controller")
+    {
+        addInput ("setpoint", NodePort::Control);
+        addInput ("process_var", NodePort::Control);
+        addOutput ("control", NodePort::Control);
+        addParam ("kp", "P", 0.0f, 10.0f, 1.0f);
+        addParam ("ki", "I", 0.0f, 10.0f, 0.1f);
+        addParam ("kd", "D", 0.0f, 10.0f, 0.05f);
+    }
+    void prepare (double sampleRate, int maxBlockSize) override
+    {
+        DSPNode::prepare (sampleRate, maxBlockSize);
+        integral = 0.0f;
+        prevError = 0.0f;
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        float kp = getParam("kp")->get();
+        float ki = getParam("ki")->get();
+        float kd = getParam("kd")->get();
+        
+        for (int i = 0; i < n; ++i)
+        {
+            float sp = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float pv = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            
+            float error = sp - pv;
+            integral += error;
+            float derivative = error - prevError;
+            
+            out[0][i] = (kp * error) + (ki * integral) + (kd * derivative);
+            prevError = error;
+        }
+    }
+private:
+    float integral = 0.0f;
+    float prevError = 0.0f;
+};

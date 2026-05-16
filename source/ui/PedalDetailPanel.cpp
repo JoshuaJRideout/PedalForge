@@ -1,6 +1,7 @@
 #include "PedalDetailPanel.h"
 #include "PedalPainter.h"
 #include "LookAndFeel.h"
+#include "../dsp/GraphPedalProcessor.h"
 
 //==============================================================================
 PedalDetailPanel::PedalDetailPanel()
@@ -98,7 +99,7 @@ void PedalDetailPanel::resized()
     //==========================================================================
     // Position invisible rotary sliders over the designed hardware locations
     //==========================================================================
-    if (selectedInstance != nullptr && selectedInstance->design != nullptr && ! knobEntries.empty())
+    if (selectedInstance != nullptr && selectedInstance->design != nullptr && (!knobEntries.empty() || !fileLoaders.empty()))
     {
         auto pedalArea = bounds.reduced (12, 0);
         pedalArea.removeFromTop (8);
@@ -171,6 +172,29 @@ void PedalDetailPanel::resized()
                 }
             }
         }
+
+        // Layout file loader buttons
+        for (auto& fe : fileLoaders)
+        {
+            for (const auto& ctrl : selectedInstance->design->controls)
+            {
+                if (ctrl.controlID == fe.controlID)
+                {
+                    float scaledX = offX + ctrl.x * sc;
+                    float scaledY = offY + ctrl.y * sc;
+                    float scaledW = ctrl.width * sc;
+                    float scaledH = ctrl.height * sc;
+                    
+                    fe.button->setBounds(
+                        (int)scaledX,
+                        (int)scaledY,
+                        (int)scaledW,
+                        (int)scaledH
+                    );
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -208,6 +232,7 @@ void PedalDetailPanel::rebuildKnobs()
     for (auto& entry : knobEntries)
         entry.knob->removeListener (this);
     knobEntries.clear();
+    fileLoaders.clear();
 
     if (selectedInstance == nullptr || engineRef == nullptr) return;
 
@@ -271,6 +296,74 @@ void PedalDetailPanel::rebuildKnobs()
             entry.paramId = rangedParam->getParameterID();
             entry.paramName = rangedParam->getName (30);
             knobEntries.push_back (std::move (entry));
+        }
+    }
+
+    if (selectedInstance->design != nullptr)
+    {
+        for (const auto& ctrl : selectedInstance->design->controls)
+        {
+            if (ctrl.type == "file_loader" || ctrl.type == "file_browser"
+                || ctrl.type == "library_loader")
+            {
+                // Find what node this is mapped to
+                juce::String nodeParamStr;
+                for (const auto& mapping : selectedInstance->design->mappings)
+                {
+                    if (mapping.controlID == ctrl.controlID)
+                    {
+                        nodeParamStr = mapping.nodeParam;
+                        break;
+                    }
+                }
+                
+                int targetNodeID = -1;
+                if (nodeParamStr.isNotEmpty())
+                    targetNodeID = nodeParamStr.upToFirstOccurrenceOf("_", false, false).getIntValue();
+
+                if (targetNodeID >= 0)
+                {
+                    FileLoaderEntry fe;
+                    fe.controlID = ctrl.controlID;
+                    fe.targetNodeID = targetNodeID;
+                    // Empty label — PedalPainter handles the visual rendering
+                    fe.button = std::make_unique<juce::TextButton>("");
+                    fe.button->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+                    fe.button->setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+                    fe.button->setAlpha(0.01f);
+                    
+                    if (ctrl.type == "library_loader")
+                    {
+                        // Library loader — trigger onOpenLibrary callback
+                        fe.button->onClick = [this, targetNodeID]() {
+                            if (onOpenLibrary)
+                                onOpenLibrary("NAM", targetNodeID);
+                        };
+                    }
+                    else
+                    {
+                        // Standard file loader — open OS file picker
+                        auto safeEngineRef = engineRef;
+                        auto safeNodeID = selectedInstance->nodeID;
+                        fe.button->onClick = [this, safeEngineRef, safeNodeID, targetNodeID]() {
+                            fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac");
+                            auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+                            fileChooser->launchAsync (chooserFlags, [this, safeEngineRef, safeNodeID, targetNodeID](const juce::FileChooser& fc) {
+                                if (fc.getResult().existsAsFile()) {
+                                    if (auto* node = safeEngineRef->getGraph().getNodeForId(safeNodeID)) {
+                                        if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
+                                            graphProc->setNodeFilePath(targetNodeID, fc.getResult().getFullPathName());
+                                        }
+                                    }
+                                }
+                            });
+                        };
+                    }
+                    
+                    addAndMakeVisible(*fe.button);
+                    fileLoaders.push_back(std::move(fe));
+                }
+            }
         }
     }
 }

@@ -405,6 +405,8 @@ InventoryOverlay::InventoryOverlay()
     itemGrid.onItemSelected = [this] (InventoryItem* item)
     {
         previewPanel.showItem (item);
+        if (onPedalClicked)
+            onPedalClicked (item->id);
     };
 
     // When a drag starts, hide the overlay so the workspace can receive the drop
@@ -531,6 +533,7 @@ void InventoryOverlay::buildItemDatabase()
         { "display",     "Display",     "Screens",     "Small graphical display panel." },
         { "text_screen", "Text",        "Screens",     "Text-based screen for status messages." },
         { "console",     "Console",     "Screens",     "Debug console / text output." },
+        { "file_loader", "File Loader", "Controls",    "Button that opens a file browser to load files." },
         { "label",       "Label",       "Decoration",  "Custom text label for the pedal face." },
         { "vu_meter",    "VU Meter",    "Instruments", "Analog-style VU level meter." },
         { "oscilloscope","Scope",       "Instruments", "Mini oscilloscope waveform display." },
@@ -625,9 +628,7 @@ void InventoryOverlay::buildItemDatabase()
         {"midi_cc", "MIDI CC Rx", "MIDI", "Nodes", "Receives MIDI CC values."},
         {"midi_note_gen", "MIDI Note Tx", "MIDI", "Nodes", "Generates MIDI notes from CV."},
 
-        {"ctrl_knob", "UI Knob", "UI Controls", "Nodes", "Exposes a knob on the pedal face."},
-        {"ctrl_switch", "UI Switch", "UI Controls", "Nodes", "Exposes a switch on the pedal face."},
-        {"ctrl_button", "UI Button", "UI Controls", "Nodes", "Exposes a momentary button."},
+
         
         {"led", "UI LED", "Displays", "Nodes", "A simple light on the pedal face."},
         {"vu_meter", "UI VU Meter", "Displays", "Nodes", "Shows audio level on the pedal face."}

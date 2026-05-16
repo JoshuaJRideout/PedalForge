@@ -30,6 +30,8 @@ public:
     /** Reset to default empty graph (AudioIn → AudioOut). */
     void clearGraph();
 
+    std::function<void()> onGraphChanged;
+
 private:
     //==========================================================================
     // Visual layout for each node

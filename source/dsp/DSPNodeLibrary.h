@@ -864,11 +864,10 @@ public:
             // 4 cascaded first-order allpass stages
             for (int s = 0; s < 4; ++s)
             {
-                float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
-                // Correct allpass: y = -c*x + x_prev + c*y_prev ... simplified:
-                float tmp = x - coeff * apState[s];
-                apState[s] = x + coeff * tmp;
-                x = tmp;
+                float v = x - coeff * apState[s];
+                float y = coeff * v + apState[s];
+                apState[s] = v;
+                x = y;
             }
             fbSample = x;
             out[0][i] = in[0][i] * (1.0f - mix) + x * mix;

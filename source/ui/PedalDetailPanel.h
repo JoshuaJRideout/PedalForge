@@ -45,6 +45,9 @@ public:
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
+    /** Called when a library_loader control is clicked in the detail panel. */
+    std::function<void (const juce::String& category, int targetNodeID)> onOpenLibrary;
+
 private:
     struct KnobEntry
     {
@@ -53,10 +56,19 @@ private:
         juce::String paramName;
     };
 
+    struct FileLoaderEntry
+    {
+        std::unique_ptr<juce::TextButton> button;
+        int targetNodeID = -1;
+        juce::String controlID;
+    };
+
     PedalInstance* selectedInstance = nullptr;
     AudioGraphEngine* engineRef = nullptr;
 
     std::vector<KnobEntry> knobEntries;
+    std::vector<FileLoaderEntry> fileLoaders;
+    std::unique_ptr<juce::FileChooser> fileChooser;
     juce::TextButton bypassButton { "BYPASS" };
     juce::TextButton removeButton { "Remove" };
     juce::TextButton closeButton  { "×" };

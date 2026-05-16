@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PedalInstance.h"
+#include "BoardConfig.h"
+#include "AppMidiConfig.h"
 
 //==============================================================================
 /**
@@ -17,6 +19,14 @@ public:
     ~AudioGraphEngine();
 
     //==========================================================================
+    /** Board management */
+    std::vector<BoardConfig>& getBoards() { return boards; }
+    const std::vector<BoardConfig>& getBoards() const { return boards; }
+    BoardConfig* getBoard (const juce::String& boardId);
+    void addBoard (const BoardConfig& board);
+    void removeBoard (const juce::String& boardId);
+
+    //==========================================================================
     /** Prepare the graph for playback. */
     void prepare (double sampleRate, int samplesPerBlock,
                   int numInputChannels, int numOutputChannels);
@@ -28,9 +38,17 @@ public:
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi);
 
     //==========================================================================
-    /** Add a pedal processor to the graph. Returns the new node's ID. */
+    /** Add a pedal processor to the graph at a board position. Returns the new node's ID. */
     NodeID addPedal (std::unique_ptr<juce::AudioProcessor> processor,
+                     const juce::String& boardId, int pageIndex,
                      int gridX, int gridY, int gridW, int gridH);
+
+    /** Add a pedal processor to the graph WITHOUT placing it on the board.
+        The pedal exists in the engine for routing but onBoard is false. */
+    NodeID addPedalOffBoard (std::unique_ptr<juce::AudioProcessor> processor);
+
+    /** Safely splices a newly added pedal into the signal chain based on its physical left-neighbor. */
+    void autoRoutePedal (NodeID newNodeId);
 
     /** Remove a pedal from the graph. */
     void removePedal (NodeID nodeId);
@@ -48,6 +66,12 @@ public:
 
     /** Remove all connections from/to a node. */
     void disconnectAll (NodeID nodeId);
+
+    /** Cycle the Turing display pedal via MIDI */
+    void cycleTuringPedal(int dir);
+
+    /** Check if a node has any connections (input or output). */
+    bool hasConnections (NodeID nodeId) const;
 
     //==========================================================================
     /** Get the list of active pedal instances. */
@@ -73,10 +97,13 @@ public:
     // Routing-tab positions for the fixed I/O nodes (public for RoutingGraphEditor)
     float audioInRouteX  = 80.0f,  audioInRouteY  = 200.0f;
     float audioOutRouteX = 800.0f, audioOutRouteY = 200.0f;
+    
+    AppMidiConfig appMidiConfig;
 
 private:
     juce::AudioProcessorGraph graph;
     std::vector<PedalInstance> instances;
+    std::vector<BoardConfig> boards;
 
     NodeID audioInputNodeID;
     NodeID audioOutputNodeID;

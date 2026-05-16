@@ -126,6 +126,7 @@ public:
         if (type == "label") return 6.0f;
         if (type == "vu_meter") return 18.0f;
         if (type == "oscilloscope") return 15.0f;
+        if (type == "file_loader") return 8.0f;
         return 12.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
@@ -138,6 +139,7 @@ public:
         if (type == "label") return 25.0f;
         if (type == "vu_meter") return 6.0f;
         if (type == "oscilloscope") return 25.0f;
+        if (type == "file_loader") return 22.0f;
         return sizeForType (type);
     }
 
@@ -1406,6 +1408,17 @@ private:
                 {
                     juce::String fullID = juce::String (nodeID) + "_" + param.id;
                     juce::String display = node->getName() + " : " + param.name;
+                    paramCombo.addItem (display + "  [" + fullID + "]", itemID);
+                    if (hw && hw->parameterID == fullID)
+                        paramCombo.setSelectedId (itemID, juce::dontSendNotification);
+                    itemID++;
+                }
+                
+                // Add virtual "File" parameter for nodes that load files
+                if (node->getType() == "nam" || node->getType() == "sampler" || node->getType() == "ir")
+                {
+                    juce::String fullID = juce::String (nodeID) + "_file";
+                    juce::String display = node->getName() + " : File Target";
                     paramCombo.addItem (display + "  [" + fullID + "]", itemID);
                     if (hw && hw->parameterID == fullID)
                         paramCombo.setSelectedId (itemID, juce::dontSendNotification);

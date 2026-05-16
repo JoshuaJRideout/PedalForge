@@ -144,6 +144,34 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             if (textIt != controlTexts.end() && textIt->second.isNotEmpty()) txt = textIt->second;
             HardwareDrawing::drawTextLabel (g, ctrlBounds, txt, &styles);
         }
+        else if (ctrl.type == "file_loader" || ctrl.type == "file_browser")
+        {
+            g.setColour (juce::Colour(0xFF333333).withAlpha(alpha));
+            g.fillRoundedRectangle (ctrlBounds, 4.0f);
+            g.setColour (juce::Colour(0x55FFFFFF).withAlpha(alpha));
+            g.drawRoundedRectangle (ctrlBounds, 4.0f, 1.0f);
+            
+            float fontSize = juce::jmax (6.0f, 10.0f * sc);
+            g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
+            g.setFont (juce::FontOptions (fontSize).withStyle("Bold"));
+            g.drawText (ctrl.label.isNotEmpty() ? ctrl.label : "Load...", ctrlBounds, juce::Justification::centred);
+            
+            continue; // Skip the default label underneath
+        }
+        else if (ctrl.type == "library_loader")
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.25f * alpha));
+            g.fillRoundedRectangle (ctrlBounds, 4.0f);
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.8f * alpha));
+            g.drawRoundedRectangle (ctrlBounds, 4.0f, 1.0f);
+
+            float fontSize = juce::jmax (6.0f, 10.0f * sc);
+            g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
+            g.setFont (juce::FontOptions (fontSize).withStyle("Bold"));
+            g.drawText (ctrl.label.isNotEmpty() ? ctrl.label : "Library", ctrlBounds, juce::Justification::centred);
+
+            continue;
+        }
 
         // Default label underneath control (skip for standalone text labels)
         if (ctrl.label.isNotEmpty() && sc > 0.3f && ctrl.type != "label")

@@ -15,6 +15,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# ─── Fetch NAM Core ────────────────────────────────────────────────
+FetchContent_Declare(
+    NAMCore
+    GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
+    GIT_TAG        v0.5.2
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(NAMCore)
+
+file(GLOB_RECURSE NAM_SOURCES "${namcore_SOURCE_DIR}/NAM/*.cpp")
+
 # ─── FAUST Compilation ────────────────────────────────────────────
 include(cmake/FaustCompile.cmake)
 
@@ -61,10 +72,20 @@ target_sources(PedalForge PRIVATE
     source/ui/LookAndFeel.cpp
     source/ui/PedalboardGrid.h
     source/ui/PedalboardGrid.cpp
+    source/ui/BoardComponent.h
+    source/ui/BoardComponent.cpp
+    source/ui/BoardWindow.cpp
+    source/ui/PlayTabComponent.h
+    source/ui/PlayTabComponent.cpp
+    source/ui/TuringRenderer.cpp
+    source/ui/MidiSettingsPanel.cpp
+    source/ui/BoardCanvas.h
+    source/ui/BoardCanvas.cpp
     source/ui/PedalComponent.h
     source/ui/PedalComponent.cpp
     source/ui/RouteOverlay.h
     source/ui/RouteOverlay.cpp
+    source/ui/LibraryComponent.cpp
     source/ui/PedalDetailPanel.h
     source/ui/PedalDetailPanel.cpp
     source/ui/PedalPalette.h
@@ -98,6 +119,9 @@ target_sources(PedalForge PRIVATE
     # MIDI
     source/midi/MidiLearn.h
     source/midi/MidiLearn.cpp
+
+    # NAM
+    ${NAM_SOURCES}
 )
 
 # ─── Compile FAUST DSP files ──────────────────────────────────────
@@ -127,6 +151,9 @@ faust_compile(DSP_FILE faust/factory/compressor.dsp
 # ─── Include path for generated FAUST headers ─────────────────────
 target_include_directories(PedalForge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${namcore_SOURCE_DIR}
+    ${namcore_SOURCE_DIR}/Dependencies/eigen
+    ${namcore_SOURCE_DIR}/Dependencies/nlohmann
 )
 
 # ─── Compile definitions ──────────────────────────────────────────
@@ -136,6 +163,7 @@ target_compile_definitions(PedalForge PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_MODAL_LOOPS_PERMITTED=1
+    NAM_SAMPLE_FLOAT=1
 )
 
 # ─── Link libraries ───────────────────────────────────────────────

@@ -4,12 +4,11 @@
 //==============================================================================
 PedalForgeProcessor::PedalForgeProcessor()
     : AudioProcessor (BusesProperties()
-                      .withInput  ("Input",    juce::AudioChannelSet::stereo(), true)
-                      .withOutput ("Output",   juce::AudioChannelSet::stereo(), true)
-                      .withInput  ("FX Return", juce::AudioChannelSet::stereo(), false)
-                      .withOutput ("FX Send",   juce::AudioChannelSet::stereo(), false)),
+                      .withInput  ("Input",    juce::AudioChannelSet::discreteChannels(8), true)
+                      .withOutput ("Output",   juce::AudioChannelSet::discreteChannels(8), true)),
       presetManager (*this),
-      midiLearn (*this)
+      midiLearn (graphEngine),
+      playMidiLearn (playGraphEngine)
 {
 }
 
@@ -23,11 +22,16 @@ void PedalForgeProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     graphEngine.prepare (sampleRate, samplesPerBlock,
                          getTotalNumInputChannels(),
                          getTotalNumOutputChannels());
+                         
+    playGraphEngine.prepare (sampleRate, samplesPerBlock,
+                         getTotalNumInputChannels(),
+                         getTotalNumOutputChannels());
 }
 
 void PedalForgeProcessor::releaseResources()
 {
     graphEngine.releaseResources();
+    playGraphEngine.releaseResources();
 }
 
 bool PedalForgeProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -53,11 +57,17 @@ void PedalForgeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // Process MIDI Learn assignments
-    midiLearn.processMidi (midiMessages);
-
-    // Process audio through the pedal graph
-    graphEngine.processBlock (buffer, midiMessages);
+    // Process audio through the pedal graph and handle MIDI routing
+    if (isPlayModeActive)
+    {
+        playMidiLearn.processMidi (midiMessages);
+        playGraphEngine.processBlock (buffer, midiMessages);
+    }
+    else
+    {
+        midiLearn.processMidi (midiMessages);
+        graphEngine.processBlock (buffer, midiMessages);
+    }
 }
 
 //==============================================================================

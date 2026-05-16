@@ -12,11 +12,11 @@ class OscillatorNode : public DSPNode
 public:
     OscillatorNode() : DSPNode ("oscillator", "Oscillator")
     {
-        addInput ("pitch", NodePort::Control);
         addInput ("fm", NodePort::Audio);
-        addInput ("pwm", NodePort::Control);
         addOutput ("out", NodePort::Audio);
         
+        addParam ("pitch", "Pitch", 0.0f, 1.0f, 0.5f);
+        addParam ("pwm", "PWM", 0.05f, 0.95f, 0.5f);
         addParam ("waveform", "Waveform", 0.0f, 3.0f, 1.0f); // 0=Sine, 1=Saw, 2=Square, 3=Triangle
         addParam ("octave", "Octave", -4.0f, 4.0f, 0.0f);
         addParam ("semitone", "Semitone", -12.0f, 12.0f, 0.0f);
@@ -35,18 +35,18 @@ public:
         for (int i = 0; i < n; ++i)
         {
             // Pitch input is 0..1 representing MIDI notes 0..127
-            float pitchCV = (numIn > 0 && in[0] != nullptr) ? in[0][i] : 0.5f; // default to center
+            float pitchCV = getParam("pitch")->get();
             float midiNote = pitchCV * 127.0f + (oct * 12.0f) + semi + (fine / 100.0f);
             
-            // Linear FM
-            float fm = (numIn > 1 && in[1] != nullptr) ? in[1][i] * 1000.0f : 0.0f;
+            // Linear FM (first explicit input port)
+            float fm = (numIn > 0 && in[0] != nullptr) ? in[0][i] * 1000.0f : 0.0f;
             
             float freq = 440.0f * std::pow (2.0f, (midiNote - 69.0f) / 12.0f) + fm;
             freq = juce::jlimit (1.0f, 20000.0f, freq);
             
             float phaseInc = freq / (float)sr;
             
-            float pwm = (numIn > 2 && in[2] != nullptr) ? in[2][i] : 0.5f;
+            float pwm = getParam("pwm")->get();
             pwm = juce::jlimit (0.05f, 0.95f, pwm);
 
             float val = 0.0f;

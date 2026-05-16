@@ -484,4 +484,217 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "2_resonance"}); 
         return d;
     }
+
+    inline std::shared_ptr<PedalDesign> createNAMAmp()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "NAM Amp";
+        d->category = "Amp Sim";
+        d->chassisW = 160.0f;
+        d->chassisH = 220.0f;
+        d->chassisColour = juce::Colour(0xFF333333); // Dark Grey
+        
+        addBypassAndLED(*d);
+
+        PedalDesign::Control inKnob, outKnob;
+        inKnob.type = "knob";
+        inKnob.width = 40; inKnob.height = 40;
+        inKnob.x = 20.0f; inKnob.y = 40.0f;
+        inKnob.label = "Input";
+        inKnob.controlID = "in_knob";
+        
+        outKnob.type = "knob";
+        outKnob.width = 40; outKnob.height = 40;
+        outKnob.x = 100.0f; outKnob.y = 40.0f;
+        outKnob.label = "Output";
+        outKnob.controlID = "out_knob";
+
+        PedalDesign::Control fileBtn;
+        fileBtn.type = "file_loader";
+        fileBtn.width = 55; fileBtn.height = 20;
+        fileBtn.x = 15.0f; fileBtn.y = 110.0f;
+        fileBtn.label = "Browse...";
+        fileBtn.controlID = "nam_loader";
+
+        PedalDesign::Control libBtn;
+        libBtn.type = "library_loader";
+        libBtn.width = 55; libBtn.height = 20;
+        libBtn.x = 85.0f; libBtn.y = 110.0f;
+        libBtn.label = "Library";
+        libBtn.controlID = "nam_library";
+
+        d->controls.push_back(inKnob);
+        d->controls.push_back(outKnob);
+        d->controls.push_back(fileBtn);
+        d->controls.push_back(libBtn);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"in_knob", "2_gain"}); // 2 is NAMNode
+        d->mappings.push_back({"out_knob", "2_out_level"});
+        d->mappings.push_back({"nam_loader", "2_filepath"});
+        d->mappings.push_back({"nam_library", "2_filepath"});
+
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject();
+        n0->setProperty("id", 0);
+        n0->setProperty("type", "audio_input");
+        n0->setProperty("name", "Audio In");
+        nodes.add(n0);
+
+        auto n1 = new juce::DynamicObject();
+        n1->setProperty("id", 1);
+        n1->setProperty("type", "audio_output");
+        n1->setProperty("name", "Audio Out");
+        nodes.add(n1);
+
+        auto n2 = new juce::DynamicObject();
+        n2->setProperty("id", 2);
+        n2->setProperty("type", "nam");
+        n2->setProperty("name", "NAM Amp");
+        
+        juce::Array<juce::var> params;
+        auto p1 = new juce::DynamicObject(); p1->setProperty("id", "gain"); p1->setProperty("value", 0.0);
+        auto p2 = new juce::DynamicObject(); p2->setProperty("id", "out_level"); p2->setProperty("value", 0.0);
+        params.add(p1); params.add(p2);
+        n2->setProperty("params", params);
+        nodes.add(n2);
+        
+        graph->setProperty("nodes", nodes);
+        
+        juce::Array<juce::var> conns;
+        auto c1 = new juce::DynamicObject();
+        c1->setProperty("srcNode", 0); c1->setProperty("srcPort", 0);
+        c1->setProperty("dstNode", 2); c1->setProperty("dstPort", 0);
+        conns.add(c1);
+        
+        auto c2 = new juce::DynamicObject();
+        c2->setProperty("srcNode", 2); c2->setProperty("srcPort", 0);
+        c2->setProperty("dstNode", 1); c2->setProperty("dstPort", 0);
+        conns.add(c2);
+
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createIRLoader()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "IR Cabinet";
+        d->category = "Amp/Cab";
+        d->chassisColour = juce::Colour(0xff555555);
+        d->chassisW = 140;
+        d->chassisH = 220;
+
+        PedalDesign::Control mix; mix.type = "knob"; mix.label = "Mix"; mix.controlID = "mix"; mix.x = 20; mix.y = 20;
+        PedalDesign::Control gain; gain.type = "knob"; gain.label = "Gain"; gain.controlID = "gain"; gain.x = 80; gain.y = 20;
+
+        PedalDesign::Control fileBtn;
+        fileBtn.type = "file_loader";
+        fileBtn.label = "Browse...";
+        fileBtn.controlID = "ir_loader";
+        fileBtn.x = 20; fileBtn.y = 120; fileBtn.width = 100; fileBtn.height = 30;
+
+        PedalDesign::Control libBtn;
+        libBtn.type = "library_loader";
+        libBtn.label = "Library";
+        libBtn.controlID = "ir_library";
+        libBtn.x = 20; libBtn.y = 160; libBtn.width = 100; libBtn.height = 30;
+
+        d->controls.push_back(mix);
+        d->controls.push_back(gain);
+        d->controls.push_back(fileBtn);
+        d->controls.push_back(libBtn);
+
+        d->mappings.push_back({"mix", "2_mix"});
+        d->mappings.push_back({"gain", "2_gain"});
+        d->mappings.push_back({"ir_loader", "2_filepath"});
+        d->mappings.push_back({"ir_library", "2_filepath"});
+
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject(); n0->setProperty("id", 0); n0->setProperty("type", "audio_input"); n0->setProperty("name", "Audio In"); nodes.add(n0);
+        auto n1 = new juce::DynamicObject(); n1->setProperty("id", 1); n1->setProperty("type", "audio_output"); n1->setProperty("name", "Audio Out"); nodes.add(n1);
+        
+        auto n2 = new juce::DynamicObject(); n2->setProperty("id", 2); n2->setProperty("type", "ir"); n2->setProperty("name", "IR Loader");
+        juce::Array<juce::var> params;
+        auto p1 = new juce::DynamicObject(); p1->setProperty("id", "mix"); p1->setProperty("value", 1.0); params.add(p1);
+        auto p2 = new juce::DynamicObject(); p2->setProperty("id", "gain"); p2->setProperty("value", 1.0); params.add(p2);
+        n2->setProperty("params", params);
+        nodes.add(n2);
+        
+        graph->setProperty("nodes", nodes);
+        
+        juce::Array<juce::var> conns;
+        auto c1 = new juce::DynamicObject(); c1->setProperty("srcNode", 0); c1->setProperty("srcPort", 0); c1->setProperty("dstNode", 2); c1->setProperty("dstPort", 0); conns.add(c1); // Audio In -> IR In L
+        auto c2 = new juce::DynamicObject(); c2->setProperty("srcNode", 0); c2->setProperty("srcPort", 0); c2->setProperty("dstNode", 2); c2->setProperty("dstPort", 1); conns.add(c2); // Audio In -> IR In R
+        auto c3 = new juce::DynamicObject(); c3->setProperty("srcNode", 2); c3->setProperty("srcPort", 0); c3->setProperty("dstNode", 1); c3->setProperty("dstPort", 0); conns.add(c3); // IR Out L -> Audio Out
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createIRReverb()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "IR Reverb";
+        d->category = "Reverb";
+        d->chassisColour = juce::Colour(0xff4a5d85);
+        d->chassisW = 140;
+        d->chassisH = 220;
+
+        PedalDesign::Control mix; mix.type = "knob"; mix.label = "Mix"; mix.controlID = "mix"; mix.x = 20; mix.y = 20;
+        PedalDesign::Control gain; gain.type = "knob"; gain.label = "Gain"; gain.controlID = "gain"; gain.x = 80; gain.y = 20;
+
+        PedalDesign::Control fileBtn;
+        fileBtn.type = "file_loader";
+        fileBtn.label = "Browse...";
+        fileBtn.controlID = "ir_loader";
+        fileBtn.x = 20; fileBtn.y = 120; fileBtn.width = 100; fileBtn.height = 30;
+
+        PedalDesign::Control libBtn;
+        libBtn.type = "library_loader";
+        libBtn.label = "Library";
+        libBtn.controlID = "ir_library";
+        libBtn.x = 20; libBtn.y = 160; libBtn.width = 100; libBtn.height = 30;
+
+        d->controls.push_back(mix);
+        d->controls.push_back(gain);
+        d->controls.push_back(fileBtn);
+        d->controls.push_back(libBtn);
+
+        d->mappings.push_back({"mix", "2_mix"});
+        d->mappings.push_back({"gain", "2_gain"});
+        d->mappings.push_back({"ir_loader", "2_filepath"});
+        d->mappings.push_back({"ir_library", "2_filepath"});
+
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject(); n0->setProperty("id", 0); n0->setProperty("type", "audio_input"); n0->setProperty("name", "Audio In"); nodes.add(n0);
+        auto n1 = new juce::DynamicObject(); n1->setProperty("id", 1); n1->setProperty("type", "audio_output"); n1->setProperty("name", "Audio Out"); nodes.add(n1);
+        
+        auto n2 = new juce::DynamicObject(); n2->setProperty("id", 2); n2->setProperty("type", "ir"); n2->setProperty("name", "IR Loader");
+        juce::Array<juce::var> params;
+        auto p1 = new juce::DynamicObject(); p1->setProperty("id", "mix"); p1->setProperty("value", 0.5); params.add(p1);
+        auto p2 = new juce::DynamicObject(); p2->setProperty("id", "gain"); p2->setProperty("value", 1.0); params.add(p2);
+        n2->setProperty("params", params);
+        nodes.add(n2);
+        
+        graph->setProperty("nodes", nodes);
+        
+        juce::Array<juce::var> conns;
+        auto c1 = new juce::DynamicObject(); c1->setProperty("srcNode", 0); c1->setProperty("srcPort", 0); c1->setProperty("dstNode", 2); c1->setProperty("dstPort", 0); conns.add(c1); // Audio In -> IR In L
+        auto c2 = new juce::DynamicObject(); c2->setProperty("srcNode", 0); c2->setProperty("srcPort", 0); c2->setProperty("dstNode", 2); c2->setProperty("dstPort", 1); conns.add(c2); // Audio In -> IR In R
+        auto c3 = new juce::DynamicObject(); c3->setProperty("srcNode", 2); c3->setProperty("srcPort", 0); c3->setProperty("dstNode", 1); c3->setProperty("dstPort", 0); conns.add(c3); // IR Out L -> Audio Out
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        return d;
+    }
 }

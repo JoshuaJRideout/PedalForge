@@ -3,7 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <map>
 
-class PedalForgeProcessor;
+class AudioGraphEngine;
 
 //==============================================================================
 /**
@@ -18,7 +18,7 @@ class PedalForgeProcessor;
 class MidiLearnManager
 {
 public:
-    MidiLearnManager (PedalForgeProcessor& processor);
+    MidiLearnManager (AudioGraphEngine& engine);
 
     /** Start learning mode for a parameter. */
     void startLearning (const juce::String& paramId);
@@ -50,12 +50,17 @@ public:
         int ccNumber;
         int channel; // 0 = omni
         juce::String paramId;
+
+        // MIDI Pickup (Catch-up) mode state
+        bool isLatched = false;
+        float lastPhysicalValue = -1.0f;
+        float lastVirtualValue = -1.0f;
     };
 
     const std::map<juce::String, MidiMapping>& getMappings() const { return mappings; }
 
 private:
-    PedalForgeProcessor& processor;
+    AudioGraphEngine& targetEngine;
 
     bool learning = false;
     juce::String learningParamId;

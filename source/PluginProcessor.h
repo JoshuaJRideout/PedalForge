@@ -46,13 +46,19 @@ public:
 
     //==========================================================================
     AudioGraphEngine& getGraphEngine() { return graphEngine; }
+    AudioGraphEngine& getPlayGraphEngine() { return playGraphEngine; }
     PresetManager& getPresetManager() { return presetManager; }
     MidiLearnManager& getMidiLearn() { return midiLearn; }
 
-private:
+    void setPlayMode(bool isActive) { isPlayModeActive = isActive; }
+
     AudioGraphEngine graphEngine;
+    AudioGraphEngine playGraphEngine;
     PresetManager presetManager;
     MidiLearnManager midiLearn;
+    MidiLearnManager playMidiLearn;
+
+    bool isPlayModeActive = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalForgeProcessor)
 };

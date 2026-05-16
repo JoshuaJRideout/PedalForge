@@ -258,3 +258,298 @@ public:
         }
     }
 };
+
+//==============================================================================
+class EqualNode : public DSPNode
+{
+public:
+    EqualNode() : DSPNode ("cmp_eq", "Equal (==)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (std::abs(a - b) < 0.0001f) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+class NotEqualNode : public DSPNode
+{
+public:
+    NotEqualNode() : DSPNode ("cmp_neq", "Not Equal (!=)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (std::abs(a - b) >= 0.0001f) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+class GreaterThanNode : public DSPNode
+{
+public:
+    GreaterThanNode() : DSPNode ("cmp_gt", "Greater Than (>)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (a > b) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+class LessThanNode : public DSPNode
+{
+public:
+    LessThanNode() : DSPNode ("cmp_lt", "Less Than (<)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (a < b) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+class GreaterOrEqualNode : public DSPNode
+{
+public:
+    GreaterOrEqualNode() : DSPNode ("cmp_gte", "Greater or Eq (>=)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (a >= b) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+class LessOrEqualNode : public DSPNode
+{
+public:
+    LessOrEqualNode() : DSPNode ("cmp_lte", "Less or Eq (<=)")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Gate);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            out[0][i] = (a <= b) ? 1.0f : 0.0f;
+        }
+    }
+};
+
+//==============================================================================
+// BITWISE
+class BitAndNode : public DSPNode
+{
+public:
+    BitAndNode() : DSPNode ("bit_and", "Bitwise AND")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            int b = (numIn > 1 && in[1]) ? (int)in[1][i] : 0;
+            out[0][i] = (float)(a & b);
+        }
+    }
+};
+
+class BitOrNode : public DSPNode
+{
+public:
+    BitOrNode() : DSPNode ("bit_or", "Bitwise OR")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            int b = (numIn > 1 && in[1]) ? (int)in[1][i] : 0;
+            out[0][i] = (float)(a | b);
+        }
+    }
+};
+
+class BitXorNode : public DSPNode
+{
+public:
+    BitXorNode() : DSPNode ("bit_xor", "Bitwise XOR")
+    {
+        addInput ("a", NodePort::Control); addInput ("b", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            int b = (numIn > 1 && in[1]) ? (int)in[1][i] : 0;
+            out[0][i] = (float)(a ^ b);
+        }
+    }
+};
+
+class BitNotNode : public DSPNode
+{
+public:
+    BitNotNode() : DSPNode ("bit_not", "Bitwise NOT")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            out[0][i] = (float)(~a);
+        }
+    }
+};
+
+class BitShiftLeftNode : public DSPNode
+{
+public:
+    BitShiftLeftNode() : DSPNode ("bit_shl", "Bit Shift Left")
+    {
+        addInput ("in", NodePort::Control); addInput ("bits", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            int b = (numIn > 1 && in[1]) ? (int)in[1][i] : 0;
+            out[0][i] = (float)(a << b);
+        }
+    }
+};
+
+class BitShiftRightNode : public DSPNode
+{
+public:
+    BitShiftRightNode() : DSPNode ("bit_shr", "Bit Shift Right")
+    {
+        addInput ("in", NodePort::Control); addInput ("bits", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            int a = (numIn > 0 && in[0]) ? (int)in[0][i] : 0;
+            int b = (numIn > 1 && in[1]) ? (int)in[1][i] : 0;
+            out[0][i] = (float)(a >> b);
+        }
+    }
+};
+
+//==============================================================================
+// MATH & ADVANCED
+class SmoothStepNode : public DSPNode
+{
+public:
+    SmoothStepNode() : DSPNode ("math_smoothstep", "Smooth Step")
+    {
+        addInput ("edge0", NodePort::Control); addInput ("edge1", NodePort::Control);
+        addInput ("x", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float edge0 = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float edge1 = (numIn > 1 && in[1]) ? in[1][i] : 1.0f;
+            float x     = (numIn > 2 && in[2]) ? in[2][i] : 0.0f;
+            
+            float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+            out[0][i] = t * t * (3.0f - 2.0f * t);
+        }
+    }
+};
+
+class AccumulatorNode : public DSPNode
+{
+public:
+    AccumulatorNode() : DSPNode ("accumulator", "Accumulator")
+    {
+        addInput ("in", NodePort::Control);
+        addInput ("reset", NodePort::Gate);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            bool reset = (numIn > 1 && in[1]) && in[1][i] > 0.5f;
+            
+            if (reset) accum = 0.0f;
+            accum += val;
+            out[0][i] = accum;
+        }
+    }
+    void reset() override { accum = 0.0f; }
+private:
+    float accum = 0.0f;
+};

@@ -598,6 +598,12 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
     else if (type == "text_screen") { juce::StringArray d {"Ready"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "console")     { juce::StringArray d {"[log]"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "pixel_display") drawPixelDisplay (g, area, nullptr, 32, 16, false, custom);
+    else if (type == "file_loader") { 
+        g.setColour (juce::Colours::grey.darker()); g.fillRoundedRectangle (area, 4.0f);
+        g.setColour (juce::Colours::white); g.drawRoundedRectangle (area, 4.0f, 1.0f);
+        g.setFont (juce::FontOptions(area.getHeight() * 0.4f).withStyle("Bold"));
+        g.drawText("LOAD", area, juce::Justification::centred);
+    }
     else if (type == "label")       { /* In PedalPainter it draws its own label, but here we can draw it as a preview */ drawTextLabel (g, area, "LABEL", custom); }
     else { g.setColour (juce::Colours::grey); g.drawRect (area, 1.0f); }
 }

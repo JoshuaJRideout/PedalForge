@@ -21,6 +21,7 @@ NodeGraphEditor::NodeGraphEditor() : canvas (*this)
     propertiesPanel.onDeleteNode = [this] (int id) { deleteNode (id); };
     propertiesPanel.onParamChanged = [this] {
         if (selectedNodeID >= 0) nodeVisuals[selectedNodeID].height = computeNodeHeight (selectedNodeID);
+        if (onGraphChanged) onGraphChanged();
         canvas.repaint();
     };
 }
@@ -57,6 +58,7 @@ void NodeGraphEditor::clearGraph()
     nodeVisuals[inID]  = { 80, 200, nodeW, 0, false };
     nodeVisuals[outID] = { 500, 200, nodeW, 0, false };
 
+    if (onGraphChanged) onGraphChanged();
     canvas.repaint();
 }
 
@@ -103,6 +105,7 @@ void NodeGraphEditor::addNodeAt (const juce::String& type, float cx, float cy)
     int id = graph.addNode (std::move (node));
     nodeVisuals[id] = { snapToGrid(cx), snapToGrid(cy), nodeW, computeNodeHeight (id), false };
     selectNode (id);
+    if (onGraphChanged) onGraphChanged();
 }
 
 void NodeGraphEditor::deleteNode (int nodeID)
@@ -113,6 +116,7 @@ void NodeGraphEditor::deleteNode (int nodeID)
     graph.removeNode (nodeID);
     nodeVisuals.erase (nodeID);
     selectNode (-1);
+    if (onGraphChanged) onGraphChanged();
 }
 
 float NodeGraphEditor::computeNodeHeight (int nodeID) const
@@ -527,6 +531,7 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
     {
         auto& c = editor.graph.getConnections()[ci];
         editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
+        if (editor.onGraphChanged) editor.onGraphChanged();
         repaint();
         return;
     }
@@ -553,6 +558,7 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
                                                   NodeGraphEditor::snapToGrid(editor.nodeVisuals[hit].y + 20.0f), 
                                                   editor.nodeW, editor.computeNodeHeight(newID), false };
                     hit = newID;
+                    if (editor.onGraphChanged) editor.onGraphChanged();
                 }
             }
         }
@@ -593,9 +599,15 @@ void NodeGraphEditor::GraphCanvas::mouseUp (const juce::MouseEvent& e)
         if (ph.nodeID >= 0 && ph.nodeID != wireStart.nodeID)
         {
             if (wireStart.isOutput && !ph.isOutput)
-                editor.graph.connect (wireStart.nodeID, wireStart.portIndex, ph.nodeID, ph.portIndex);
+            {
+                if (editor.graph.connect (wireStart.nodeID, wireStart.portIndex, ph.nodeID, ph.portIndex))
+                    if (editor.onGraphChanged) editor.onGraphChanged();
+            }
             else if (!wireStart.isOutput && ph.isOutput)
-                editor.graph.connect (ph.nodeID, ph.portIndex, wireStart.nodeID, wireStart.portIndex);
+            {
+                if (editor.graph.connect (ph.nodeID, ph.portIndex, wireStart.nodeID, wireStart.portIndex))
+                    if (editor.onGraphChanged) editor.onGraphChanged();
+            }
         }
         draggingWire = false;
         repaint();
@@ -667,6 +679,7 @@ bool NodeGraphEditor::GraphCanvas::keyPressed (const juce::KeyPress& key)
                     editor.nodeVisuals[newID] = { NodeGraphEditor::snapToGrid(cx), NodeGraphEditor::snapToGrid(cy), 
                                                   editor.nodeW, editor.computeNodeHeight(newID), false };
                     editor.selectNode (newID);
+                    if (editor.onGraphChanged) editor.onGraphChanged();
                     repaint();
                 }
             }
@@ -798,14 +811,6 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     mi.addSubMenu("Generate (CV to MIDI)", miTx);
     nodesMenu.addSubMenu("MIDI",mi);
 
-    // ─── Control Surface ───
-    nodesMenu.addSeparator();
-    juce::PopupMenu cs;
-    cs.addItem(300,"Knob"); cs.addItem(301,"Fader"); cs.addItem(302,"Button (Momentary)");
-    cs.addItem(303,"Toggle (Latching)"); cs.addItem(304,"Selector (Multi-Position)");
-    cs.addSeparator();
-    cs.addItem(305,"XY Pad");
-    nodesMenu.addSubMenu("Controls (Pedal UI)",cs);
 
     // ─── Displays & Lights ───
     juce::PopupMenu dp;
@@ -883,9 +888,7 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             case 258: t="midi_program_gen"; break; case 259: t="midi_pressure_gen"; break;
             case 260: t="midi_poly_pressure_gen"; break; case 261: t="midi_pitchbend_gen"; break;
             case 262: t="midi_transport_gen"; break;
-            // Controls
-            case 300: t="ctrl_knob"; break; case 301: t="ctrl_fader"; break; case 302: t="ctrl_button"; break;
-            case 303: t="ctrl_toggle"; break; case 304: t="ctrl_selector"; break; case 305: t="ctrl_xy"; break;
+
             // Displays & Gadgets
             case 320: t="disp_led"; break; case 321: t="disp_rgb_led"; break;
             case 322: t="disp_display"; break; case 323: t="disp_vu"; break; case 324: t="disp_tuner"; break;
@@ -1105,7 +1108,7 @@ void NodeGraphEditor::NodePropertiesPanel::rebuildSliders()
     int y = 5;
     int w = juce::jmax (viewport.getWidth() - 12, 100);
 
-    if (currentNode->getType() == "ir" || currentNode->getType() == "sampler")
+    if (currentNode->getType() == "ir" || currentNode->getType() == "sampler" || currentNode->getType() == "nam")
     {
         auto* btn = new juce::TextButton ("Load File...");
         btn->setBounds (12, y, w, 24);
@@ -1117,12 +1120,14 @@ void NodeGraphEditor::NodePropertiesPanel::rebuildSliders()
         lbl->setBounds (12, y + 30, w, 20);
 
         btn->onClick = [this, lbl, node = currentNode]() {
-            fileChooser = std::make_unique<juce::FileChooser> ("Select Audio File", juce::File{}, "*.wav;*.mp3;*.aif;*.flac");
+            juce::String ext = (node->getType() == "nam") ? "*.nam" : "*.wav;*.mp3;*.aif;*.flac";
+            fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, ext);
             auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
             fileChooser->launchAsync (chooserFlags, [this, lbl, node](const juce::FileChooser& fc) {
                 if (fc.getResult().existsAsFile() && currentNode == node) {
                     currentNode->setFilePath (fc.getResult().getFullPathName());
                     lbl->setText (fc.getResult().getFileName(), juce::dontSendNotification);
+                    if (onParamChanged) onParamChanged();
                 }
             });
         };

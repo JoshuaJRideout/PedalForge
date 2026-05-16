@@ -37,11 +37,10 @@ inline const std::vector<BoardPreset>& getBoardPresets()
  * Board dimensions come from selectable presets (Nano/Mini/Standard/Pro).
  */
 class PedalboardGrid : public juce::Component,
-                       public juce::DragAndDropTarget,
                        public juce::Timer
 {
 public:
-    PedalboardGrid (AudioGraphEngine& engine);
+    PedalboardGrid (AudioGraphEngine& engine, MidiLearnManager& midiLearn);
     ~PedalboardGrid() override;
 
     void paint (juce::Graphics& g) override;
@@ -51,20 +50,14 @@ public:
     void mouseDown (const juce::MouseEvent& e) override;
 
     //==========================================================================
-    // DragAndDropTarget
-    bool isInterestedInDragSource (const SourceDetails& details) override;
-    void itemDragEnter (const SourceDetails& details) override;
-    void itemDragMove  (const SourceDetails& details) override;
-    void itemDragExit  (const SourceDetails& details) override;
-    void itemDropped   (const SourceDetails& details) override;
-
-    //==========================================================================
     void addPedalAtGrid (const juce::String& pedalName, int gridX, int gridY);
     void addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY);
     void removePedal (AudioGraphEngine::NodeID nodeId);
     void rebuildFromEngine();
     void snapPedalToGrid (PedalComponent& comp);
     bool keyPressed (const juce::KeyPress& key) override;
+
+    class BoardCanvas* getCanvas() { return boardCanvas.get(); }
 
     //==========================================================================
     /** Select a pedal (highlights it and opens the detail panel). */
@@ -80,6 +73,9 @@ public:
     /** Callback fired when the Tab menu button is clicked. */
     std::function<void()> onOpenInventory;
 
+    /** Callback fired when a pedal's library_loader control is clicked. */
+    std::function<void (const juce::String& category, int targetNodeID)> onOpenLibrary;
+
     /** Get the currently selected pedal instance (or nullptr). */
     PedalInstance* getSelectedInstance()
     {
@@ -88,26 +84,17 @@ public:
 
     /** Get the detail panel. */
     PedalDetailPanel& getDetailPanel() { return detailPanel; }
-
-    int getCellSize() const { return cellSize; }
-    int getGridCols() const { return gridCols; }
-    int getGridRows() const { return gridRows; }
-
-    juce::Point<int> gridToPixel (int gx, int gy) const;
-    juce::Point<int> pixelToGrid (int px, int py) const;
-    bool isGridRectFree (int gx, int gy, int gw, int gh,
-                         AudioGraphEngine::NodeID ignoreNodeId = {}) const;
+    
+    /** Get the MidiLearnManager. */
+    MidiLearnManager& getMidiLearn() { return midiLearn; }
 
     //==========================================================================
-    /** Set the board preset by index. */
-    void setBoardPreset (int presetIndex);
-    int  getBoardPresetIndex() const { return currentPresetIndex; }
 
 private:
     AudioGraphEngine& engine;
-
-    std::vector<std::unique_ptr<PedalComponent>> pedalComponents;
-    PedalComponent* selectedPedal = nullptr;
+    MidiLearnManager& midiLearn;
+    
+    std::unique_ptr<class BoardCanvas> boardCanvas;
     
     std::unique_ptr<PedalInstance> clipboardPedal;
 
@@ -116,24 +103,10 @@ private:
     PedalDetailPanel detailPanel;
     juce::TextButton btnInventory { "+ Add Pedal (Tab)" };
 
-    // Fixed cell size — never changes with window resize
-    static constexpr int cellSize = 60;
-
-    int gridCols = 10;
-    int gridRows = 7;
-    int currentPresetIndex = 2; // Default: "Standard"
-
-    // Grid origin (computed in resized to centre the board)
-    int gridOriginX = 0;
-    int gridOriginY = 0;
+    // Multi-board / Page controls
+    juce::TextButton btnAddBoard { "+ Add Board" };
 
     static constexpr int detailPanelWidth = 240;
-
-    // Drag-hover preview
-    bool showDropPreview = false;
-    int  dropPreviewX = 0, dropPreviewY = 0;
-    int  dropPreviewW = 1, dropPreviewH = 2;
-    bool dropPreviewValid = false;
 
     // Listener bridge from detail panel → grid
     struct DetailPanelListener : public PedalDetailPanel::Listener
@@ -147,6 +120,55 @@ private:
     };
 
     DetailPanelListener detailListener { *this };
+
+    //==========================================================================
+    // Active Pedals sidebar — shows all pedals in the engine
+    //==========================================================================
+    class ActivePedalsList : public juce::Component
+    {
+    public:
+        ActivePedalsList (PedalboardGrid& g) : grid (g) {}
+
+        void paint (juce::Graphics& g) override;
+        void resized() override;
+
+        /** Rebuild the list from the engine. */
+        void refresh();
+
+        /** Row click callback. */
+        std::function<void(PedalInstance*)> onPedalClicked;
+
+    private:
+        PedalboardGrid& grid;
+
+        //----------------------------------------------------------------------
+        class PedalRow : public juce::Component
+        {
+        public:
+            PedalRow (const PedalInstance& inst, PedalboardGrid& g);
+
+            void paint (juce::Graphics& g) override;
+            void mouseDown (const juce::MouseEvent& e) override;
+            void mouseDrag (const juce::MouseEvent& e) override;
+
+            // Snapshot of display data (safe even if vector reallocates)
+            juce::AudioProcessorGraph::NodeID nodeID;
+            juce::String name;
+            juce::String category;
+            juce::Colour colour;
+            bool onBoard = true;
+            int gridW = 1, gridH = 2;
+
+            PedalboardGrid& grid;
+            bool dragStarted = false;
+        };
+
+        juce::Viewport viewport;
+        juce::Component content;
+        juce::OwnedArray<PedalRow> rows;
+    };
+
+    ActivePedalsList activePedalsList { *this };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalboardGrid)
 };

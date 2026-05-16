@@ -251,3 +251,179 @@ public:
         }
     }
 };
+
+//==============================================================================
+class SineNode : public DSPNode
+{
+public:
+    SineNode() : DSPNode ("math_sin", "Sine")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::sin (val);
+        }
+    }
+};
+
+class CosineNode : public DSPNode
+{
+public:
+    CosineNode() : DSPNode ("math_cos", "Cosine")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::cos (val);
+        }
+    }
+};
+
+class TangentNode : public DSPNode
+{
+public:
+    TangentNode() : DSPNode ("math_tan", "Tangent")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::tan (val);
+        }
+    }
+};
+
+class SinhNode : public DSPNode
+{
+public:
+    SinhNode() : DSPNode ("math_sinh", "Sinh")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::sinh (val);
+        }
+    }
+};
+
+class CoshNode : public DSPNode
+{
+public:
+    CoshNode() : DSPNode ("math_cosh", "Cosh")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::cosh (val);
+        }
+    }
+};
+
+class TanhNode : public DSPNode
+{
+public:
+    TanhNode() : DSPNode ("math_tanh", "Tanh")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::tanh (val);
+        }
+    }
+};
+
+class LerpNode : public DSPNode
+{
+public:
+    LerpNode() : DSPNode ("math_lerp", "Lerp")
+    {
+        addInput ("a", NodePort::Control);
+        addInput ("b", NodePort::Control);
+        addInput ("t", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            float t = (numIn > 2 && in[2]) ? in[2][i] : 0.0f;
+            out[0][i] = a + t * (b - a);
+        }
+    }
+};
+
+class ExpNode : public DSPNode
+{
+public:
+    ExpNode() : DSPNode ("math_exp", "Exponential")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = std::exp (val);
+        }
+    }
+};
+
+class LogNode : public DSPNode
+{
+public:
+    LogNode() : DSPNode ("math_log", "Logarithm")
+    {
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
+    }
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        if (numOut == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            float val = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            out[0][i] = (val > 0.0f) ? std::log (val) : 0.0f;
+        }
+    }
+};

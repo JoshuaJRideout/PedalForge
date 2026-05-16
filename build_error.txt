@@ -1,0 +1,1928 @@
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:1:
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:93:10: error: class member cannot be redeclared
+   93 |     void rebuildFromEngine();
+      |          ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:65:10: note: previous declaration is here
+   65 |     void rebuildFromEngine();
+      |          ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:2:
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:93:10: error: class member cannot be redeclared
+   93 |     void rebuildFromEngine();
+      |          ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:65:10: note: previous declaration is here
+   65 |     void rebuildFromEngine();
+      |          ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:48:20: error: member access into incomplete type 'BoardComponent'
+   48 |         parentBoard->grabKeyboardFocus();
+      |                    ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:68:94: error: member access into incomplete type 'BoardComponent'
+   68 |                                 else if (result == 2 && parentBoard != nullptr && parentBoard->getParentGrid() != nullptr)
+      |                                                                                              ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:70:48: error: member access into incomplete type 'BoardComponent'
+   70 |                                     parentBoard->getParentGrid()->removePedal (instance.nodeID);
+      |                                                ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:72:94: error: member access into incomplete type 'BoardComponent'
+   72 |                                 else if (result == 3 && parentBoard != nullptr && parentBoard->getParentGrid() != nullptr)
+      |                                                                                              ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:75:48: error: member access into incomplete type 'BoardComponent'
+   75 |                                     parentBoard->getParentGrid()->rebuildFromEngine();
+      |                                                ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:82:46: error: member access into incomplete type 'BoardComponent'
+   82 |     if (parentBoard != nullptr && parentBoard->getParentGrid() != nullptr)
+      |                                              ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:83:20: error: member access into incomplete type 'BoardComponent'
+   83 |         parentBoard->getParentGrid()->selectPedal (this);
+      |                    ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:85:68: error: member access into incomplete type 'BoardComponent'
+   85 |     if (e.mods.isAltDown() && parentBoard != nullptr && parentBoard->getParentGrid() != nullptr)
+      |                                                                    ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:87:20: error: member access into incomplete type 'BoardComponent'
+   87 |         parentBoard->getParentGrid()->addPedalCopy (instance, instance.gridX + 1, instance.gridY + 1);
+      |                    ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:160:48: error: cannot initialize a parameter of type 'Component *' with an lvalue of type 'BoardComponent *'
+  160 |     auto mouseInParent = e.getEventRelativeTo (parentBoard).getPosition();
+      |                                                ^~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: 'BoardComponent' is not defined, but forward declared here; conversion would be valid if it was derived from 'juce::Component'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/build/_deps/juce-src/modules/juce_gui_basics/mouse/juce_MouseEvent.h:352:47: note: passing argument to parameter 'newComponent' here
+  352 |     MouseEvent getEventRelativeTo (Component* newComponent) const noexcept;
+      |                                               ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:167:31: error: member access into incomplete type 'BoardComponent'
+  167 |     auto snapped = parentBoard->pixelToGrid (px + parentBoard->getCellSize() / 2,
+      |                               ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:167:62: error: member access into incomplete type 'BoardComponent'
+  167 |     auto snapped = parentBoard->pixelToGrid (px + parentBoard->getCellSize() / 2,
+      |                                                              ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:168:62: error: member access into incomplete type 'BoardComponent'
+  168 |                                              py + parentBoard->getCellSize() / 2);
+      |                                                              ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:172:60: error: member access into incomplete type 'BoardComponent'
+  172 |                 || snapped.x + instance.gridW > parentBoard->getGridCols()
+      |                                                            ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:173:60: error: member access into incomplete type 'BoardComponent'
+  173 |                 || snapped.y + instance.gridH > parentBoard->getGridRows();
+      |                                                            ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:179:35: error: member access into incomplete type 'BoardComponent'
+  179 |         int cellSize = parentBoard->getCellSize();
+      |                                   ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:187:32: error: member access into incomplete type 'BoardComponent'
+  187 |         dragValid = parentBoard->isGridRectFree (snapped.x, snapped.y,
+      |                                ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.cpp:192:31: error: member access into incomplete type 'BoardComponent'
+  192 |         auto pos = parentBoard->gridToPixel (snapped.x, snapped.y);
+      |                               ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalComponent.h:7:7: note: forward declaration of 'BoardComponent'
+    7 | class BoardComponent;
+      |       ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.
+make[2]: *** [CMakeFiles/PedalForge.dir/source/ui/PedalComponent.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:105:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  105 |             Op op = (Op) bytecode[pc++];
+      |                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:108:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  108 |                 case OP_PUSH_CONST: stack[sp++] = constants[bytecode[pc++]]; break;
+      |                                                             ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:109:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  109 |                 case OP_PUSH_VAR:   stack[sp++] = vars[bytecode[pc++]]; break;
+      |                                                        ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:110:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  110 |                 case OP_STORE_VAR:  vars[bytecode[pc++]] = stack[sp - 1]; break;
+      |                                          ~~~~~~~~ ~~^~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:6:
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:93:10: error: class member cannot be redeclared
+   93 |     void rebuildFromEngine();
+      |          ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:65:10: note: previous declaration is here
+   65 |     void rebuildFromEngine();
+      |          ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:78:74: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   78 |                 else if (msg.isNoteOff() && msg.getNoteNumber() / 127.0f == currentNote)
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:476:29: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  476 |                 case 0: v = std::sin (phase * 2.0 * juce::MathConstants<double>::pi); break;
+      |                           ~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:511:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  511 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:527:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  527 |             float delayed = buffer[readPos];
+      |                             ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:529:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  529 |             buffer[writePos] = input;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:561:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  561 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:65: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                                                          ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                             ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:584:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  584 |             buffer[writePos] = in[0][i] + delayed * fb;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:719:55: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  719 |         for (int i = 0; i < 4; ++i) { comb[i].resize ((int)(combLens[i] * scale), 0.0f); combIdx[i] = 0; combFilt[i] = 0.0f; }
+      |                                               ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:720:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  720 |         for (int i = 0; i < 2; ++i) { ap[i].resize ((int)(apLens[i] * scale), 0.0f); apIdx[i] = 0; }
+      |                                             ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:737:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  737 |                 float del = comb[c][combIdx[c]];
+      |                             ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:739:25: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  739 |                 comb[c][combIdx[c]] = x + combFilt[c] * size;
+      |                 ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:748:35: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  748 |                 float del = ap[a][apIdx[a]];
+      |                             ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:750:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  750 |                 ap[a][apIdx[a]] = wet + del * 0.5f;
+      |                 ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:787:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  787 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:837:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  837 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:867:23: warning: unused variable 'y' [-Wunused-variable]
+  867 |                 float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
+      |                       ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:902:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  902 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:970:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  970 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:18: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |             ~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:40: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                 ~~~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:57: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                                       ~ ^  ~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1039:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+ 1039 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1671:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1671 |         if (int srIdx = vm.getVarIndex("sr"); srIdx >= 0) vm.vars[srIdx] = (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1672:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1672 |         if (int dtIdx = vm.getVarIndex("dt"); dtIdx >= 0) vm.vars[dtIdx] = 1.0f / (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1673:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1673 |         if (int tIdx  = vm.getVarIndex("t");  tIdx >= 0)  vm.vars[tIdx]  = 0.0f;
+      |                                                           ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1687:25: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1687 |                 vm.vars[paramIndices[p]] = getParams()[p].get();
+      |                 ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1693:43: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1693 |         float dt = (dtIdx >= 0) ? vm.vars[dtIdx] : 0.0f;
+      |                                   ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1701:29: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1701 |                     vm.vars[inputIndices[p]] = (p < (size_t)numIn) ? in[p][i] : 0.0f;
+      |                     ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1707:52: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1707 |                 if (outputIndices[p] >= 0) vm.vars[outputIndices[p]] = 0.0f;
+      |                                            ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1709:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1709 |             if (defOutIdx >= 0) vm.vars[defOutIdx] = 0.0f;
+      |                                 ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1716:58: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1716 |                     if (outputIndices[p] >= 0 && vm.vars[outputIndices[p]] != 0.0f)
+      |                                                  ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1717:45: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1717 |                         out[p][i] = vm.vars[outputIndices[p]];
+      |                                     ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:64: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                        ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:94: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                                                      ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1725:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1725 |             if (tIdx >= 0) vm.vars[tIdx] += dt;
+      |                            ~~      ^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:105:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  105 |             Op op = (Op) bytecode[pc++];
+      |                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:108:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  108 |                 case OP_PUSH_CONST: stack[sp++] = constants[bytecode[pc++]]; break;
+      |                                                             ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:109:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  109 |                 case OP_PUSH_VAR:   stack[sp++] = vars[bytecode[pc++]]; break;
+      |                                                        ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:110:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  110 |                 case OP_STORE_VAR:  vars[bytecode[pc++]] = stack[sp - 1]; break;
+      |                                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1869:54: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+ 1869 |                     if (msg.getNoteNumber() / 127.0f == currentNote)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:78:74: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   78 |                 else if (msg.isNoteOff() && msg.getNoteNumber() / 127.0f == currentNote)
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:105:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  105 |             Op op = (Op) bytecode[pc++];
+      |                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:108:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  108 |                 case OP_PUSH_CONST: stack[sp++] = constants[bytecode[pc++]]; break;
+      |                                                             ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:109:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  109 |                 case OP_PUSH_VAR:   stack[sp++] = vars[bytecode[pc++]]; break;
+      |                                                        ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:110:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  110 |                 case OP_STORE_VAR:  vars[bytecode[pc++]] = stack[sp - 1]; break;
+      |                                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:476:29: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  476 |                 case 0: v = std::sin (phase * 2.0 * juce::MathConstants<double>::pi); break;
+      |                           ~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:511:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  511 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:527:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  527 |             float delayed = buffer[readPos];
+      |                             ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:529:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  529 |             buffer[writePos] = input;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:561:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  561 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:65: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                                                          ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                             ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:584:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  584 |             buffer[writePos] = in[0][i] + delayed * fb;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:719:55: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  719 |         for (int i = 0; i < 4; ++i) { comb[i].resize ((int)(combLens[i] * scale), 0.0f); combIdx[i] = 0; combFilt[i] = 0.0f; }
+      |                                               ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:720:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  720 |         for (int i = 0; i < 2; ++i) { ap[i].resize ((int)(apLens[i] * scale), 0.0f); apIdx[i] = 0; }
+      |                                             ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:737:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  737 |                 float del = comb[c][combIdx[c]];
+      |                             ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:739:25: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  739 |                 comb[c][combIdx[c]] = x + combFilt[c] * size;
+      |                 ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:748:35: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  748 |                 float del = ap[a][apIdx[a]];
+      |                             ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:750:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  750 |                 ap[a][apIdx[a]] = wet + del * 0.5f;
+      |                 ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:787:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  787 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:837:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  837 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:867:23: warning: unused variable 'y' [-Wunused-variable]
+  867 |                 float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
+      |                       ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:902:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  902 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:970:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  970 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:18: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |             ~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:40: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                 ~~~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:57: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                                       ~ ^  ~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1039:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+ 1039 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:78:74: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   78 |                 else if (msg.isNoteOff() && msg.getNoteNumber() / 127.0f == currentNote)
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:476:29: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  476 |                 case 0: v = std::sin (phase * 2.0 * juce::MathConstants<double>::pi); break;
+      |                           ~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:511:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  511 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:527:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  527 |             float delayed = buffer[readPos];
+      |                             ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:529:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  529 |             buffer[writePos] = input;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:561:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  561 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:65: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                                                          ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+In file included from   582 |     /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:        float d1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.hela:1671:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+yed = buffer[r0] * (1 1671 |         if (int srIdx = vm.getVarIndex("sr"); srIdx >= 0) vm.vars[sr.0f - frac) + buffer[r1] * frac;
+      |                             ~~~~~~ ^~
+Idx] = (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:584:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  584 |             buffer[writ/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1672:ePos] = in[0][i] + delaye67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+d 1672 |         * fb;
+      |             ~~~~~~ ^~~~~~~~ if (int dtIdx = vm.getVarIndex("dt"); dtIdx >
+= 0) vm.vars[dtIdx] = 1.0f / (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1673:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1673 |         if (int tIdx  = vm.getVarIndex("t");  tIdx >= 0)  vm.vars[tIdx]  = 0.0f;
+      |                                                           ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1687:25: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1687 |                 vm.vars[paramIndices[p]] = getParams()[p].get();
+      |                 ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1693:43: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1693 |         float dt = (dtIdx >= 0) ? vm.vars[dtIdx] : 0.0f;
+      |                                   ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1701:29: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1701 |                     vm.vars[inputIndices[p]] = (p < (size_t)numIn) ? in[p][i] : 0.0f;
+      |                     ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1707:52: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1707 |                 if (outputIndices[p] >= 0) vm.vars[outputIndices[p]] = 0.0f;
+      |                                            ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1709:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1709 |             if (defOutIdx >= 0) vm.vars[defOutIdx] = 0.0f;
+      |                                 ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1716:58: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1716 |                     if (outputIndices[p] >= 0 && vm.vars[outputIndices[p]] != 0.0f)
+      |                                                  ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1717:45: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1717 |                         out[p][i] = vm.vars[outputIndices[p]];
+      |                                     ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:64: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                        ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:94: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                                                      ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1725:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1725 |             if (tIdx >= 0) vm.vars[tIdx] += dt;
+      |                            ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:719:55: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  719 |         for (int i = 0; i < 4; ++i) { comb[i].resize ((int)(combLens[i] * scale), 0.0f); combIdx[i] = 0; combFilt[i] = 0.0f; }
+      |                                               ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:720:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  720 |         for (int i = 0; i < 2; ++i) { ap[i].resize ((int)(apLens[i] * scale), 0.0f); apIdx[i] = 0; }
+      |                                             ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:737:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  737 |                 float del = comb[c][combIdx[c]];
+      |                             ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:739:25: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  739 |                 comb[c][combIdx[c]] = x + combFilt[c] * size;
+      |                 ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:748:35: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  748 |                 float del = ap[a][apIdx[a]];
+      |                             ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:750:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  750 |                 ap[a][apIdx[a]] = wet + del * 0.5f;
+      |                 ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:787:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  787 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1869:54: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+ 1869 |                     if (msg.getNoteNumber() / 127.0f == currentNote)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:837:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  837 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:867:23: warning: unused variable 'y' [-Wunused-variable]
+  867 |                 float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
+      |                       ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:902:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  902 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:970:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  970 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:18: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != last:
+In file included from Gain || q != lastQ)
+      |             ~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:40: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.hgainDB != lastGain || q != lastQ)
+      |                                 ~~~~~~ ^  ~~~~~~~~:4
+:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2037/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:57: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if :
+(freq != lastFreq |/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:153:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+| gai  153 |         flonat aRate = 1.0f / (a * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:154:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  154 |         float dRate = 1.0f / (d * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:155:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  155 |         float rRatDB != lase = 1.0f / (r * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+tGain || q != lastQ)
+      |                                                       ~ ^  ~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:207:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  207 |         float aRate = 1.0f / (getParam("attack")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1039:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:208:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+ 1039 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+  208 |         float rRate = 1.0f / (getParam("release")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:269:61: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  269 |             float p = freq * juce::MathConstants<float>::pi / sr;
+      |                   ~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:320:69: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  320 |             float wc = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+      |                   ~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:369:17: warning: implicit conversion turns floating-point number into integer: 'float' to 'bool' [-Wfloat-conversion]
+  369 |             if (isExp)
+      |             ~~  ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:397:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  397 |         float coeff = time > 0.001f ? std::exp (-1.0f / (time * sr)) : 0.0f;
+      |               ~~~~~                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1671:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1671 |         if (int srIdx = vm.getVarIndex("sr"); srIdx >= 0) vm.vars[srIdx] = (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1672:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1672 |         if (int dtIdx = vm.getVarIndex("dt"); dtIdx >= 0) vm.vars[dtIdx] = 1.0f / (float) sampleRate;
+      |                                                           ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1673:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1673 |         if (int tIdx  = vm.getVarIndex("t");  tIdx >= 0)  vm.vars[tIdx]  = 0.0f;
+      |                                                           ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1687:25: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1687 |                 vm.vars[paramIndices[p]] = getParams()[p].get();
+      |                 ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1693:43: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1693 |         float dt = (dtIdx >= 0) ? vm.vars[dtIdx] : 0.0f;
+      |                                   ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1701:29: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1701 |                     vm.vars[inputIndices[p]] = (p < (size_t)numIn) ? in[p][i] : 0.0f;
+      |                     ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1707:52: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1707 |                 if (outputIndices[p] >= 0) vm.vars[outputIndices[p]] = 0.0f;
+      |                                            ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1709:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1709 |             if (defOutIdx >= 0) vm.vars[defOutIdx] = 0.0f;
+      |                                 ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1716:58: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1716 |                     if (outputIndices[p] >= 0 && vm.vars[outputIndices[p]] != 0.0f)
+      |                                                  ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1717:45: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1717 |                         out[p][i] = vm.vars[outputIndices[p]];
+      |                                     ~~      ^~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:64: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                        ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:94: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                                                      ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1725:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1725 |             if (tIdx >= 0) vm.vars[tIdx] += dt;
+      |                            ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1869:54: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+ 1869 |                     if (msg.getNoteNumber() / 127.0f == currentNote)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2037:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:153:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  153 |         float aRate = 1.0f / (a * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:154:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  154 |         float dRate = 1.0f / (d * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:155:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  155 |         float rRate = 1.0f / (r * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:207:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  207 |         float aRate = 1.0f / (getParam("attack")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:208:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  208 |         float rRate = 1.0f / (getParam("release")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:269:61: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  269 |             float p = freq * juce::MathConstants<float>::pi / sr;
+      |                   ~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:320:69: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  320 |             float wc = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+      |                   ~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:369:17: warning: implicit conversion turns floating-point number into integer: 'float' to 'bool' [-Wfloat-conversion]
+  369 |             if (isExp)
+      |             ~~  ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:397:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  397 |         float coeff = time > 0.001f ? std::exp (-1.0f / (time * sr)) : 0.0f;
+      |               ~~~~~                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2037:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:153:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  153 |         float aRate = 1.0f / (a * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:154:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  154 |         float dRate = 1.0f / (d * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:155:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  155 |         float rRate = 1.0f / (r * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:207:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  207 |         float aRate = 1.0f / (getParam("attack")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:208:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  208 |         float rRate = 1.0f / (getParam("release")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:269:61: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  269 |             float p = freq * juce::MathConstants<float>::pi / sr;
+      |                   ~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:320:69: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  320 |             float wc = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+      |                   ~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:369:17: warning: implicit conversion turns floating-point number into integer: 'float' to 'bool' [-Wfloat-conversion]
+  369 |             if (isExp)
+      |             ~~  ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:397:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  397 |         float coeff = time > 0.001f ? std::exp (-1.0f / (time * sr)) : 0.0f;
+      |               ~~~~~                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:6:
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:93:10: error: class member cannot be redeclared
+   93 |     void rebuildFromEngine();
+      |          ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.h:65:10: note: previous declaration is here
+   65 |     void rebuildFromEngine();
+      |          ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:43:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   43 |             out[0][i] = memory[readIdx];
+      |                         ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:46:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   46 |                 memory[writeIdx] = dataIn;
+      |                 ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:267:30: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  267 |             out[0][i] = (val != lastVal) ? 1.0f : 0.0f;
+      |                          ~~~ ^  ~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:340:12: warning: non-static data member 'sr' of 'LogicDelayNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  340 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:315:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  315 |         buffer.resize ((int)(sampleRate * 5.0), 0.0f); // 5 sec max
+      |                ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:327:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  327 |             buffer[writePos] = val;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:332:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  332 |             out[0][i] = buffer[readPos];
+      |                         ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:39: warning: implicit conversion changes signedness: 'size_type' (aka 'unsigned long') to 'int' [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                      ~ ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                         ~~~~~~~~~^~~  ~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:384:12: warning: non-static data member 'sr' of 'PulseWidthNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  384 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:429:12: warning: non-static data member 'sr' of 'OneShotNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  429 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:476:12: warning: non-static data member 'sr' of 'DebounceNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  476 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:456:21: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  456 |             if (val != pendingVal)
+      |                 ~~~ ^  ~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:520:12: warning: non-static data member 'sr' of 'BlinkNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  520 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:563:12: warning: non-static data member 'sr' of 'RampNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  563 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:603:22: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  603 |                 data[idx] = val_in;
+      |                 ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:612:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  612 |                 out[0][i] = data[idx];
+      |                             ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:602:52: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  602 |             if (set && !lastSet && idx >= 0 && idx < data.size()) {
+      |                                                ~~~ ^ ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:611:33: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  611 |             if (idx >= 0 && idx < data.size()) {
+      |                             ~~~ ^ ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2040:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/LogicNodeLibrary.h:78:56: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+   78 |         float durSamples = getParam("duration")->get() * sr;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:105:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  105 |             Op op = (Op) bytecode[pc++];
+      |                          ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:108:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  108 |                 case OP_PUSH_CONST: stack[sp++] = constants[bytecode[pc++]]; break;
+      |                                                             ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:109:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  109 |                 case OP_PUSH_VAR:   stack[sp++] = vars[bytecode[pc++]]; break;
+      |                                                        ~~~~~~~~ ~~^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ExpressionVM.h:110:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  110 |                 case OP_STORE_VAR:  vars[bytecode[pc++]] = stack[sp - 1]; break;
+      |                                          ~~~~~~~~ ~~^~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2042:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ControlNodeLibrary.h:255:12: warning: non-static data member 'sr' of 'PitchDetectorNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  255 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2043:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:130:30: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  130 |         float releaseCoeff = std::exp (-1.0f / (sr * releaseMs * 0.001f));
+      |               ~~~~~~~~~~~~   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:78:74: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   78 |                 else if (msg.isNoteOff() && msg.getNoteNumber() / 127.0f == currentNote)
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:202:41: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  202 |                         float freq = sr / period;
+      |                               ~~~~   ~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:476:29: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  476 |                 case 0: v = std::sin (phase * 2.0 * juce::MathConstants<double>::pi); break;
+      |                           ~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:547:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  547 |         float durSamples = sr * durMs * 0.001f;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:569:34: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  569 | /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:511:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+     511 |                    buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+  float inc = freq / sr;
+      |                       ~~~   ~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:527:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  527 |             float delayed = buffer[readPos];
+      |                             ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:529:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  529 |             buffer[writePos] = input;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:561:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  561 |         buffer.resize (maxSamples, 0.0f);
+      |                ~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:65: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                                                          ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:582:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  582 |             float delayed = buffer[r0] * (1.0f - frac) + buffer[r1] * frac;
+      |                             ~~~~~~ ^~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:584:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  584 |             buffer[writePos] = in[0][i] + delayed * fb;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:719:55: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  719 |         for (int i = 0; i < 4; ++i) { comb[i].resize ((int)(combLens[i] * scale), 0.0f); combIdx[i] = 0; combFilt[i] = 0.0f; }
+      |                                               ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:720:53: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  720 |         for (int i = 0; i < 2; ++i) { ap[i].resize ((int)(apLens[i] * scale), 0.0f); apIdx[i] = 0; }
+      |                                             ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:737:37: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  737 |                 float del = comb[c][combIdx[c]];
+      |                             ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:739:25: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  739 |                 comb[c][combIdx[c]] = x + combFilt[c] * size;
+      |                 ~~~~    ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:748:35: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  748 |                 float del = ap[a][apIdx[a]];
+      |                             ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:750:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  750 |                 ap[a][apIdx[a]] = wet + del * 0.5f;
+      |                 ~~    ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:787:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  787 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:837:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  837 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:867:23: warning: unused variable 'y' [-Wunused-variable]
+  867 |                 float y = coeff * (x - apState[s]) + apState[s]; // allpass: y = c*(x - y_prev) + x_prev
+      |                       ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:902:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  902 |     void prepare (double sr,In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp int bs) o:v1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:43:32e: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   43 |        rride
+      |                          ^
+ /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+    ou  277 |     t[0][In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:d1o:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7i:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from ]/Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h :4=:
+ In file included from m/Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.hubele :sr m= 444:
+10o0.0;
+In file included from       | /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h           ^:
+4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:43:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ry[readIdx];
+      |                         ~~~~~~ ^~~~~~~
+   43 |             out[0][i] = memory[readIdx];
+      | /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:46                        ~~~~~~ ^~~~~~~:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+
+   46 |            /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:46:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+     memory[writeIdx] =    46 |      d  In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp: 2 :
+In file included from  /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4 :
+ In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:970a:t26:a Iwarning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]n
+;    memo  ry[writ970 |    
+ vo      i| d preepIardex (]doub                ~~~~~~ ^~~~~~~~le
+ sr,  int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+= dataIn;
+      |                 ~~~~~~ ^~~~~~~~
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:18: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |             ~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:40: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                 ~~~~~~ ^  ~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:983:57: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  983 |         if (freq != lastFreq || gainDB != lastGain || q != lastQ)
+      |                                                       ~ ^  ~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1039:26: warning: parameter 'sr' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+ 1039 |     void prepare (double sr, int bs) override
+      |                          ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:267:30: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  267 |             out[0][i] = (val != lastVal) ? 1.0f : 0.0f;
+      |                          ~~~ ^  ~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:340:12: warning: non-static data member 'sr' of 'LogicDelayNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  340 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:315:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  315 |         buffer.resize ((int)(sampleRate * 5.0), 0.0f); // 5 sec max
+      |                ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:327:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  327 |             buffer[writePos] = val;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:332:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  332 |             out[0][i] = buffer[readPos];
+      |                         ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:39: warning: implicit conversion changes signedness: 'size_type' (aka 'unsigned long') to 'int' [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                      ~ ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                         ~~~~~~~~~^~~  ~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:384:12: warning: non-static data member 'sr' of 'PulseWidthNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  384 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:429:12: warning: non-static data member 'sr' of 'OneShotNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  429 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:476:12: warning: non-static data member 'sr' of 'DebounceNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  476 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:456:21: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  456 |             if (val != pendingVal)
+      |                 ~~~ ^  ~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:520:12: warning: non-static data member 'sr' of 'BlinkNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  520 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:267:30: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  267 |             out[0][i] = (In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:va1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:l 4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:563:12: warning: non-static data member 'sr' of 'RampNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  563 | != lastVal)  ? 1.0f : 0.0f;
+      |                          ~~~ ^  ~~~~~~~
+   double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 4In file included from 4/Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:21:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from 00.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:340:12: warning: non-static data member 'sr' of 'LogicDelayNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+:
+  340 |     double sr = 44100./Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1671:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+0 1671 |        ;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277: if (12: note: declared herein
+  277t srId |     doubxle sr = 4410In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h :=5:
+In file included from 0 vm.get/Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+VarIIn file included from n/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.hde:x("sr"); s4r:
+.Idx0 In file included from ;
+      |            ^/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h
+:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:603:22: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+>= 0) vm.vars[sr  603In file included from  | /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7 :
+ In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.hI: dx]4 :
+  = ( float) saIn file included from mpleRa/Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038 :
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:315:24 : warning: timplicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+e ;  
+         |                                                            ~~      ^~~~~ dat
+a[idx] =   val_in;
+      |                 ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1672:67: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1672 |         if (int dtI315dx = v/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:612:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+m  612 |      |     .         o ut[0][i]  = d ata[gidext]V;
+a      r|                             ~~~~ ^~~
+I    buffer.rnd/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.he:x602(:52:e swarning: icomparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+z"e  602 |   d ((int)(sampleRatte" )* 5.0), 0.0f);  //  5  s e ;c max
+      |                ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~
+     if (set && !lastS/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:327e:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   d327 |     t         tbuff&e&r[wrIitePosd]x  => val;
+      |             ~~~~~~ ^~~~~~~~
+= 0) /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.hv:m332:32:  warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+.  v332a |    r  s      i out[[0d][i] = dbuffxer[reatdPos];
+       | >                        ~~~~~~ ^~~~~~~
+= /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:39:I warning: implicit conversion changes signedness: 'size_type' (aka 'unsigned long') to 'int' [-Wsign-conversion]
+d  334x |     0    & & ] = 1.0    writePos = (wfr it/e Pos +( f1)l %o buffer.isidzx < deata.size()) {(
+      |                                                ~~~ ^ ~~~~~~~~~~~
+)at) sample/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.hRate;
+      ;| 
+                                                          ~~      ^~~~~      
+|                      ~ ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+:611:33: /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.hwarning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h  611 |      ::1673:67 :  warning:  implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+334  : 34 if (idx > 1673 |         if (int t=I dx  = 0vm.get:V awarning: rimplicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]In
+dex("t   334& | & idx <" )d;at a. stiz e( )) Id x > = 0)   vm . vars[t{Id
+x      ]  = 0 .0f;
+      | |                                                           ~~      ^~~~                            ~~~ ^ ~~~~~~~~~~~
+
+    writePos = (writePos + 1) % b/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1687:25: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1687 |   u              vm.vars[paramIndices[p]] = getParffamers(.s)[izp]e(.g);et
+      ()|                         ~~~~~~~~~^~~  ~;
+
+      |                 ~~      ^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:384:12/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1693:43: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]: 
+warning: non-static data member 'sr' of 'PulseWidthNode' shadows member inherited from type 'DSPNode' [-Wshadow-field] 1693
+ |    384 |     double sr = 44100.0;
+      |            ^
+       float dt = (dtIdx >= 0) ? vm.vars[dtIdx] : 0.0f;
+      |                                   ~~      ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1701:29: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1701 |                     vm.vIn file included from In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cppa:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2040:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/LogicNodeLibrary.h:78:56: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+   78 |         float du/Users/joshua/Developer/PedalForge/source/PluginEditor.cppr:Sam1:
+rs[pinputleIn file included from s Ind=ices g/Users/joshua/Developer/PedalForge/source/PluginEditor.he[tParam("duration")->get(:) * sr;
+      7|               ~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+:
+In file included from p]] = (p < /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4(size_t)numIn) ? in[p][i] : 0.0f;
+      |                     ~~      ^~~~~~~~~~~~~~~
+:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:429:12: warning: non-static data member 'sr' of 'OneShotNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  429 |     double sr = 4/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1707:52: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+4100.0;
+      |            ^ 1707 |    
+  /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:  277:         if (output12: note: declared here
+  277Indices[p] >= 0) vm.vars[outputIndices[p]] = 0.0f;
+      |                                            ~~      ^~~~~~~~~~~~~~~~
+ |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1709:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1709 |             if (defOutIdx >= 0) vm.vars[defOutIdx] = 0.0f;
+      |                                 ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1716:58: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1716 |                     if (outputIndices[p] >= 0 && vm.vars[outputIndices[p]] != 0.0f)
+      |                                                  ~~      ^~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:476:12: warning: non-static data member 'sr' of 'DebounceNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1717:  476 | 45: warning: implicit conversion changes signedness: 'value_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+    double sr  1717 |                         out= 44100.0;
+      | [           ^
+p][i] = vm.var/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+s[outputIndices[p]];
+      |                                     ~~      ^~~~~~~~~~~~~~~~
+  277 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:64: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+ 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                        ~~      ^~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1719:94: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h: 1719 |                         out[0][i] = (defOutIdx >= 0 && vm.vars[4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+      |                                                                                      ~~      ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:456:21/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1725:36: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+:  1725 |             if (tIdx >=warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   456 |             if (val != pendingVal)
+      |                 ~~~ ^  ~~~~~~~~~~
+0) vm.vars[tIdx] += dt;
+      |                            ~~      ^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:520:12: warning: non-static data member 'sr' of 'BlinkNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  520 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h/Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:563:12: warning: non-static data member 'sr' of 'RampNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+:4  563:
+In file included from  |     double sr = 44100.0;/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h
+      |            ^
+:2042:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ControlNodeLibrary.h:255:12: warning: non-static data member 'sr' of 'PitchDetectorNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  255 |     doubl/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 | e sr = 44100.0;
+      |            ^
+    double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:603:22: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  603 |                 data[idx] = val_in;
+      |                 ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:612:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  612 |                 out[0][i] = data[idx];
+      |                             ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:602:52: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  602 |             if (set && !lastSet && idx >= 0 && idx < data.size()) {
+      |                                                ~~~ ^ ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:611:33: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  611 |             if (idx >= 0 && idx < data.size()) {
+      |                             ~~~ ^ ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2043:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:130:30: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  130 |         float releaseCoeff = std::exp (-1.0f / (sr * releaseMs * 0.001f));
+      |               ~~~~~~~~~~~~   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:202:41: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  202 |                         float freq = sr / period;
+      |                               ~~~~   ~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:547:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  547 |         float durSamples = sr * durMs * 0.001f;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:569:34: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  569 |                 float inc = freq / sr;
+      |                       ~~~   ~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:1869:54: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+ 1869 |                     if (msg.getNoteNumber() / 127.0f == currentNote)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2040:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/LogicNodeLibrary.h:78:56: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+   78 |         float durSamples = getParam("duration")->get() * sr;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2042:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ControlNodeLibrary.h:255:12: warning: non-static data member 'sr' of 'PitchDetectorNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  255 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2043:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:130:30: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  130 |         float releaseCoeff = std::exp (-1.0f / (sr * releaseMs * 0.001f));
+      |               ~~~~~~~~~~~~   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:202:41: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  202 |                         float freq = sr / period;
+      |                               ~~~~   ~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:547:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  547 |         float durSamples = sr * durMs * 0.001f;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:569:34: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  569 |                 float inc = freq / sr;
+      |                       ~~~   ~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2037:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:153:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  153 |         float aRate = 1.0f / (a * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:154:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  154 |         float dRate = 1.0f / (d * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:155:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  155 |         float rRate = 1.0f / (r * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:207:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  207 |         float aRate = 1.0f / (getParam("attack")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:208:28: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  208 |         float rRate = 1.0f / (getParam("release")->get() * sr);
+      |               ~~~~~   ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:269:61: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  269 |             float p = freq * juce::MathConstants<float>::pi / sr;
+      |                   ~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:320:69: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  320 |             float wc = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+      |                   ~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:369:17: warning: implicit conversion turns floating-point number into integer: 'float' to 'bool' [-Wfloat-conversion]
+  369 |             if (isExp)
+      |             ~~  ^~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/SynthNodeLibrary.h:397:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  397 |         float coeff = time > 0.001f ? std::exp (-1.0f / (time * sr)) : 0.0f;
+      |               ~~~~~                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:43:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   43 |             out[0][i] = memory[readIdx];
+      |                         ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:46:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+   46 |                 memory[writeIdx] = dataIn;
+      |                 ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:267:30: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  267 |             out[0][i] = (val != lastVal) ? 1.0f : 0.0f;
+      |                          ~~~ ^  ~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:340:12: warning: non-static data member 'sr' of 'LogicDelayNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  340 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:315:24: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  315 |         buffer.resize ((int)(sampleRate * 5.0), 0.0f); // 5 sec max
+      |                ~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:327:20: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  327 |             buffer[writePos] = val;
+      |             ~~~~~~ ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:332:32: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  332 |             out[0][i] = buffer[readPos];
+      |                         ~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:39: warning: implicit conversion changes signedness: 'size_type' (aka 'unsigned long') to 'int' [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                      ~ ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:334:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  334 |             writePos = (writePos + 1) % buffer.size();
+      |                         ~~~~~~~~~^~~  ~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:384:12: warning: non-static data member 'sr' of 'PulseWidthNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  384 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:429:12: warning: non-static data member 'sr' of 'OneShotNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  429 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:476:12: warning: non-static data member 'sr' of 'DebounceNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  476 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:456:21: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+  456 |             if (val != pendingVal)
+      |                 ~~~ ^  ~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:520:12: warning: non-static data member 'sr' of 'BlinkNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  520 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:563:12: warning: non-static data member 'sr' of 'RampNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  563 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2038:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:603:22: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  603 |                 data[idx] = val_in;
+      |                 ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:612:34: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  612 |                 out[0][i] = data[idx];
+      |                             ~~~~ ^~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:602:52: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  602 |             if (set && !lastSet && idx >= 0 && idx < data.size()) {
+      |                                                ~~~ ^ ~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/MemoryNodeLibrary.h:611:33: warning: comparison of integers of different signs: 'int' and 'size_type' (aka 'unsigned long') [-Wsign-compare]
+  611 |             if (idx >= 0 && idx < data.size()) {
+      |                             ~~~ ^ ~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2040:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/LogicNodeLibrary.h:78:56: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+   78 |         float durSamples = getParam("duration")->get() * sr;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2042:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/ControlNodeLibrary.h:255:12: warning: non-static data member 'sr' of 'PitchDetectorNode' shadows member inherited from type 'DSPNode' [-Wshadow-field]
+  255 |     double sr = 44100.0;
+      |            ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNode.h:277:12: note: declared here
+  277 |     double sr = 44100.0;
+      |            ^
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPNodeLibrary.h:2043:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:130:30: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  130 |         float releaseCoeff = std::exp (-1.0f / (sr * releaseMs * 0.001f));
+      |               ~~~~~~~~~~~~   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:202:41: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  202 |                         float freq = sr / period;
+      |                               ~~~~   ~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:547:39: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  547 |         float durSamples = sr * durMs * 0.001f;
+      |               ~~~~~~~~~~   ~~~~~~~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/PeripheralNodeLibrary.h:569:34: warning: implicit conversion loses floating-point precision: 'double' to 'float' [-Wimplicit-float-conversion]
+  569 |                 float inc = freq / sr;
+      |                       ~~~   ~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                                               ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:48: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                       ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:342:28: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  342 |         bufferPool.resize (maxPorts);
+      |                    ~~~~~~  ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:344:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  344 |             b.resize (maxBlockSize, 0.0f);
+      |               ~~~~~~  ^~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:392:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  392 |                                    bufferPool[portBufferMap[key]].data());
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:395:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  395 |                                    bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:394:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  394 |                         std::fill (bufferPool[portBufferMap[key]].data(),
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:402:47: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  402 |             std::vector<const float*> inPtrs (numInputs, nullptr);
+      |                                       ~~~~~~  ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:37: warning: implicit conversion changes signedness: 'const int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                         ~~~~~~ ~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:60: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                                                 ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:415:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  415 |             std::vector<float> silence (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:421:42: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  421 |             std::vector<float*> outPtrs (numOutputs, nullptr);
+      |                                 ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:29: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                     ~~~~~~~ ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:45: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                                  ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:430:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  430 |             std::vector<float> devNull (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.h:5:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                                               ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:48: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                       ~~~~~~~~ ^~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                                               ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:48: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                       ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:342:28: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  342 |         bufferPool.resize (maxPorts);
+      |                    ~~~~~~  ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:344:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  344 |             b.resize (maxBlockSize, 0.0f);
+      |               ~~~~~~  ^~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:392:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  392 |                                    bufferPool[portBufferMap[key]].data());
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:395:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  395 |                                    bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:394:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  394 |                         std::fill (bufferPool[portBufferMap[key]].data(),
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:402:47: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  402 |             std::vector<const float*> inPtrs (numInputs, nullptr);
+      |                                       ~~~~~~  ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:37: warning: implicit conversion changes signedness: 'const int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                         ~~~~~~ ~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:60: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                                                 ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:415:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  415 |             std::vector<float> silence (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:342:28: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  342 |         bufferPool.resize (maxPorts);
+      |                    ~~~~~~  ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:344:23: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  344 |             b.resize (maxBlockSize, 0.0f);
+      |               ~~~~~~  ^~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:421:42: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  421 |             std::vector<float*> outPtrs (numOutputs, nullptr);
+      |                                 ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:29: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                     ~~~~~~~ ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:45: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                                  ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:430:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  430 |             std::vector<float> devNull (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:392:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  392 |                                    bufferPool[portBufferMap[key]].data());
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:395:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  395 |                                    bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:394:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  394 |                         std::fill (bufferPool[portBufferMap[key]].data(),
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/PedalPalette.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/PedalRegistry.h:4:
+In file included from /Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/GraphPedalProcessor.h:4:
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:72: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                                               ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:291:48: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  291 |         if (!NodePort::areCompatible (srcPorts[srcPort].type, dstPorts[dstPort].type))
+      |                                       ~~~~~~~~ ^~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:402:47: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  402 |             std::vector<const float*> inPtrs (numInputs, nullptr);
+      |                                       ~~~~~~  ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:37: warning: implicit conversion changes signedness: 'const int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                         ~~~~~~ ~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:60: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                                                 ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:415:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  415 |             std::vector<float> silence (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:421:42: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  421 |             std::vector<float*> outPtrs (numOutputs, nullptr);
+      |                                 ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:29: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                     ~~~~~~~ ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:45: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                                  ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:430:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  430 |             std::vector<float> devNull (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:342:28: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  342 |         bufferPool.resize (maxPorts);
+      |                    ~~~~~~  ^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:99:87: warning: comparing floating point with == or != is unsafe [-Wfloat-equal]
+   99 |                                         if (i/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:344:23nstance.controlValues[mapping.controlID] != val ||
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~
+: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  344 |             b.resize (maxBlockSize, 0.0f);
+      |               ~~~~~~  ^~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:205:57: warning: unused parameter 'srcInst' [-Wunused-parameter]
+  205 | void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY)
+      |                                                         ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:205:70: warning: unused parameter 'gridX' [-Wunused-parameter]
+  205 | void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY)
+      |                                                                      ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:205:81: warning: unused parameter 'gridY' [-Wunused-parameter]
+  205 | void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY)
+      |                                                                                 ^
+/Users/joshua/Developer/PedalForge/source/ui/PedalboardGrid.cpp:363:24: warning: 'startDragging' is deprecated: This overload does not allow the image's scale to be specified. Use the other overload of startDragging instead. [-Wdeprecated-declarations]
+  363 |             container->startDragging (desc, this, emptyImage, false);
+      |                        ^
+/Users/joshua/Developer/PedalForge/build/_deps/juce-src/modules/juce_gui_basics/mouse/juce_DragAndDropContainer.h:111:7: note: 'startDragging' has been explicitly marked deprecated here
+  111 |     [[deprecated ("This overload does not allow the image's scale to be specified. Use the other overload of startDragging instead.")]]
+      |       ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:392:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  392 |                                    bufferPool[portBufferMap[key]].data());
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:395:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  395 |                                    bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:394:47: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  394 |                         std::fill (bufferPool[portBufferMap[key]].data(),
+      |                                    ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:402:47: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  402 |             std::vector<const float*> inPtrs (numInputs, nullptr);
+      |                                       ~~~~~~  ^~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:37: warning: implicit conversion changes signedness: 'const int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                         ~~~~~~ ~~~~~^~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:410:60: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  410 |                         inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+      |                                                 ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:415:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  415 |             std::vector<float> silence (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:421:42: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  421 |             std::vector<float*> outPtrs (numOutputs, nullptr);
+      |                                 ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:29: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                     ~~~~~~~ ^
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:426:45: warning: implicit conversion changes signedness: 'mapped_type' (aka 'int') to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  426 |                     outPtrs[p] = bufferPool[portBufferMap[key]].data();
+      |                                  ~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/../pedals/../dsp/../dsp/DSPGraph.h:430:41: warning: implicit conversion changes signedness: 'int' to 'size_type' (aka 'unsigned long') [-Wsign-conversion]
+  430 |             std::vector<float> devNull (numSamples, 0.0f);
+      |                                ~~~~~~~  ^~~~~~~~~~
+/Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:36:10: warning: unused variable 'toolbar' [-Wunused-variable]
+   36 |     auto toolbar = area.removeFromTop (36);
+      |          ^~~~~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.cpp:1:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+/Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:38:10: warning: 'InventoryOverlay::keyPressed' hides overloaded virtual function [-Woverloaded-virtual]
+   38 |     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
+      |          ^
+/Users/joshua/Developer/PedalForge/build/_deps/juce-src/modules/juce_gui_basics/components/juce_Component.h:1908:18: note: hidden overloaded virtual function 'juce::Component::keyPressed' declared here: different number of parameters (1 vs 2)
+ 1908 |     virtual bool keyPressed (const KeyPress& key);
+      |                  ^
+/Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:335:44: warning: implicit conversion turns floating-point number into integer: 'float' to 'int' [-Wfloat-conversion]
+  334 |         g.drawText (node.inputs[(size_t) i].name,
+      |           ~~~~~~~~
+  335 |                     pp.x + portR + 4, pp.y - 7, 70, 14,
+      |                                       ~~~~~^~~
+/Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:335:34: warning: implicit conversion turns floating-point number into integer: 'float' to 'int' [-Wfloat-conversion]
+  334 |         g.drawText (node.inputs[(size_t) i].name,
+      |           ~~~~~~~~
+  335 |                     pp.x + portR + 4, pp.y - 7, 70, 14,
+      |                     ~~~~~~~~~~~~~^~~
+/Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:349:45: warning: implicit conversion turns floating-point number into integer: 'float' to 'int' [-Wfloat-conversion]
+  348 |         g.drawText (node.outputs[(size_t) i].name,
+      |           ~~~~~~~~
+  349 |                     pp.x - portR - 74, pp.y - 7, 70, 14,
+      |                                        ~~~~~^~~
+/Users/joshua/Developer/PedalForge/source/ui/RoutingGraphEditor.cpp:349:34: warning: implicit conversion turns floating-point number into integer: 'float' to 'int' [-Wfloat-conversion]
+  348 |         g.drawText (node.outputs[(size_t) i].name,
+      |           ~~~~~~~~
+  349 |                     pp.x - portR - 74, pp.y - 7, 70, 14,
+      |                     ~~~~~~~~~~~~~^~~~
+In file included from /Users/joshua/Developer/PedalForge/source/PluginProcessor.cpp:2:
+In file included from /Users/joshua/Developer/PedalForge/source/PluginEditor.h:7:
+/Users/joshua/Developer/PedalForge/source/ui/InventoryOverlay.h:38:10: warning: 'InventoryOverlay::keyPressed' hides overloaded virtual function [-Woverloaded-virtual]
+   38 |     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
+      |          ^
+/Users/joshua/Developer/PedalForge/build/_deps/juce-src/modules/juce_gui_basics/components/juce_Component.h:1908:18: note: hidden overloaded virtual function 'juce::Component::keyPressed' declared here: different number of parameters (1 vs 2)
+ 1908 |     virtual bool keyPressed (const KeyPress& key);
+      |                  ^
+96 warnings and 1 error generated.
+make[2]: *** [CMakeFiles/PedalForge.dir/source/ui/PedalboardGrid.cpp.o] Error 1
+92 warnings and 1 error generated.
+92 warnings and 1 error generated.
+make[2]: *** [CMakeFiles/PedalForge.dir/source/PluginEditor.cpp.o] Error 1
+make[2]: *** [CMakeFiles/PedalForge.dir/source/PluginProcessor.cpp.o] Error 1
+96 warnings generated.
+make[1]: *** [CMakeFiles/PedalForge.dir/all] Error 2
+make: *** [all] Error 2

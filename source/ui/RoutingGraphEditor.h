@@ -2,6 +2,9 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../engine/AudioGraphEngine.h"
+#include "../pedals/PedalRegistry.h"
+#include "../dsp/GraphPedalProcessor.h"
+#include "../dsp/PedalDesign.h"
 
 //==============================================================================
 /**
@@ -13,7 +16,7 @@
  *
  * Layout: scrollable/zoomable canvas (left) + properties panel (right).
  */
-class RoutingGraphEditor : public juce::Component
+class RoutingGraphEditor : public juce::Component, public juce::Timer
 {
 public:
     explicit RoutingGraphEditor (AudioGraphEngine& engine);
@@ -24,6 +27,11 @@ public:
 
     /** Rebuild the visual graph from the engine's current state. */
     void syncFromEngine();
+
+    void timerCallback() override;
+
+    /** Callback fired when a pedal is selected/deselected. */
+    std::function<void(PedalInstance*)> onPedalSelected;
 
 private:
     //==========================================================================
@@ -71,7 +79,8 @@ private:
     //==========================================================================
     // Canvas — handles drawing and interaction
     //==========================================================================
-    class RoutingCanvas : public juce::Component
+    class RoutingCanvas : public juce::Component,
+                          public juce::DragAndDropTarget
     {
     public:
         RoutingCanvas (RoutingGraphEditor& owner);
@@ -81,6 +90,10 @@ private:
         void mouseDrag (const juce::MouseEvent& e) override;
         void mouseUp (const juce::MouseEvent& e) override;
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override;
+
+        // DragAndDropTarget
+        bool isInterestedInDragSource (const SourceDetails& details) override;
+        void itemDropped (const SourceDetails& details) override;
 
         std::function<void(int)> onNodeSelected;
 
@@ -129,6 +142,8 @@ private:
     std::vector<RoutingNode> nodes;
     std::vector<RoutingConnection> connections;
     int selectedNodeIdx = -1;
+    int lastKnownInputChannels = -1;
+    int lastKnownOutputChannels = -1;
 
     RoutingCanvas canvas;
     PropertiesPanel propertiesPanel;
@@ -148,6 +163,7 @@ private:
 
     int findNodeByEngineId (AudioGraphEngine::NodeID id) const;
     void selectNode (int idx);
+    void addPedalToRoute (const juce::String& pedalName, float canvasX, float canvasY);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RoutingGraphEditor)
 };

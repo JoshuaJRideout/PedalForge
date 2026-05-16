@@ -1,5 +1,8 @@
 #include "RoutingGraphEditor.h"
 #include "LookAndFeel.h"
+#include "../pedals/PedalRegistry.h"
+#include "../dsp/GraphPedalProcessor.h"
+#include "../dsp/PedalDesign.h"
 
 //==============================================================================
 // RoutingGraphEditor
@@ -13,6 +16,7 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
     canvas.onNodeSelected = [this] (int idx) { selectNode (idx); };
 
     syncFromEngine();
+    startTimer (500); // Poll for channel changes every 500ms
 }
 
 RoutingGraphEditor::~RoutingGraphEditor() = default;
@@ -53,8 +57,14 @@ void RoutingGraphEditor::syncFromEngine()
         audioIn.x = engine.audioInRouteX;
         audioIn.y = engine.audioInRouteY;
         audioIn.isIONode = true;
-        audioIn.outputs.push_back ({ "Left",  PortType::AudioStereo, true,  0 });
-        audioIn.outputs.push_back ({ "Right", PortType::AudioStereo, true,  1 });
+        
+        auto* inNode = engine.getGraph().getNodeForId(audioIn.engineNodeId);
+        int numInChannels = inNode ? inNode->getProcessor()->getTotalNumOutputChannels() : 2;
+        for (int i = 0; i < numInChannels; ++i)
+        {
+            juce::String label = "Ch " + juce::String (i + 1);
+            audioIn.outputs.push_back ({ label, PortType::AudioStereo, true, i });
+        }
         nodes.push_back (std::move (audioIn));
     }
     {
@@ -64,8 +74,14 @@ void RoutingGraphEditor::syncFromEngine()
         audioOut.x = engine.audioOutRouteX;
         audioOut.y = engine.audioOutRouteY;
         audioOut.isIONode = true;
-        audioOut.inputs.push_back ({ "Left",  PortType::AudioStereo, false, 0 });
-        audioOut.inputs.push_back ({ "Right", PortType::AudioStereo, false, 1 });
+        
+        auto* outNode = engine.getGraph().getNodeForId(audioOut.engineNodeId);
+        int numOutChannels = outNode ? outNode->getProcessor()->getTotalNumInputChannels() : 2;
+        for (int i = 0; i < numOutChannels; ++i)
+        {
+            juce::String label = "Ch " + juce::String (i + 1);
+            audioOut.inputs.push_back ({ label, PortType::AudioStereo, false, i });
+        }
         nodes.push_back (std::move (audioOut));
     }
 
@@ -90,11 +106,22 @@ void RoutingGraphEditor::syncFromEngine()
             node.y = ny;
         }
 
-        // Standard stereo audio ports
-        node.inputs.push_back  ({ "Audio L",  PortType::AudioStereo, false, 0 });
-        node.inputs.push_back  ({ "Audio R",  PortType::AudioStereo, false, 1 });
-        node.outputs.push_back ({ "Audio L",  PortType::AudioStereo, true,  0 });
-        node.outputs.push_back ({ "Audio R",  PortType::AudioStereo, true,  1 });
+        auto* pedalNode = engine.getGraph().getNodeForId(inst.nodeID);
+        int pInChans = pedalNode ? pedalNode->getProcessor()->getTotalNumInputChannels() : 2;
+        int pOutChans = pedalNode ? pedalNode->getProcessor()->getTotalNumOutputChannels() : 2;
+        
+        for (int i = 0; i < pInChans; ++i)
+        {
+            juce::String label = (i % 2 == 0) ? "Audio L" : "Audio R";
+            if (i >= 2) label += " " + juce::String(i/2 + 1);
+            node.inputs.push_back  ({ label, PortType::AudioStereo, false, i });
+        }
+        for (int i = 0; i < pOutChans; ++i)
+        {
+            juce::String label = (i % 2 == 0) ? "Audio L" : "Audio R";
+            if (i >= 2) label += " " + juce::String(i/2 + 1);
+            node.outputs.push_back ({ label, PortType::AudioStereo, true, i });
+        }
 
         // TODO: Add MIDI/Expression ports based on pedal capabilities
 
@@ -136,6 +163,22 @@ void RoutingGraphEditor::syncFromEngine()
     canvas.repaint();
 }
 
+void RoutingGraphEditor::timerCallback()
+{
+    auto* inNode = engine.getGraph().getNodeForId(engine.getAudioInputNodeID());
+    auto* outNode = engine.getGraph().getNodeForId(engine.getAudioOutputNodeID());
+    
+    int currentInChannels = inNode ? inNode->getProcessor()->getTotalNumOutputChannels() : 2;
+    int currentOutChannels = outNode ? outNode->getProcessor()->getTotalNumInputChannels() : 2;
+    
+    if (currentInChannels != lastKnownInputChannels || currentOutChannels != lastKnownOutputChannels)
+    {
+        lastKnownInputChannels = currentInChannels;
+        lastKnownOutputChannels = currentOutChannels;
+        syncFromEngine();
+    }
+}
+
 //==============================================================================
 // Helpers
 //==============================================================================
@@ -157,9 +200,21 @@ void RoutingGraphEditor::selectNode (int idx)
     {
         nodes[(size_t) idx].selected = true;
         propertiesPanel.showNode (&nodes[(size_t) idx]);
+        
+        if (onPedalSelected)
+        {
+            if (!nodes[(size_t) idx].isIONode)
+                onPedalSelected (engine.getPedalInstance (nodes[(size_t) idx].engineNodeId));
+            else
+                onPedalSelected (nullptr);
+        }
     }
     else
+    {
         propertiesPanel.clearSelection();
+        if (onPedalSelected)
+            onPedalSelected (nullptr);
+    }
 
     canvas.repaint();
 }
@@ -399,6 +454,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
 
     if (e.mods.isRightButtonDown())
     {
+        // Right-click on a connection → delete it
         int connIdx = hitTestConnection (cp);
         if (connIdx >= 0)
         {
@@ -412,6 +468,25 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
                                       dstNode.engineNodeId, dstPort.engineChannel);
             editor.connections.erase (editor.connections.begin() + connIdx);
             repaint();
+            return;
+        }
+
+        // Right-click on a pedal node → context menu
+        int nodeIdx = hitTestNode (cp);
+        if (nodeIdx >= 0 && ! editor.nodes[(size_t) nodeIdx].isIONode)
+        {
+            auto nodeId = editor.nodes[(size_t) nodeIdx].engineNodeId;
+            juce::PopupMenu menu;
+            menu.addItem (1, "Delete");
+            menu.showMenuAsync (juce::PopupMenu::Options(),
+                                [this, nodeId] (int result)
+                                {
+                                    if (result == 1)
+                                    {
+                                        editor.engine.removePedal (nodeId);
+                                        editor.syncFromEngine();
+                                    }
+                                });
         }
         return;
     }
@@ -652,4 +727,91 @@ void RoutingGraphEditor::PropertiesPanel::clearSelection()
 {
     currentNode = nullptr;
     repaint();
+}
+
+//==============================================================================
+// Drag and Drop support — accept pedal drops from the inventory
+//==============================================================================
+bool RoutingGraphEditor::RoutingCanvas::isInterestedInDragSource (const SourceDetails& details)
+{
+    return details.description.toString().startsWith ("pedal:");
+}
+
+void RoutingGraphEditor::RoutingCanvas::itemDropped (const SourceDetails& details)
+{
+    auto desc = details.description.toString();
+    auto parts = juce::StringArray::fromTokens (desc, ":", "");
+    if (parts.size() < 2 || parts[0] != "pedal") return;
+
+    auto pedalName = parts[1];
+    auto cp = screenToCanvas ((float)details.localPosition.x, (float)details.localPosition.y);
+    editor.addPedalToRoute (pedalName, cp.x, cp.y);
+}
+
+void RoutingGraphEditor::addPedalToRoute (const juce::String& pedalName, float canvasX, float canvasY)
+{
+    for (auto& info : getFactoryPedals())
+    {
+        if (info.name == pedalName)
+        {
+            auto processor = info.factory();
+            auto nodeId = engine.addPedalOffBoard (std::move (processor));
+
+            if (auto* inst = engine.getPedalInstance (nodeId))
+            {
+                inst->colour    = info.colour;
+                inst->category  = info.category;
+                inst->numKnobs  = info.numKnobs;
+                inst->gridW     = info.gridW;
+                inst->gridH     = info.gridH;
+                inst->routeX    = snapToGrid (canvasX);
+                inst->routeY    = snapToGrid (canvasY);
+
+                if (info.designFactory)
+                {
+                    inst->design = info.designFactory();
+                    if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
+                        inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+                }
+                else
+                {
+                    inst->design = std::make_shared<PedalDesign>();
+                    inst->design->name     = inst->name;
+                    inst->design->category = inst->category;
+                    inst->design->chassisColour = inst->colour;
+
+                    if (auto* proc = dynamic_cast<GraphPedalProcessor*>(engine.getGraph().getNodeForId(nodeId)->getProcessor()))
+                    {
+                        inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
+
+                        float x = 20, y = 40;
+                        for (auto* param : proc->getParameters())
+                        {
+                            if (auto* pf = dynamic_cast<juce::AudioParameterFloat*> (param))
+                            {
+                                PedalDesign::Control ctrl;
+                                ctrl.type      = "knob";
+                                ctrl.label     = pf->name;
+                                ctrl.controlID = "knob_" + juce::String (inst->design->controls.size() + 1);
+                                ctrl.x = x;  ctrl.y = y;
+                                ctrl.width = 40;  ctrl.height = 40;
+                                inst->design->controls.push_back (ctrl);
+
+                                PedalDesign::Mapping m;
+                                m.controlID = ctrl.controlID;
+                                m.nodeParam = pf->paramID;
+                                inst->design->mappings.push_back (m);
+
+                                x += 50;
+                                if (x > 150) { x = 20; y += 60; }
+                            }
+                        }
+                    }
+                }
+            }
+
+            syncFromEngine();
+            return;
+        }
+    }
 }

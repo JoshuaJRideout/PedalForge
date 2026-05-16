@@ -38,6 +38,8 @@ public:
     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
 
     PedalPalette& getPedalPalette() { return pedalPalette; }
+    
+    std::function<void(const juce::String&)> onPedalClicked;
 
 private:
     //==========================================================================
