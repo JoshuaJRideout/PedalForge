@@ -13,6 +13,7 @@ struct CustomStyles
     bool stretchImage = true;
     juce::String fontFamily = "Sans";
     int fontStyle = 1;
+    float rotationRangeDeg = 270.0f;  // visual arc for knobs, in degrees
 };
 
 inline void drawImageScaled (juce::Graphics& g, const juce::Image& img, juce::Rectangle<float> area, bool stretch)
@@ -27,13 +28,17 @@ inline void drawImageScaled (juce::Graphics& g, const juce::Image& img, juce::Re
 
 inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr)
 {
+    // Compute the total arc in radians from the configured degrees
+    float arcRad = (custom ? custom->rotationRangeDeg : 270.0f) * (juce::MathConstants<float>::pi / 180.0f);
+    float halfArc = arcRad * 0.5f;
+
     if (custom && custom->imageMain.isNotEmpty())
     {
         juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
         if (!img.isNull())
         {
             g.saveState();
-            float angle = -2.35f + value * 4.7f;
+            float angle = -halfArc + value * arcRad;
             auto transform = juce::AffineTransform::rotation (angle, area.getCentreX(), area.getCentreY());
             g.addTransform (transform);
             drawImageScaled (g, img, area, custom->stretchImage);
@@ -52,7 +57,7 @@ inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float valu
     g.setColour (juce::Colour (0xFF1E1E2E));
     g.fillEllipse (cx - r * 0.85f, cy - r * 0.85f, r * 1.7f, r * 1.7f);
     // Indicator line
-    float angle = -2.35f + value * 4.7f;
+    float angle = -halfArc + value * arcRad;
     float ix = cx + std::sin (angle) * r * 0.78f;
     float iy = cy - std::cos (angle) * r * 0.78f;
     float ix2 = cx + std::sin (angle) * r * 0.3f;

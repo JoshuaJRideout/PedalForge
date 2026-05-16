@@ -233,6 +233,35 @@ void PedalDetailPanel::rebuildKnobs()
             entry.knob->addListener (this);
             entry.knob->setName (rangedParam->getParameterID());
 
+            // Look up sensitivity from the mapped control in the design
+            float sensitivity = 200.0f; // default
+            if (selectedInstance->design != nullptr)
+            {
+                for (const auto& mapping : selectedInstance->design->mappings)
+                {
+                    if (mapping.nodeParam == rangedParam->getParameterID())
+                    {
+                        for (const auto& ctrl : selectedInstance->design->controls)
+                        {
+                            if (ctrl.controlID == mapping.controlID && ctrl.type == "knob")
+                            {
+                                sensitivity = ctrl.sensitivity;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Use velocity-based dragging so the knob responds to the configured
+            // pixel distance rather than scaling with the parameter's numeric range.
+            entry.knob->setVelocityBasedMode (true);
+            entry.knob->setVelocityModeParameters (1.0, 1, 0.0, false,
+                                                    juce::ModifierKeys::noModifiers);
+            // setMouseDragSensitivity controls how many pixels = full range
+            entry.knob->setMouseDragSensitivity ((int) sensitivity);
+
             // Make the slider nearly invisible — PedalPainter renders the knob,
             // but we need a small alpha so mouse events are intercepted.
             entry.knob->setAlpha (0.01f);

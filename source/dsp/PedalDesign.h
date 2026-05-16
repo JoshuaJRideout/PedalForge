@@ -37,6 +37,10 @@ struct PedalDesign
         juce::String controlID;   // unique ID within this design
         float defaultValue = 0.5f;
 
+        // Knob visual/interaction properties
+        float rotationRange = 270.0f;   // visual arc in degrees (e.g. 270 = 7-o'clock to 5-o'clock)
+        float sensitivity = 200.0f;     // pixels of vertical drag for a full 0→1 sweep
+
         // Custom UI properties
         juce::String imageMain;
         juce::String imageTrack;
@@ -108,6 +112,10 @@ struct PedalDesign
                 co->setProperty ("fontFamily", c.fontFamily);
             if (c.fontStyle != 1)
                 co->setProperty ("fontStyle", c.fontStyle);
+            if (std::abs (c.rotationRange - 270.0f) > 0.01f)
+                co->setProperty ("rotationRange", c.rotationRange);
+            if (std::abs (c.sensitivity - 200.0f) > 0.01f)
+                co->setProperty ("sensitivity", c.sensitivity);
 
             ctrlArr.add (juce::var (co));
         }
@@ -169,6 +177,8 @@ struct PedalDesign
                         if (co->hasProperty("stretchImage")) c.stretchImage = (bool) co->getProperty ("stretchImage");
                         if (co->hasProperty("fontFamily"))   c.fontFamily   = co->getProperty ("fontFamily").toString();
                         if (co->hasProperty("fontStyle"))    c.fontStyle    = (int) co->getProperty ("fontStyle");
+                        if (co->hasProperty("rotationRange")) c.rotationRange = (float)(double) co->getProperty ("rotationRange");
+                        if (co->hasProperty("sensitivity"))   c.sensitivity   = (float)(double) co->getProperty ("sensitivity");
                         design.controls.push_back (c);
                     }
                 }

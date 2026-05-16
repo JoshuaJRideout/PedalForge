@@ -29,6 +29,10 @@ struct PedalInstance
     bool bypassed = false;
     int  rotation = 0;          // 0, 90, 180, 270 degrees
 
+    // Routing-tab canvas position (persisted across tab switches)
+    float routeX = -1.0f;      // -1 = not yet placed (use auto-layout)
+    float routeY = -1.0f;
+
     // Custom design
     std::shared_ptr<PedalDesign> design;
 

@@ -70,6 +70,10 @@ public:
     /** Restore graph state from a JSON string. */
     void deserialise (const juce::String& jsonState);
 
+    // Routing-tab positions for the fixed I/O nodes (public for RoutingGraphEditor)
+    float audioInRouteX  = 80.0f,  audioInRouteY  = 200.0f;
+    float audioOutRouteX = 800.0f, audioOutRouteY = 200.0f;
+
 private:
     juce::AudioProcessorGraph graph;
     std::vector<PedalInstance> instances;
@@ -84,6 +88,7 @@ private:
     double currentSampleRate = 44100.0;
     int    currentBlockSize  = 512;
     int    currentNumChannels = 2;
+
 
     void setupIONodes();
     void connectPassthrough();

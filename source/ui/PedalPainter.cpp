@@ -101,6 +101,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         styles.stretchImage = ctrl.stretchImage;
         styles.fontFamily = ctrl.fontFamily;
         styles.fontStyle = ctrl.fontStyle;
+        styles.rotationRangeDeg = ctrl.rotationRange;
 
         if (ctrl.type == "knob")
             HardwareDrawing::drawKnob (g, ctrlBounds, val, &styles);

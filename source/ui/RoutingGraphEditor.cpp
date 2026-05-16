@@ -50,7 +50,8 @@ void RoutingGraphEditor::syncFromEngine()
         RoutingNode audioIn;
         audioIn.engineNodeId = engine.getAudioInputNodeID();
         audioIn.name = "Audio In";
-        audioIn.x = 80;  audioIn.y = 200;
+        audioIn.x = engine.audioInRouteX;
+        audioIn.y = engine.audioInRouteY;
         audioIn.isIONode = true;
         audioIn.outputs.push_back ({ "Left",  PortType::AudioStereo, true,  0 });
         audioIn.outputs.push_back ({ "Right", PortType::AudioStereo, true,  1 });
@@ -60,7 +61,8 @@ void RoutingGraphEditor::syncFromEngine()
         RoutingNode audioOut;
         audioOut.engineNodeId = engine.getAudioOutputNodeID();
         audioOut.name = "Audio Out";
-        audioOut.x = 800; audioOut.y = 200;
+        audioOut.x = engine.audioOutRouteX;
+        audioOut.y = engine.audioOutRouteY;
         audioOut.isIONode = true;
         audioOut.inputs.push_back ({ "Left",  PortType::AudioStereo, false, 0 });
         audioOut.inputs.push_back ({ "Right", PortType::AudioStereo, false, 1 });
@@ -74,8 +76,19 @@ void RoutingGraphEditor::syncFromEngine()
         RoutingNode node;
         node.engineNodeId = inst.nodeID;
         node.name = inst.name;
-        node.x = nx;  node.y = ny;
         node.isIONode = false;
+
+        // Use persisted position if available, otherwise auto-layout
+        if (inst.routeX >= 0.0f && inst.routeY >= 0.0f)
+        {
+            node.x = inst.routeX;
+            node.y = inst.routeY;
+        }
+        else
+        {
+            node.x = nx;
+            node.y = ny;
+        }
 
         // Standard stereo audio ports
         node.inputs.push_back  ({ "Audio L",  PortType::AudioStereo, false, 0 });
@@ -504,6 +517,27 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
 
         draggingWire = false;
         repaint();
+    }
+
+    if (draggingNodeIdx >= 0)
+    {
+        // Persist the new position back to the engine / PedalInstance
+        auto& n = editor.nodes[(size_t) draggingNodeIdx];
+        if (n.engineNodeId == editor.engine.getAudioInputNodeID())
+        {
+            editor.engine.audioInRouteX = n.x;
+            editor.engine.audioInRouteY = n.y;
+        }
+        else if (n.engineNodeId == editor.engine.getAudioOutputNodeID())
+        {
+            editor.engine.audioOutRouteX = n.x;
+            editor.engine.audioOutRouteY = n.y;
+        }
+        else if (auto* inst = editor.engine.getPedalInstance (n.engineNodeId))
+        {
+            inst->routeX = n.x;
+            inst->routeY = n.y;
+        }
     }
 
     draggingNodeIdx = -1;

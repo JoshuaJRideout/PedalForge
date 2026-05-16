@@ -21,6 +21,10 @@ struct PlacedHardware
     bool stretchImage = true;     // Whether to stretch image or keep aspect ratio
     juce::String fontFamily = "Sans";
     int fontStyle = 1;            // 0=Plain, 1=Bold, 2=Italic, 3=BoldItalic
+
+    // Knob visual/interaction properties
+    float rotationRange = 270.0f; // visual arc in degrees
+    float sensitivity = 200.0f;   // pixels of drag for full sweep
 };
 
 //==============================================================================
@@ -77,22 +81,22 @@ public:
         if (onSelectionChanged) onSelectionChanged();
     }
 
-    // Grid presets: { size, label }
-    static constexpr float gridSizes[] = { 10.0f, 20.0f, 40.0f };
-    static constexpr int numGridSizes = 3;
-    inline static const char* gridLabels[] = { "Fine", "Med", "Coarse" };
+    // Snap grid size in mm
+    static constexpr float gridSize = 1.0f; // 1mm snap
 
-    // Chassis presets (name, width, height)
+    // Chassis presets — real-world enclosure dimensions in millimeters
     struct ChassisPreset { const char* name; float w; float h; };
     inline static const ChassisPreset chassisPresets[] = {
-        { "1590A",  120.0f, 200.0f },
-        { "1590B",  200.0f, 340.0f },
-        { "1590BB", 240.0f, 380.0f },
-        { "125B",   280.0f, 420.0f },
+        { "1590A",   50.0f,  90.0f },   // ~50 x 90 mm
+        { "1590B",   60.0f, 112.0f },   // ~60 x 112 mm
+        { "1590BB",  72.0f, 120.0f },   // ~72 x 120 mm
+        { "125B",    80.0f, 120.0f },   // ~80 x 120 mm
+        { "1032L",  125.0f,  80.0f },   // ~125 x 80 mm (wide)
+        { "1590DD", 145.0f, 121.0f },   // ~145 x 121 mm (dual)
     };
-    static constexpr int numChassisPresets = 4;
+    static constexpr int numChassisPresets = 6;
     int chassisPresetIndex = 1; // default 1590B
-    float chassisW = 200.0f, chassisH = 340.0f;
+    float chassisW = 60.0f, chassisH = 112.0f;  // default 1590B in mm
 
     // Chassis paint colours
     inline static const juce::Colour chassisColours[] = {
@@ -110,82 +114,44 @@ public:
     int chassisColourIndex = 0;
     juce::Colour chassisColour { 0xFF8A8A94 };
 
-    // Component sizes per type (aligned to grid)
+    // Component sizes per type in mm
     static float sizeForType (const juce::String& type)
     {
-        if (type == "fader") return 40.0f;
-        if (type == "led" || type == "rgb_led" || type == "indicator") return 20.0f;
-        // Screens — need height
-        if (type == "7seg") return 30.0f;
-        if (type == "display") return 28.0f;
-        if (type == "text_screen" || type == "console") return 50.0f;
-        if (type == "pixel_display") return 40.0f;
-        if (type == "label") return 20.0f;
-        if (type == "vu_meter") return 60.0f;
-        if (type == "oscilloscope") return 50.0f;
-        return 40.0f; // knob, switch, footswitch
+        if (type == "fader") return 12.0f;
+        if (type == "led" || type == "rgb_led" || type == "indicator") return 5.0f;
+        if (type == "7seg") return 10.0f;
+        if (type == "display") return 8.0f;
+        if (type == "text_screen" || type == "console") return 15.0f;
+        if (type == "pixel_display") return 12.0f;
+        if (type == "label") return 6.0f;
+        if (type == "vu_meter") return 18.0f;
+        if (type == "oscilloscope") return 15.0f;
+        return 12.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
     {
-        if (type == "fader") return 100.0f;
-        // Screens are wider than tall
-        if (type == "7seg") return 70.0f;
-        if (type == "display") return 70.0f;
-        if (type == "text_screen" || type == "console") return 80.0f;
-        if (type == "pixel_display") return 80.0f;
-        if (type == "label") return 80.0f;
-        if (type == "vu_meter") return 20.0f; // tall and narrow
-        if (type == "oscilloscope") return 80.0f;
+        if (type == "fader") return 30.0f;
+        if (type == "7seg") return 22.0f;
+        if (type == "display") return 22.0f;
+        if (type == "text_screen" || type == "console") return 25.0f;
+        if (type == "pixel_display") return 25.0f;
+        if (type == "label") return 25.0f;
+        if (type == "vu_meter") return 6.0f;
+        if (type == "oscilloscope") return 25.0f;
         return sizeForType (type);
     }
 
     float snapToGrid (float val) const
     {
-        if (! snapEnabled) return val;
-        float g = gridSizes[gridSizeIndex];
-        return std::round (val / g) * g;
+        return std::round (val / gridSize) * gridSize;
     }
 
     ChassisCanvas()
     {
         setWantsKeyboardFocus (true);
-        addAndMakeVisible (btnReset);
-        btnReset.onClick = [this] { scale = 1.0f; panX = panY = 0.0f; rotation = 0.0f; repaint(); };
-        addAndMakeVisible (btnRotate);
-        btnRotate.onClick = [this] { rotation += juce::MathConstants<float>::halfPi; repaint(); };
-        addAndMakeVisible (btnGrid);
-        btnGrid.onClick = [this] { gridSizeIndex = (gridSizeIndex + 1) % numGridSizes; updateGridLabel(); repaint(); };
-        addAndMakeVisible (btnSnap);
-        btnSnap.setClickingTogglesState (true);
-        btnSnap.setToggleState (true, juce::dontSendNotification);
-        btnSnap.onClick = [this] { snapEnabled = btnSnap.getToggleState(); repaint(); };
-
-        // Chassis size selector
-        for (int i = 0; i < numChassisPresets; ++i)
-            chassisCombo.addItem (chassisPresets[i].name, i + 1);
-        chassisCombo.setSelectedId (chassisPresetIndex + 1, juce::dontSendNotification);
-        chassisCombo.onChange = [this]
-        {
-            chassisPresetIndex = chassisCombo.getSelectedId() - 1;
-            chassisW = chassisPresets[chassisPresetIndex].w;
-            chassisH = chassisPresets[chassisPresetIndex].h;
-            repaint();
-        };
-        addAndMakeVisible (chassisCombo);
-
-        // Colour button
-        addAndMakeVisible (btnColour);
-        btnColour.onClick = [this]
-        {
-            chassisColourIndex = (chassisColourIndex + 1) % numChassisColours;
-            chassisColour = chassisColours[chassisColourIndex];
-            chassisImage = ""; // Clear image when cycling colors
-            repaint();
-        };
 
         addAndMakeVisible (btnSave);
         btnSave.onClick = [this] { savePedalDesign(); };
-        updateGridLabel();
     }
 
     juce::var cachedEffectsGraph;
@@ -244,6 +210,8 @@ public:
             ctrl.stretchImage = hw.stretchImage;
             ctrl.fontFamily = hw.fontFamily;
             ctrl.fontStyle = hw.fontStyle;
+            ctrl.rotationRange = hw.rotationRange;
+            ctrl.sensitivity = hw.sensitivity;
             design.controls.push_back (ctrl);
 
             // Mapping
@@ -262,20 +230,9 @@ public:
         return design;
     }
 
-    void updateGridLabel()
-    {
-        btnGrid.setButtonText (juce::String ("Grid: ") + gridLabels[gridSizeIndex]);
-    }
-
     void resized() override
     {
-        btnReset.setBounds  (10, 10, 80, 24);
-        btnRotate.setBounds (100, 10, 80, 24);
-        btnGrid.setBounds   (190, 10, 100, 24);
-        btnSnap.setBounds   (300, 10, 60, 24);
-        chassisCombo.setBounds (370, 10, 90, 24);
-        btnColour.setBounds (470, 10, 70, 24);
-        btnSave.setBounds   (getWidth() - 90, 10, 80, 24);
+        btnSave.setBounds (getWidth() - 90, 10, 80, 24);
     }
 
     void paint (juce::Graphics& g) override
@@ -299,7 +256,7 @@ public:
         HardwareDrawing::drawChassis (g, { 0, 0, chassisW, chassisH }, chassisColour, &chassisStyles);
 
         // Draw grid overlay on chassis
-        float gs = gridSizes[gridSizeIndex];
+        float gs = gridSize;
         g.setColour (juce::Colour (0x18FFFFFF));
         for (float gx = 0; gx <= chassisW; gx += gs)
             g.drawVerticalLine ((int) gx, 0, chassisH);
@@ -828,13 +785,7 @@ public:
 
     friend class PedalDesignerComponent;
 
-    juce::TextButton btnReset { "Reset View" }, btnRotate { "Rotate" };
-    juce::TextButton btnGrid { "Grid: Med" }, btnSnap { "Snap" };
-    juce::ComboBox chassisCombo;
-    juce::TextButton btnColour { "Colour" };
     juce::TextButton btnSave { "Save" };
-    int gridSizeIndex = 1;
-    bool snapEnabled = true;
     float scale = 1.0f, panX = 0.0f, panY = 0.0f, rotation = 0.0f;
     juce::String chassisImage;
     std::unique_ptr<juce::FileChooser> fileChooser;
@@ -954,6 +905,10 @@ public:
         setupButton (btnImageMain, [this] { pickImage (true); });
         setupButton (btnImageTrack, [this] { pickImage (false); });
         setupButton (btnClearImage, [this] { clearImage(); });
+
+        // Knob-specific editors
+        setupEditor (rotationEditor);
+        setupEditor (sensitivityEditor);
     }
 
     void pickImage (bool isMain)
@@ -1071,6 +1026,15 @@ public:
                 nameEditor.setVisible (false);
                 authorEditor.setVisible (false);
                 descEditor.setVisible (false);
+
+                bool isKnob = (hwPtr->type == "knob");
+                rotationEditor.setVisible (isKnob);
+                sensitivityEditor.setVisible (isKnob);
+                if (isKnob)
+                {
+                    rotationEditor.setText (juce::String (hwPtr->rotationRange, 0), juce::dontSendNotification);
+                    sensitivityEditor.setText (juce::String (hwPtr->sensitivity, 0), juce::dontSendNotification);
+                }
             }
         }
         else if (sel.empty())
@@ -1100,6 +1064,8 @@ public:
             fontStyleCombo.setVisible (false);
             fontFamilyCombo.setVisible (false);
             colourCombo.setVisible (false);
+            rotationEditor.setVisible (false);
+            sensitivityEditor.setVisible (false);
         }
         else
         {
@@ -1118,6 +1084,8 @@ public:
             authorEditor.setVisible (false);
             descEditor.setVisible (false);
             deleteButton.setVisible (true);
+            rotationEditor.setVisible (false);
+            sensitivityEditor.setVisible (false);
         }
         resized();
         repaint();
@@ -1185,6 +1153,17 @@ public:
                     g.setColour (PedalForgeLookAndFeel::textSecondary);
                     g.setFont (juce::FontOptions (10.0f));
                     g.drawText ("Track: " + juce::File(hw->imageTrack).getFileName(), m, btnImageTrack.getBottom() + 2, getWidth()-m*2, 14, juce::Justification::centredLeft);
+                }
+
+                // Knob-specific labels
+                if (hw->type == "knob")
+                {
+                    int ky = rotationEditor.getY() - 18;
+                    g.setColour (PedalForgeLookAndFeel::textMuted); g.setFont (juce::FontOptions (11.0f));
+                    g.drawText ("KNOB BEHAVIOUR", m, ky, getWidth()-m*2, 16, juce::Justification::centredLeft);
+                    g.setColour (PedalForgeLookAndFeel::textSecondary); g.setFont (juce::FontOptions (11.0f));
+                    g.drawText ("Arc °", m, rotationEditor.getY(), 32, 24, juce::Justification::centredLeft);
+                    g.drawText ("Sens", m + 90, sensitivityEditor.getY(), 32, 24, juce::Justification::centredLeft);
                 }
             }
         }
@@ -1283,7 +1262,15 @@ public:
                 btnImageMain.setBounds (m, y, getWidth()-m*2, 24); y += 30;
                 btnImageTrack.setBounds (m, y, getWidth()-m*2, 24); y += 30;
                 colourCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
-                btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
+                btnClearImage.setBounds (m, y, getWidth()-m*2, 24); y += 32;
+
+                // Knob-specific: Rotation Range + Sensitivity
+                if (hw && hw->type == "knob")
+                {
+                    y += 4;
+                    rotationEditor.setBounds (m + 34, y, 48, 24);
+                    sensitivityEditor.setBounds (m + 124, y, 48, 24);
+                }
             }
 
             deleteButton.setBounds (m, getHeight()-50, getWidth()-m*2, 32);
@@ -1321,6 +1308,8 @@ public:
                 if (&editor == &labelEditor) { hw->label = labelEditor.getText(); canvas->notifyHardwareChanged(); }
                 else if (&editor == &wEditor) { hw->width = juce::jmax(10.0f, wEditor.getText().getFloatValue()); canvas->notifyHardwareChanged(); }
                 else if (&editor == &hEditor) { hw->height = juce::jmax(10.0f, hEditor.getText().getFloatValue()); canvas->notifyHardwareChanged(); }
+                else if (&editor == &rotationEditor) { hw->rotationRange = juce::jlimit(10.0f, 360.0f, rotationEditor.getText().getFloatValue()); canvas->notifyHardwareChanged(); }
+                else if (&editor == &sensitivityEditor) { hw->sensitivity = juce::jmax(20.0f, sensitivityEditor.getText().getFloatValue()); canvas->notifyHardwareChanged(); }
             }
         }
     }
@@ -1398,6 +1387,7 @@ private:
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
     juce::TextButton btnClearImage { "Clear Images" };
+    juce::TextEditor rotationEditor, sensitivityEditor;
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     void rebuildParamCombo (PlacedHardware* hw)
@@ -1439,6 +1429,12 @@ private:
     canvas->onSelectionChanged = [this] () { properties->showForIndices (); };
     properties->onDeleteClicked = [this] { canvas->deleteSelected(); };
 
+    // Colour swatch button in the toolbar
+    colourSwatchBtn.setColour (juce::TextButton::buttonColourId, canvas->chassisColour);
+    colourSwatchBtn.setButtonText ("");
+    colourSwatchBtn.onClick = [this] { showColourPicker(); };
+    addAndMakeVisible (colourSwatchBtn);
+
     // Initialize properties panel to chassis immediately
     properties->showForIndices();
 }
@@ -1453,14 +1449,50 @@ void PedalDesignerComponent::paint (juce::Graphics& g)
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float)getWidth());
+
+    // Colour label
+    g.setColour (PedalForgeLookAndFeel::textSecondary);
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawText ("Colour", colourSwatchBtn.getX() - 48, colourSwatchBtn.getY(), 44, 24,
+                juce::Justification::centredRight);
 }
 
 void PedalDesignerComponent::resized()
 {
     auto area = getLocalBounds();
     auto toolbar = area.removeFromTop (36);
+    
+    // Colour swatch in toolbar
+    colourSwatchBtn.setBounds (toolbar.removeFromLeft (80).withSizeKeepingCentre (24, 24).translated (48, 0));
+    
     properties->setBounds (area.removeFromRight (250));
     canvas->setBounds (area);
+}
+
+void PedalDesignerComponent::showColourPicker()
+{
+    auto* picker = new juce::ColourSelector (
+        juce::ColourSelector::showColourAtTop
+        | juce::ColourSelector::showSliders
+        | juce::ColourSelector::showColourspace);
+    picker->setCurrentColour (canvas->chassisColour);
+    picker->setSize (260, 300);
+    picker->addChangeListener (this);
+    juce::CallOutBox::launchAsynchronously (std::unique_ptr<juce::Component> (picker),
+                                            colourSwatchBtn.getScreenBounds(),
+                                            nullptr);
+}
+
+void PedalDesignerComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
+{
+    if (auto* picker = dynamic_cast<juce::ColourSelector*> (source))
+    {
+        auto col = picker->getCurrentColour();
+        canvas->chassisColour = col;
+        canvas->chassisImage = ""; // clear custom image when colour changes
+        colourSwatchBtn.setColour (juce::TextButton::buttonColourId, col);
+        canvas->repaint();
+    }
 }
 
 void PedalDesignerComponent::setEffectsGraph (DSPGraph* graph)
@@ -1492,7 +1524,6 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
                 std::abs (canvas->chassisPresets[i].h - design.chassisH) < 1.0f)
             {
                 canvas->chassisPresetIndex = i;
-                canvas->chassisCombo.setSelectedId (i + 1, juce::dontSendNotification);
                 break;
             }
         }
@@ -1516,6 +1547,8 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
             hw.stretchImage = ctrl.stretchImage;
             hw.fontFamily = ctrl.fontFamily;
             hw.fontStyle = ctrl.fontStyle;
+            hw.rotationRange = ctrl.rotationRange;
+            hw.sensitivity = ctrl.sensitivity;
 
             // Find parameterID from mappings
             for (const auto& m : design.mappings)
@@ -1536,11 +1569,10 @@ void PedalDesignerComponent::clearDesign()
     if (canvas)
     {
         canvas->placedHardware.clear();
-        canvas->chassisW = 200.0f;
-        canvas->chassisH = 340.0f;
+        canvas->chassisW = 60.0f;
+        canvas->chassisH = 112.0f;
         canvas->chassisColour = juce::Colour (0xFF8A8A94);
         canvas->chassisPresetIndex = 1;
-        canvas->chassisCombo.setSelectedId (2, juce::dontSendNotification);
         canvas->chassisColourIndex = 0;
         canvas->repaint();
     }
