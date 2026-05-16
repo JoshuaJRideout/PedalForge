@@ -145,20 +145,16 @@ class GainNode : public DSPNode
 public:
     GainNode() : DSPNode ("gain", "Gain")
     {
-        addInput ("in"); addInput ("gain_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("gain", "Gain", -60.0f, 24.0f, 0.0f); // dB
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramGain = getParam("gain")->get();
+        float g = std::pow (10.0f, getParam("gain")->get() / 20.0f);
         for (int i = 0; i < n; ++i)
-        {
-            float cv = (numIn > 1) ? in[1][i] : 0.0f;
-            float g = (cv != 0.0f) ? cv : std::pow (10.0f, paramGain / 20.0f);
             out[0][i] = in[0][i] * g;
-        }
     }
 };
 
@@ -167,22 +163,18 @@ class MixNode : public DSPNode
 public:
     MixNode() : DSPNode ("mix", "Mix")
     {
-        addInput ("dry"); addInput ("wet"); addInput ("mix_cv", NodePort::Control);
+        addInput ("dry"); addInput ("wet");
         addOutput ("out");
         addParam ("mix", "Mix", 0.0f, 1.0f, 0.5f);
     }
 
     void process (const float** in, int numIn, float** out, int, int n) override
     {
-        float paramMix = getParam("mix")->get();
+        float m = getParam("mix")->get();
         if (numIn >= 2)
         {
             for (int i = 0; i < n; ++i)
-            {
-                float cv = (numIn > 2) ? in[2][i] : 0.0f;
-                float m = (cv != 0.0f) ? juce::jlimit(0.0f, 1.0f, cv) : paramMix;
                 out[0][i] = in[0][i] * (1.0f - m) + in[1][i] * m;
-            }
         }
         else if (numIn >= 1)
             std::copy (in[0], in[0] + n, out[0]);
@@ -213,8 +205,6 @@ public:
     LowPassNode() : DSPNode ("lowpass", "Low Pass")
     {
         addInput ("in");
-        addInput ("freq_cv", NodePort::Control);
-        addInput ("q_cv", NodePort::Control);
         addOutput ("out");
         addParam ("freq", "Frequency", 20.0f, 20000.0f, 1000.0f);
         addParam ("q", "Resonance", 0.1f, 10.0f, 0.707f);
@@ -226,19 +216,14 @@ public:
         z1 = z2 = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramF = getParam("freq")->get();
-        float paramQ = getParam("q")->get();
+        float f = getParam("freq")->get();
+        float q = getParam("q")->get();
 
         for (int i = 0; i < n; ++i)
         {
-            float fcv = (numIn > 1) ? in[1][i] : 0.0f;
-            float qcv = (numIn > 2) ? in[2][i] : 0.0f;
-            float f = (fcv != 0.0f) ? juce::jlimit(20.0f, 20000.0f, fcv) : paramF;
-            float q = (qcv != 0.0f) ? juce::jlimit(0.1f, 10.0f, qcv) : paramQ;
             updateCoeffs(f, q);
-
             float x = in[0][i];
             float y = b0 * x + b1 * x1 + b2 * x2 - a1 * z1 - a2 * z2;
             x2 = x1; x1 = x; z2 = z1; z1 = y;
@@ -272,8 +257,6 @@ public:
     HighPassNode() : DSPNode ("highpass", "High Pass")
     {
         addInput ("in");
-        addInput ("freq_cv", NodePort::Control);
-        addInput ("q_cv", NodePort::Control);
         addOutput ("out");
         addParam ("freq", "Frequency", 20.0f, 20000.0f, 200.0f);
         addParam ("q", "Resonance", 0.1f, 10.0f, 0.707f);
@@ -285,19 +268,14 @@ public:
         z1 = z2 = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramF = getParam("freq")->get();
-        float paramQ = getParam("q")->get();
+        float f = getParam("freq")->get();
+        float q = getParam("q")->get();
 
         for (int i = 0; i < n; ++i)
         {
-            float fcv = (numIn > 1) ? in[1][i] : 0.0f;
-            float qcv = (numIn > 2) ? in[2][i] : 0.0f;
-            float f = (fcv != 0.0f) ? juce::jlimit(20.0f, 20000.0f, fcv) : paramF;
-            float q = (qcv != 0.0f) ? juce::jlimit(0.1f, 10.0f, qcv) : paramQ;
             updateCoeffs(f, q);
-
             float x = in[0][i];
             float y = b0 * x + b1 * x1 + b2 * x2 - a1 * z1 - a2 * z2;
             x2 = x1; x1 = x; z2 = z1; z1 = y;
@@ -429,20 +407,16 @@ class SoftClipNode : public DSPNode
 public:
     SoftClipNode() : DSPNode ("softclip", "Soft Clip")
     {
-        addInput ("in"); addInput ("drive_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("drive", "Drive", 1.0f, 100.0f, 10.0f);
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramD = getParam("drive")->get();
+        float d = getParam("drive")->get();
         for (int i = 0; i < n; ++i)
-        {
-            float cv = (numIn > 1) ? in[1][i] : 0.0f;
-            float d = (cv != 0.0f) ? juce::jlimit(1.0f, 100.0f, cv) : paramD;
             out[0][i] = std::tanh (in[0][i] * d) / std::tanh (d);
-        }
     }
 };
 
@@ -451,22 +425,18 @@ class HardClipNode : public DSPNode
 public:
     HardClipNode() : DSPNode ("hardclip", "Hard Clip")
     {
-        addInput ("in"); addInput ("drive_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("drive", "Drive", 1.0f, 100.0f, 10.0f);
         addParam ("threshold", "Threshold", 0.01f, 1.0f, 0.5f);
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramD = getParam("drive")->get();
+        float d = getParam("drive")->get();
         float t = getParam("threshold")->get();
         for (int i = 0; i < n; ++i)
-        {
-            float cv = (numIn > 1) ? in[1][i] : 0.0f;
-            float d = (cv != 0.0f) ? juce::jlimit(1.0f, 100.0f, cv) : paramD;
             out[0][i] = juce::jlimit (-t, t, in[0][i] * d);
-        }
     }
 };
 
@@ -478,7 +448,6 @@ class LFONode : public DSPNode
 public:
     LFONode() : DSPNode ("lfo", "LFO")
     {
-        addInput ("rate_cv", NodePort::Control);
         addOutput ("out", NodePort::Control);
         addParam ("rate", "Rate", 0.05f, 20.0f, 1.0f);   // Hz
         addParam ("depth", "Depth", 0.0f, 1.0f, 1.0f);
@@ -491,16 +460,14 @@ public:
         phase = 0.0;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float**, int, float** out, int, int n) override
     {
-        float paramRate = getParam("rate")->get();
+        float rate = getParam("rate")->get();
         float depth = getParam("depth")->get();
         int shape   = (int) getParam("shape")->get();
 
         for (int i = 0; i < n; ++i)
         {
-            float rcv = (numIn > 0) ? in[0][i] : 0.0f;
-            float rate = (rcv != 0.0f) ? juce::jlimit(0.05f, 20.0f, rcv) : paramRate;
             double inc = rate / sr;
 
             float v = 0.0f;
@@ -532,8 +499,6 @@ public:
     DelayNode() : DSPNode ("delay", "Delay")
     {
         addInput ("in");
-        addInput ("time_cv", NodePort::Control);
-        addInput ("fb_cv", NodePort::Control);
         addOutput ("out");
         addParam ("time", "Time", 0.001f, 2.0f, 0.3f);       // seconds
         addParam ("feedback", "Feedback", 0.0f, 0.95f, 0.4f);
@@ -547,17 +512,13 @@ public:
         writePos = 0;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramTime = getParam("time")->get();
-        float paramFB   = getParam("feedback")->get();
+        float time = getParam("time")->get();
+        float fb   = getParam("feedback")->get();
 
         for (int i = 0; i < n; ++i)
         {
-            float tcv = (numIn > 1) ? in[1][i] : 0.0f;
-            float fcv = (numIn > 2) ? in[2][i] : 0.0f;
-            float time = (tcv != 0.0f) ? juce::jlimit(0.001f, 2.0f, tcv) : paramTime;
-            float fb   = (fcv != 0.0f) ? juce::jlimit(0.0f, 0.95f, fcv) : paramFB;
             int delaySamples = juce::jlimit (1, (int)buffer.size() - 1, (int)(time * sr));
 
             int readPos = writePos - delaySamples;
@@ -645,7 +606,7 @@ class CompressorNode : public DSPNode
 public:
     CompressorNode() : DSPNode ("compressor", "Compressor")
     {
-        addInput ("in"); addInput ("thresh_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("threshold", "Threshold", -60.0f, 0.0f, -20.0f);
         addParam ("ratio", "Ratio", 1.0f, 20.0f, 4.0f);
@@ -659,9 +620,9 @@ public:
         envelope = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramThresh = getParam("threshold")->get();
+        float thresh = getParam("threshold")->get();
         float ratio   = getParam("ratio")->get();
         float attMs   = getParam("attack")->get();
         float relMs   = getParam("release")->get();
@@ -670,8 +631,6 @@ public:
 
         for (int i = 0; i < n; ++i)
         {
-            float tcv = (numIn > 1) ? in[1][i] : 0.0f;
-            float thresh = (tcv != 0.0f) ? tcv : paramThresh;
             float x = in[0][i];
             float absX = std::abs (x);
             float dB = 20.0f * std::log10 (absX + 1e-10f);
@@ -699,7 +658,7 @@ class NoiseGateNode : public DSPNode
 public:
     NoiseGateNode() : DSPNode ("noisegate", "Noise Gate")
     {
-        addInput ("in"); addInput ("thresh_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("threshold", "Threshold", -80.0f, 0.0f, -40.0f);
         addParam ("attack", "Attack", 0.1f, 50.0f, 1.0f);
@@ -712,9 +671,9 @@ public:
         gateGain = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramThresh = getParam("threshold")->get();
+        float thresh = getParam("threshold")->get();
         float attMs   = getParam("attack")->get();
         float relMs   = getParam("release")->get();
         float attCoef = 1.0f - std::exp (-1.0f / ((float)sr * attMs * 0.001f));
@@ -722,8 +681,6 @@ public:
 
         for (int i = 0; i < n; ++i)
         {
-            float tcv = (numIn > 1) ? in[1][i] : 0.0f;
-            float thresh = (tcv != 0.0f) ? tcv : paramThresh;
             float dB = 20.0f * std::log10 (std::abs (in[0][i]) + 1e-10f);
             float target = (dB > thresh) ? 1.0f : 0.0f;
             float coef = (target > gateGain) ? attCoef : relCoef;
@@ -747,8 +704,6 @@ public:
     SchroederReverbNode() : DSPNode ("reverb", "Reverb")
     {
         addInput ("in");
-        addInput ("size_cv", NodePort::Control);
-        addInput ("mix_cv", NodePort::Control);
         addOutput ("out");
         addParam ("size", "Size", 0.0f, 1.0f, 0.5f);
         addParam ("damping", "Damping", 0.0f, 1.0f, 0.5f);
@@ -765,18 +720,14 @@ public:
         for (int i = 0; i < 2; ++i) { ap[i].resize ((int)(apLens[i] * scale), 0.0f); apIdx[i] = 0; }
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramSize = getParam("size")->get();
+        float size = getParam("size")->get() * 0.28f + 0.7f;
         float damp = getParam("damping")->get();
-        float paramMix = getParam("mix")->get();
+        float mix = getParam("mix")->get();
 
         for (int i = 0; i < n; ++i)
         {
-            float scv = (numIn > 1) ? in[1][i] : 0.0f;
-            float mcv = (numIn > 2) ? in[2][i] : 0.0f;
-            float size = ((scv != 0.0f) ? juce::jlimit(0.0f, 1.0f, scv) : paramSize) * 0.28f + 0.7f;
-            float mix  = (mcv != 0.0f) ? juce::jlimit(0.0f, 1.0f, mcv) : paramMix;
             float x = in[0][i] * 0.5f;
             float wet = 0.0f;
 
@@ -826,7 +777,7 @@ class FuzzNode : public DSPNode
 public:
     FuzzNode() : DSPNode ("fuzz", "Fuzz")
     {
-        addInput ("in"); addInput ("drive_cv", NodePort::Control);
+        addInput ("in");
         addOutput ("out");
         addParam ("gain", "Gain", 1.0f, 100.0f, 40.0f);
         addParam ("bias", "Bias", -0.5f, 0.5f, 0.1f);     // asymmetry
@@ -839,9 +790,9 @@ public:
         lpState = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int, float** out, int, int n) override
     {
-        float paramG = getParam("gain")->get();
+        float g = getParam("gain")->get();
         float bias   = getParam("bias")->get();
         float tone   = getParam("tone")->get();
         float cutoff = 200.0f + tone * 4800.0f;
@@ -851,8 +802,6 @@ public:
 
         for (int i = 0; i < n; ++i)
         {
-            float cv = (numIn > 1) ? in[1][i] : 0.0f;
-            float g = (cv != 0.0f) ? juce::jlimit(1.0f, 100.0f, cv) : paramG;
             float x = in[0][i] * g + bias;
             // Asymmetric clip: positive clips harder than negative
             float clipped = (x > 0.0f) ? juce::jmin (x, 0.7f) : juce::jmax (x, -1.0f);
@@ -1325,11 +1274,13 @@ public:
     {
         addInput ("a"); addInput ("b");
         addOutput ("out");
+        addParam ("value", "Value", -10.0f, 10.0f, 0.0f);
     }
     void process (const float** in, int numIn, float** out, int, int n) override
     {
+        float val = getParam("value")->get();
         for (int i = 0; i < n; ++i)
-            out[0][i] = in[0][i] + ((numIn > 1) ? in[1][i] : 0.0f);
+            out[0][i] = in[0][i] + ((numIn > 1) ? in[1][i] : val);
     }
 };
 
@@ -1357,12 +1308,14 @@ public:
     {
         addInput ("a"); addInput ("b");
         addOutput ("out");
+        addParam ("value", "Value", 0.001f, 10.0f, 1.0f);
     }
     void process (const float** in, int numIn, float** out, int, int n) override
     {
+        float val = getParam("value")->get();
         for (int i = 0; i < n; ++i)
         {
-            float b = (numIn > 1) ? in[1][i] : 1.0f;
+            float b = (numIn > 1) ? in[1][i] : val;
             out[0][i] = (std::abs(b) > 1e-10f) ? in[0][i] / b : 0.0f;
         }
     }
@@ -1708,54 +1661,68 @@ class ExpressionNode : public DSPNode
 public:
     ExpressionNode() : DSPNode ("expression", "Expression (E2)")
     {
-        addInput ("in"); addInput ("in2");
-        addOutput ("out");
-        addParam ("p1", "Param 1", -100.0f, 100.0f, 1.0f);
-        addParam ("p2", "Param 2", -100.0f, 100.0f, 0.0f);
-        addParam ("p3", "Param 3", -100.0f, 100.0f, 0.0f);
-        addParam ("p4", "Param 4", -100.0f, 100.0f, 0.0f);
-
-        // Default expression: pass-through with gain
-        setExpression ("out = in * p1");
+        // Default expression if none provided
+        setExpression ("@inputs in in2\n@outputs out\n@parameters p1 p2 p3 p4\nout = in * p1");
     }
 
     void prepare (double sampleRate, int bs) override
     {
         DSPNode::prepare (sampleRate, bs);
-        vm.vars[ExpressionVM::VAR_SR] = (float) sampleRate;
-        vm.vars[ExpressionVM::VAR_DT] = 1.0f / (float) sampleRate;
-        vm.vars[ExpressionVM::VAR_T]  = 0.0f;
+        if (int srIdx = vm.getVarIndex("sr"); srIdx >= 0) vm.vars[srIdx] = (float) sampleRate;
+        if (int dtIdx = vm.getVarIndex("dt"); dtIdx >= 0) vm.vars[dtIdx] = 1.0f / (float) sampleRate;
+        if (int tIdx  = vm.getVarIndex("t");  tIdx >= 0)  vm.vars[tIdx]  = 0.0f;
     }
 
-    void process (const float** in, int numIn, float** out, int, int n) override
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
     {
         if (! vm.isCompiled()) {
-            for (int i = 0; i < n; ++i) out[0][i] = 0.0f;
+            for (int p = 0; p < numOut; ++p)
+                for (int i = 0; i < n; ++i) out[p][i] = 0.0f;
             return;
         }
 
         // Load user params
-        vm.vars[ExpressionVM::VAR_P1] = getParam("p1")->get();
-        vm.vars[ExpressionVM::VAR_P2] = getParam("p2")->get();
-        vm.vars[ExpressionVM::VAR_P3] = getParam("p3")->get();
-        vm.vars[ExpressionVM::VAR_P4] = getParam("p4")->get();
+        for (size_t p = 0; p < paramIndices.size(); ++p) {
+            if (paramIndices[p] >= 0 && p < getParams().size()) {
+                vm.vars[paramIndices[p]] = getParams()[p].get();
+            }
+        }
 
-        float dt = vm.vars[ExpressionVM::VAR_DT];
+        int tIdx  = vm.getVarIndex("t");
+        int dtIdx = vm.getVarIndex("dt");
+        float dt = (dtIdx >= 0) ? vm.vars[dtIdx] : 0.0f;
+        int defOutIdx = vm.getVarIndex("out");
 
         for (int i = 0; i < n; ++i)
         {
-            vm.vars[ExpressionVM::VAR_IN]  = in[0][i];
-            vm.vars[ExpressionVM::VAR_IN2] = (numIn > 1) ? in[1][i] : 0.0f;
-            vm.vars[ExpressionVM::VAR_OUT] = 0.0f;
+            // Load inputs
+            for (size_t p = 0; p < inputIndices.size(); ++p) {
+                if (inputIndices[p] >= 0) {
+                    vm.vars[inputIndices[p]] = (p < (size_t)numIn) ? in[p][i] : 0.0f;
+                }
+            }
+            
+            // Clear outputs
+            for (size_t p = 0; p < outputIndices.size(); ++p) {
+                if (outputIndices[p] >= 0) vm.vars[outputIndices[p]] = 0.0f;
+            }
+            if (defOutIdx >= 0) vm.vars[defOutIdx] = 0.0f;
 
             float result = vm.evaluate();
 
-            // Use explicit out= assignment if set, otherwise last expression value
-            out[0][i] = (vm.vars[ExpressionVM::VAR_OUT] != 0.0f)
-                      ? vm.vars[ExpressionVM::VAR_OUT]
-                      : result;
+            // Store outputs
+            for (size_t p = 0; p < outputIndices.size(); ++p) {
+                if (p < (size_t)numOut) {
+                    if (outputIndices[p] >= 0 && vm.vars[outputIndices[p]] != 0.0f)
+                        out[p][i] = vm.vars[outputIndices[p]];
+                    else if (p == 0)
+                        out[0][i] = (defOutIdx >= 0 && vm.vars[defOutIdx] != 0.0f) ? vm.vars[defOutIdx] : result;
+                    else
+                        out[p][i] = 0.0f;
+                }
+            }
 
-            vm.vars[ExpressionVM::VAR_T] += dt;
+            if (tIdx >= 0) vm.vars[tIdx] += dt;
         }
     }
 
@@ -1766,14 +1733,73 @@ public:
     bool setExpression (const juce::String& expr)
     {
         expressionSource = expr;
-        return vm.compile_and_store (expr);
+        
+        juce::StringArray inputs;
+        juce::StringArray outputs;
+        juce::StringArray parameters;
+        
+        juce::StringArray lines = juce::StringArray::fromLines (expr);
+        for (auto& line : lines) {
+            auto t = line.trim();
+            if (t.startsWithIgnoreCase ("@inputs ")) {
+                inputs.addArray (juce::StringArray::fromTokens (t.substring(8), " \t", ""));
+            }
+            else if (t.startsWithIgnoreCase ("@outputs ")) {
+                outputs.addArray (juce::StringArray::fromTokens (t.substring(9), " \t", ""));
+            }
+            else if (t.startsWithIgnoreCase ("@parameters ")) {
+                parameters.addArray (juce::StringArray::fromTokens (t.substring(12), " \t", ""));
+            }
+        }
+        
+        if (inputs.isEmpty()) inputs.addTokens ("in in2", " \t", "");
+        if (outputs.isEmpty()) outputs.add ("out");
+        if (parameters.isEmpty()) parameters.addTokens ("p1 p2 p3 p4", " \t", "");
+
+        // Only clear and rebuild if signature changed, to preserve param values if possible
+        bool sigChanged = false;
+        if (inputs.size() != (int)getInputPorts().size()) sigChanged = true;
+        if (outputs.size() != (int)getOutputPorts().size()) sigChanged = true;
+        if (parameters.size() != (int)getParams().size()) sigChanged = true;
+
+        if (sigChanged) {
+            clearInputs();
+            clearOutputs();
+            
+            for (auto& inName : inputs) addInput (inName);
+            for (auto& outName : outputs) addOutput (outName);
+            
+            // Preserve existing param values if name matches
+            std::map<juce::String, float> oldParamValues;
+            for (auto& p : getParams()) oldParamValues[p.id] = p.baseValue.load();
+            
+            clearParams();
+            for (auto& pName : parameters) {
+                float defVal = oldParamValues.count(pName) ? oldParamValues[pName] : 0.0f;
+                addParam (pName, pName, -100.0f, 100.0f, defVal);
+            }
+        }
+
+        vm.clearVars();
+        bool ok = vm.compile_and_store (expr);
+        
+        // Map dynamic variables to fast indices
+        inputIndices.clear();
+        for (auto& n : inputs) inputIndices.push_back (vm.getVarIndex (n.toStdString()));
+        
+        outputIndices.clear();
+        for (auto& n : outputs) outputIndices.push_back (vm.getVarIndex (n.toStdString()));
+        
+        paramIndices.clear();
+        for (auto& n : parameters) paramIndices.push_back (vm.getVarIndex (n.toStdString()));
+
+        return ok;
     }
 
     const juce::String& getExpression() const { return expressionSource; }
     const juce::String& getCompileError() const { return vm.getError(); }
 
     //==========================================================================
-    /** Override serialization to include expression source. */
     juce::var toJSON() const
     {
         auto base = DSPNode::toJSON();
@@ -1796,6 +1822,9 @@ public:
 private:
     ExpressionVM vm;
     juce::String expressionSource;
+    std::vector<int> inputIndices;
+    std::vector<int> outputIndices;
+    std::vector<int> paramIndices;
 };
 
 //==============================================================================

@@ -19,7 +19,10 @@ NodeGraphEditor::NodeGraphEditor() : canvas (*this)
 
     canvas.onNodeSelected = [this] (int id) { selectNode (id); };
     propertiesPanel.onDeleteNode = [this] (int id) { deleteNode (id); };
-    propertiesPanel.onParamChanged = [this] { canvas.repaint(); };
+    propertiesPanel.onParamChanged = [this] {
+        if (selectedNodeID >= 0) nodeVisuals[selectedNodeID].height = computeNodeHeight (selectedNodeID);
+        canvas.repaint();
+    };
 }
 
 NodeGraphEditor::~NodeGraphEditor() = default;
@@ -57,11 +60,20 @@ void NodeGraphEditor::clearGraph()
     canvas.repaint();
 }
 
-void NodeGraphEditor::paint (juce::Graphics&) {}
+void NodeGraphEditor::paint (juce::Graphics& g)
+{
+    // Tab Toolbar Background
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.fillRect (toolbarArea);
+    g.setColour (PedalForgeLookAndFeel::gridLine);
+    g.drawHorizontalLine (35, 0.0f, (float)getWidth());
+}
 
 void NodeGraphEditor::resized()
 {
     auto area = getLocalBounds();
+    auto toolbar = area.removeFromTop (36);
     propertiesPanel.setBounds (area.removeFromRight (propertiesWidth));
     canvas.setBounds (area);
 }
@@ -107,7 +119,10 @@ float NodeGraphEditor::computeNodeHeight (int nodeID) const
 {
     auto* node = const_cast<DSPGraph&>(graph).getNode (nodeID);
     if (!node) return headerH + 20;
-    int np = juce::jmax ((int)node->getInputPorts().size(), (int)node->getOutputPorts().size());
+    int standardInputs = 0;
+    for (const auto& p : node->getInputPorts())
+        if (!p.isParameterCV) standardInputs++;
+    int np = juce::jmax (standardInputs, (int)node->getOutputPorts().size());
     return headerH + juce::jmax (np, 1) * portSpacing + (int)node->getParams().size() * paramRowH + 10;
 }
 
@@ -116,7 +131,41 @@ juce::Point<float> NodeGraphEditor::getPortPosition (int nodeID, bool isOutput, 
     auto it = nodeVisuals.find (nodeID);
     if (it == nodeVisuals.end()) return {};
     const auto& v = it->second;
-    return { isOutput ? (v.x + v.width) : v.x, v.y + headerH + portSpacing * 0.5f + portIndex * portSpacing };
+    if (isOutput)
+        return { v.x + v.width, v.y + headerH + portSpacing * 0.5f + portIndex * portSpacing };
+        
+    auto* node = const_cast<DSPGraph&>(graph).getNode (nodeID);
+    if (!node || portIndex < 0 || portIndex >= (int)node->getInputPorts().size()) return {};
+    
+    const auto& port = node->getInputPorts()[portIndex];
+    if (port.isParameterCV)
+    {
+        juce::String paramID = port.name.upToLastOccurrenceOf ("_cv", false, false);
+        int pIndex = 0;
+        for (int i = 0; i < (int)node->getParams().size(); ++i) {
+            if (node->getParams()[i].id == paramID) {
+                pIndex = i;
+                break;
+            }
+        }
+        
+        int standardInputs = 0;
+        for (const auto& p : node->getInputPorts())
+            if (!p.isParameterCV) standardInputs++;
+        int np = juce::jmax (standardInputs, (int)node->getOutputPorts().size());
+        float py = v.y + headerH + juce::jmax (np, 1) * portSpacing + 2 + pIndex * paramRowH + paramRowH * 0.5f;
+        
+        return { v.x, py };
+    }
+    else
+    {
+        int standardIdx = 0;
+        for (int i = 0; i < portIndex; ++i)
+            if (!node->getInputPorts()[i].isParameterCV)
+                standardIdx++;
+                
+        return { v.x, v.y + headerH + portSpacing * 0.5f + standardIdx * portSpacing };
+    }
 }
 
 juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
@@ -294,9 +343,13 @@ void NodeGraphEditor::GraphCanvas::drawNode (juce::Graphics& g, int nodeID, DSPN
         
         g.setColour (pc);
         g.fillEllipse (pp.x - portR, pp.y - portR, portR * 2, portR * 2);
-        g.setColour (juce::Colours::white.withAlpha (0.7f));
-        g.setFont (juce::FontOptions (9.0f));
-        g.drawText (node->getInputPorts()[i].name, pp.x + portR + 4, pp.y - 6, 60, 12, juce::Justification::centredLeft);
+        
+        if (!port.isParameterCV)
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.7f));
+            g.setFont (juce::FontOptions (9.0f));
+            g.drawText (node->getInputPorts()[i].name, pp.x + portR + 4, pp.y - 6, 60, 12, juce::Justification::centredLeft);
+        }
     }
     for (int i = 0; i < (int)node->getOutputPorts().size(); ++i)
     {
@@ -327,7 +380,10 @@ void NodeGraphEditor::GraphCanvas::drawNode (juce::Graphics& g, int nodeID, DSPN
     }
 
     // Inline param values
-    int np = juce::jmax ((int)node->getInputPorts().size(), (int)node->getOutputPorts().size());
+    int standardInputs = 0;
+    for (const auto& p : node->getInputPorts())
+        if (!p.isParameterCV) standardInputs++;
+    int np = juce::jmax (standardInputs, (int)node->getOutputPorts().size());
     float py = visual.y + headerH + juce::jmax (np, 1) * portSpacing + 2;
     g.setFont (juce::FontOptions (10.0f));
     for (const auto& param : node->getParams())
@@ -621,9 +677,32 @@ bool NodeGraphEditor::GraphCanvas::keyPressed (const juce::KeyPress& key)
     return false;
 }
 
+bool NodeGraphEditor::GraphCanvas::isInterestedInDragSource (const juce::DragAndDropTarget::SourceDetails& dragSourceDetails)
+{
+    return dragSourceDetails.description.toString().startsWith ("node:");
+}
+
+void NodeGraphEditor::GraphCanvas::itemDropped (const juce::DragAndDropTarget::SourceDetails& dragSourceDetails)
+{
+    juce::String desc = dragSourceDetails.description.toString();
+    if (desc.startsWith ("node:"))
+    {
+        auto parts = juce::StringArray::fromTokens (desc, ":", "");
+        if (parts.size() >= 2)
+        {
+            juce::String type = parts[1];
+            auto cp = screenToCanvas ((float)dragSourceDetails.localPosition.x, (float)dragSourceDetails.localPosition.y);
+            editor.addNodeAt (type, cp.x, cp.y);
+        }
+    }
+}
+
 void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
 {
     juce::PopupMenu menu;
+    juce::PopupMenu effectsMenu;
+    juce::PopupMenu nodesMenu;
+    
     juce::PopupMenu io; 
     io.addItem(4, "Audio Input"); io.addItem(5, "Audio Output"); 
     io.addSeparator();
@@ -632,20 +711,21 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     io.addItem(350, "Expression Pedal"); io.addItem(351, "Footswitch");
     io.addSeparator();
     io.addItem(352, "CV Input"); io.addItem(353, "CV Output");
-    menu.addSubMenu("I/O", io);
+    nodesMenu.addSubMenu("I/O", io);
     
-    juce::PopupMenu u; u.addItem(1,"Gain"); u.addItem(2,"Mix"); u.addItem(3,"Split"); menu.addSubMenu("Utility",u);
-    juce::PopupMenu f; f.addItem(10,"Low Pass"); f.addItem(11,"High Pass"); f.addItem(12,"All Pass"); f.addItem(13,"Tone Stack"); f.addItem(14,"Parametric EQ"); menu.addSubMenu("Filters",f);
-    juce::PopupMenu dr; dr.addItem(20,"Soft Clip"); dr.addItem(21,"Hard Clip"); dr.addItem(22,"Fuzz"); menu.addSubMenu("Drive",dr);
-    juce::PopupMenu m; m.addItem(30,"LFO"); m.addItem(31,"Phaser"); m.addItem(32,"Flanger"); menu.addSubMenu("Modulation",m);
-    juce::PopupMenu dl; dl.addItem(40,"Delay"); dl.addItem(41,"Mod Delay"); menu.addSubMenu("Delay",dl);
-    juce::PopupMenu dy; dy.addItem(50,"Compressor"); dy.addItem(51,"Noise Gate"); menu.addSubMenu("Dynamics",dy);
-    juce::PopupMenu rv; rv.addItem(60,"Reverb"); rv.addItem(61,"IR Convolution"); menu.addSubMenu("Reverb",rv);
-    juce::PopupMenu ut; ut.addItem(68,"Cabinet Sim"); menu.addSubMenu("Guitar Utility",ut);
+    juce::PopupMenu u; u.addItem(1,"Gain"); u.addItem(2,"Mix"); u.addItem(3,"Split"); nodesMenu.addSubMenu("Utility",u);
+    
+    juce::PopupMenu f; f.addItem(10,"Low Pass"); f.addItem(11,"High Pass"); f.addItem(12,"All Pass"); f.addItem(13,"Tone Stack"); f.addItem(14,"Parametric EQ"); effectsMenu.addSubMenu("Filters",f);
+    juce::PopupMenu dr; dr.addItem(20,"Soft Clip"); dr.addItem(21,"Hard Clip"); dr.addItem(22,"Fuzz"); effectsMenu.addSubMenu("Drive",dr);
+    juce::PopupMenu m; m.addItem(30,"LFO"); m.addItem(31,"Phaser"); m.addItem(32,"Flanger"); effectsMenu.addSubMenu("Modulation",m);
+    juce::PopupMenu dl; dl.addItem(40,"Delay"); dl.addItem(41,"Mod Delay"); effectsMenu.addSubMenu("Delay",dl);
+    juce::PopupMenu dy; dy.addItem(50,"Compressor"); dy.addItem(51,"Noise Gate"); effectsMenu.addSubMenu("Dynamics",dy);
+    juce::PopupMenu rv; rv.addItem(60,"Reverb"); rv.addItem(61,"IR Convolution"); effectsMenu.addSubMenu("Reverb",rv);
+    juce::PopupMenu ut; ut.addItem(68,"Cabinet Sim"); effectsMenu.addSubMenu("Guitar Utility",ut);
     
     juce::PopupMenu mf; 
     mf.addItem(65,"RAM / Delay Line"); mf.addItem(66,"File Sampler");
-    menu.addSubMenu("Memory / Files",mf);
+    nodesMenu.addSubMenu("Memory / Files",mf);
 
     juce::PopupMenu sy; 
     sy.addItem(70,"Oscillator (VCO)"); sy.addItem(71,"Noise Gen");
@@ -655,10 +735,10 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     sy.addItem(74,"State Variable Filter"); sy.addItem(75,"Ladder Filter");
     sy.addSeparator();
     sy.addItem(76,"VCA"); sy.addItem(77,"Glide (Portamento)"); sy.addItem(78,"Voice Allocator");
-    menu.addSubMenu("Synthesizer",sy);
+    nodesMenu.addSubMenu("Synthesizer",sy);
 
     // ─── Wiremod-inspired ───
-    menu.addSeparator();
+    nodesMenu.addSeparator();
     juce::PopupMenu lg;
     lg.addItem(100,"AND Gate"); lg.addItem(101,"OR Gate"); lg.addItem(102,"NOT Gate");
     lg.addItem(200,"NAND Gate"); lg.addItem(201,"NOR Gate"); lg.addItem(103,"XOR Gate"); lg.addItem(202,"XNOR Gate");
@@ -671,7 +751,7 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     lg.addItem(104,"Comparator"); lg.addItem(105,"Latch / Toggle"); lg.addItem(107,"Constant");
     lg.addSeparator();
     lg.addItem(106,"Mux / A|B Switch"); lg.addItem(211,"Demux"); lg.addItem(212,"Priority");
-    menu.addSubMenu("Logic",lg);
+    nodesMenu.addSubMenu("Logic",lg);
 
     juce::PopupMenu mt;
     mt.addItem(110,"Add"); mt.addItem(170,"Subtract"); mt.addItem(111,"Multiply"); mt.addItem(112,"Divide"); mt.addItem(113,"Modulo");
@@ -685,17 +765,17 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     mt.addItem(114,"Ranger / Remap"); mt.addItem(115,"Smooth / Slew"); mt.addItem(116,"Clamp");
     mt.addSeparator();
     mt.addItem(117,"Abs (Rectify)"); mt.addItem(118,"Negate (Invert)");
-    menu.addSubMenu("Math",mt);
+    nodesMenu.addSubMenu("Math",mt);
 
     juce::PopupMenu ti;
     ti.addItem(120,"Clock / Timer"); ti.addItem(121,"Counter"); ti.addItem(122,"Sequencer (8-step)");
     ti.addSeparator();
     ti.addItem(123,"Envelope Follower"); ti.addItem(124,"Sample & Hold");
-    menu.addSubMenu("Timing / Sensors",ti);
+    nodesMenu.addSubMenu("Timing / Sensors",ti);
 
     juce::PopupMenu sc;
     sc.addItem(130,"Expression (E2)");
-    menu.addSubMenu("Scripting",sc);
+    nodesMenu.addSubMenu("Scripting",sc);
 
     juce::PopupMenu miRx;
     miRx.addItem(140,"Note"); miRx.addItem(141,"CC"); miRx.addItem(250,"CC 14-bit");
@@ -716,16 +796,16 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     juce::PopupMenu mi;
     mi.addSubMenu("Receive (MIDI to CV)", miRx);
     mi.addSubMenu("Generate (CV to MIDI)", miTx);
-    menu.addSubMenu("MIDI",mi);
+    nodesMenu.addSubMenu("MIDI",mi);
 
     // ─── Control Surface ───
-    menu.addSeparator();
+    nodesMenu.addSeparator();
     juce::PopupMenu cs;
     cs.addItem(300,"Knob"); cs.addItem(301,"Fader"); cs.addItem(302,"Button (Momentary)");
     cs.addItem(303,"Toggle (Latching)"); cs.addItem(304,"Selector (Multi-Position)");
     cs.addSeparator();
     cs.addItem(305,"XY Pad");
-    menu.addSubMenu("Controls (Pedal UI)",cs);
+    nodesMenu.addSubMenu("Controls (Pedal UI)",cs);
 
     // ─── Displays & Lights ───
     juce::PopupMenu dp;
@@ -747,7 +827,10 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
 
     dp.addSeparator();
     dp.addItem(331,"Sound Emitter");
-    menu.addSubMenu("Displays & Gadgets",dp);
+    nodesMenu.addSubMenu("Displays & Gadgets",dp);
+
+    menu.addSubMenu("Effects", effectsMenu);
+    menu.addSubMenu("Nodes", nodesMenu);
 
     float cx = cp.x, cy = cp.y;
     menu.showMenuAsync ({}, [this, cx, cy](int r) {
@@ -849,9 +932,7 @@ NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
     expressionError.setFont (juce::FontOptions (11.0f));
     addChildComponent (expressionError);
 
-    compileButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF2DD4BF).withAlpha (0.3f));
-    compileButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xFF2DD4BF));
-    compileButton.onClick = [this]
+    expressionEditor.onTextChange = [this]
     {
         if (auto* exprNode = dynamic_cast<ExpressionNode*>(currentNode))
         {
@@ -861,6 +942,7 @@ NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
                 expressionError.setText ("", juce::dontSendNotification);
                 expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
                 expressionError.setText ("Compiled OK!", juce::dontSendNotification);
+                if (onParamChanged) onParamChanged();
             }
             else
             {
@@ -869,7 +951,6 @@ NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
             }
         }
     };
-    addChildComponent (compileButton);
 }
 
 void NodeGraphEditor::NodePropertiesPanel::paint (juce::Graphics& g)
@@ -959,8 +1040,7 @@ void NodeGraphEditor::NodePropertiesPanel::resized()
         int editorH = juce::jmin (exprArea.getHeight() / 2, 180);
         expressionEditor.setBounds (exprArea.removeFromTop (editorH).reduced (8, 0));
         auto btnRow = exprArea.removeFromTop (30).reduced (8, 3);
-        compileButton.setBounds (btnRow.removeFromLeft (80));
-        expressionError.setBounds (btnRow.withTrimmedLeft (8));
+        expressionError.setBounds (btnRow);
         viewport.setBounds (exprArea.withTrimmedBottom (0));
     }
     else
@@ -991,7 +1071,7 @@ void NodeGraphEditor::NodePropertiesPanel::clearSelection()
     deleteButton.setVisible (false);
     expressionEditor.setVisible (false);
     expressionError.setVisible (false);
-    compileButton.setVisible (false);
+    expressionError.setVisible (false);
     repaint();
 }
 
@@ -1005,13 +1085,11 @@ void NodeGraphEditor::NodePropertiesPanel::setupExpressionEditor()
             expressionError.setText ("", juce::dontSendNotification);
         }
         expressionEditor.setVisible (true);
-        compileButton.setVisible (true);
         expressionError.setVisible (true);
     }
     else
     {
         expressionEditor.setVisible (false);
-        compileButton.setVisible (false);
         expressionError.setVisible (false);
     }
 }

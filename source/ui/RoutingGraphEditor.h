@@ -98,6 +98,7 @@ private:
         juce::Point<float> screenToCanvas (float sx, float sy) const;
         PortHit hitTestPort (juce::Point<float> cp) const;
         int hitTestNode (juce::Point<float> cp) const;
+        int hitTestConnection (juce::Point<float> cp) const;
 
         void drawNode (juce::Graphics& g, int idx, const RoutingNode& node) const;
         void drawConnection (juce::Graphics& g, const RoutingConnection& conn) const;

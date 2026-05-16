@@ -50,7 +50,8 @@ private:
 
     //==========================================================================
     /** The canvas where nodes and wires are drawn and interacted with. */
-    class GraphCanvas : public juce::Component
+    class GraphCanvas : public juce::Component,
+                        public juce::DragAndDropTarget
     {
     public:
         GraphCanvas (NodeGraphEditor& owner);
@@ -61,6 +62,9 @@ private:
         void mouseUp (const juce::MouseEvent& e) override;
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override;
         bool keyPressed (const juce::KeyPress& key) override;
+
+        bool isInterestedInDragSource (const juce::DragAndDropTarget::SourceDetails& dragSourceDetails) override;
+        void itemDropped (const juce::DragAndDropTarget::SourceDetails& dragSourceDetails) override;
 
         std::function<void(int)> onNodeSelected;
 
@@ -124,7 +128,6 @@ private:
         // Expression editor (visible only for ExpressionNode)
         juce::TextEditor expressionEditor;
         juce::Label expressionError;
-        juce::TextButton compileButton { "Compile" };
         bool isExpressionNode = false;
 
         juce::OwnedArray<juce::TextButton> fileLoaders;

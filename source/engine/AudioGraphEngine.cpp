@@ -129,6 +129,29 @@ void AudioGraphEngine::removePedal (NodeID nodeId)
         instances.end());
 }
 
+void AudioGraphEngine::updatePedalProcessor (NodeID nodeId, std::unique_ptr<juce::AudioProcessor> newProcessor)
+{
+    // Snapshot connections
+    std::vector<juce::AudioProcessorGraph::Connection> connections;
+    for (auto c : graph.getConnections())
+    {
+        if (c.source.nodeID == nodeId || c.destination.nodeID == nodeId)
+            connections.push_back (c);
+    }
+
+    graph.removeNode (nodeId);
+
+    // Re-add node with exact same ID
+    auto node = graph.addNode (std::move (newProcessor), nodeId);
+
+    if (node != nullptr)
+    {
+        // Restore connections
+        for (auto c : connections)
+            graph.addConnection (c);
+    }
+}
+
 //==============================================================================
 bool AudioGraphEngine::connect (NodeID sourceNode, int sourceChannel,
                                  NodeID destNode,   int destChannel)

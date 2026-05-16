@@ -35,6 +35,9 @@ public:
     /** Remove a pedal from the graph. */
     void removePedal (NodeID nodeId);
 
+    /** Replace the processor for an existing pedal node, maintaining its connections. */
+    void updatePedalProcessor (NodeID nodeId, std::unique_ptr<juce::AudioProcessor> newProcessor);
+
     /** Connect two pedal nodes (output of source → input of dest). */
     bool connect (NodeID sourceNode, int sourceChannel,
                   NodeID destNode,   int destChannel);

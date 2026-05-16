@@ -6,6 +6,7 @@
 #include <string>
 #include <atomic>
 #include <cmath>
+#include <set>
 
 //==============================================================================
 /**
@@ -19,32 +20,53 @@ struct NodeParam
     float minVal = 0.0f;
     float maxVal = 1.0f;
     float defaultVal = 0.5f;
-    std::atomic<float> value { 0.5f };
+    std::atomic<float> baseValue { 0.5f };
+    float modValue { 0.0f };
+    bool isModulated { false };
+    bool modulatable { true };
 
     NodeParam() = default;
     NodeParam (const juce::String& pid, const juce::String& pname,
-              float mn, float mx, float def)
-        : id (pid), name (pname), minVal (mn), maxVal (mx), defaultVal (def)
-    { value.store (def); }
+              float mn, float mx, float def, bool isMod = true)
+        : id (pid), name (pname), minVal (mn), maxVal (mx), defaultVal (def), modulatable (isMod)
+    { baseValue.store (def); }
 
     // Non-copyable due to atomic, but movable
     NodeParam (NodeParam&& o) noexcept
         : id (std::move(o.id)), name (std::move(o.name)),
-          minVal (o.minVal), maxVal (o.maxVal), defaultVal (o.defaultVal)
-    { value.store (o.value.load()); }
+          minVal (o.minVal), maxVal (o.maxVal), defaultVal (o.defaultVal),
+          modValue (o.modValue), isModulated (o.isModulated),
+          modulatable (o.modulatable)
+    { baseValue.store (o.baseValue.load()); }
 
     NodeParam& operator= (NodeParam&& o) noexcept
     {
         id = std::move(o.id); name = std::move(o.name);
         minVal = o.minVal; maxVal = o.maxVal; defaultVal = o.defaultVal;
-        value.store (o.value.load());
+        modValue = o.modValue; isModulated = o.isModulated;
+        modulatable = o.modulatable;
+        baseValue.store (o.baseValue.load());
         return *this;
     }
 
-    float get() const { return value.load (std::memory_order_relaxed); }
-    void set (float v) { value.store (juce::jlimit (minVal, maxVal, v), std::memory_order_relaxed); }
+    float get() const { return isModulated ? modValue : baseValue.load (std::memory_order_relaxed); }
+    void set (float v) { baseValue.store (juce::jlimit (minVal, maxVal, v), std::memory_order_relaxed); }
     float getNormalized() const { return (get() - minVal) / (maxVal - minVal); }
     void setNormalized (float n) { set (minVal + n * (maxVal - minVal)); }
+
+    /** Apply a CV modulation value non-destructively. */
+    void applyModulation (float cv)
+    {
+        if (cv != 0.0f)
+        {
+            isModulated = true;
+            modValue = juce::jlimit (minVal, maxVal, cv);
+        }
+        else
+        {
+            isModulated = false;
+        }
+    }
 };
 
 //==============================================================================
@@ -58,6 +80,7 @@ struct NodePort
     juce::String name;
     Type type = Audio;
     int channels = 1; // 1 = mono, 2 = stereo
+    bool isParameterCV = false;
 
     /** Check if two port types are compatible for connection. */
     static bool areCompatible (Type src, Type dst)
@@ -131,6 +154,56 @@ public:
     }
 
     //==========================================================================
+    /** Auto-generate Control input ports for all parameters.
+        Called automatically by the graph runtime before first process.
+        Each parameter gets a corresponding `paramId_cv` Control input port
+        appended after the node's explicitly declared ports. */
+    void autoExposeParams()
+    {
+        if (paramsExposed) return;
+        paramsExposed = true;
+
+        paramPortStartIndex = (int) getInputPorts().size();
+
+        for (const auto& p : params)
+        {
+            if (p.modulatable)
+                addInput (p.id + "_cv", NodePort::Control, 1, true);
+        }
+    }
+
+    /** Read auto-generated CV input ports and apply them to parameters.
+        The graph runtime calls this once per block, before process().
+        When a CV port receives a non-zero signal, it overrides the
+        parameter's knob value for that sample block.
+
+        @param inputBuffers  The input buffer array from process()
+        @param numInputs     Number of input buffers
+        @param sampleIndex   Current sample index (use 0 for block-rate)
+    */
+    void applyControlInputs (const float** inputBuffers, int numInputs, int sampleIndex)
+    {
+        if (paramPortStartIndex < 0) return;
+
+        int portIdx = paramPortStartIndex;
+        for (auto& p : params)
+        {
+            if (p.modulatable)
+            {
+                if (portIdx < numInputs && inputBuffers[portIdx] != nullptr)
+                    p.applyModulation (inputBuffers[portIdx][sampleIndex]);
+                else
+                    p.applyModulation (0.0f);
+                
+                portIdx++;
+            }
+        }
+    }
+
+    /** Check if params have been auto-exposed. */
+    bool areParamsExposed() const { return paramsExposed; }
+
+    //==========================================================================
     /** Serialize node state to JSON. */
     juce::var toJSON() const
     {
@@ -187,15 +260,19 @@ public:
 protected:
     juce::MidiBuffer* midiBuffer = nullptr;
     juce::String filePath;
-    void addInput  (const juce::String& n, NodePort::Type t = NodePort::Audio, int ch = 1)
-    { inputPorts.push_back ({ n, t, ch }); }
+    void addInput  (const juce::String& n, NodePort::Type t = NodePort::Audio, int ch = 1, bool isParamCV = false)
+    { inputPorts.push_back ({ n, t, ch, isParamCV }); }
 
     void addOutput (const juce::String& n, NodePort::Type t = NodePort::Audio, int ch = 1)
-    { outputPorts.push_back ({ n, t, ch }); }
+    { outputPorts.push_back ({ n, t, ch, false }); }
 
     void addParam (const juce::String& id, const juce::String& pname,
-                   float mn, float mx, float def)
-    { params.emplace_back (id, pname, mn, mx, def); }
+                   float mn, float mx, float def, bool isMod = true)
+    { params.emplace_back (id, pname, mn, mx, def, isMod); }
+
+    void clearInputs()  { inputPorts.clear(); paramsExposed = false; paramPortStartIndex = -1; }
+    void clearOutputs() { outputPorts.clear(); }
+    void clearParams()  { params.clear(); paramsExposed = false; paramPortStartIndex = -1; }
 
     double sr = 44100.0;
     int blockSize = 512;
@@ -208,4 +285,7 @@ private:
     std::vector<NodePort> inputPorts;
     std::vector<NodePort> outputPorts;
     std::vector<NodeParam> params;
+
+    bool paramsExposed = false;
+    int paramPortStartIndex = -1;  // index of first auto-generated CV port
 };

@@ -9,47 +9,10 @@
 //==============================================================================
 /**
  * ExpressionVM — A lightweight bytecode virtual machine for audio DSP.
- *
- * Inspired by Wiremod's Expression2 chip from Garry's Mod.
- * Compiles simple math expressions into opcodes, then evaluates
- * them per-sample at audio rate with zero allocation.
- *
- * Built-in variables:
- *   in, in2     — input signals (from node ports)
- *   out         — output signal
- *   sr          — sample rate
- *   t           — time (seconds, auto-incrementing)
- *   dt          — 1/sr (time step)
- *   p1..p4      — user parameters (from sliders)
- *   x1..x8      — state variables (persist between samples)
- *
- * Built-in functions:
- *   sin, cos, tan, asin, acos, atan
- *   abs, sign, floor, ceil, sqrt, exp, log, log2
- *   tanh, pow, min, max, clamp, lerp
- *   mod (same as %)
- *
- * Syntax:
- *   x1 = x1 * 0.999 + abs(in) * 0.001;
- *   out = tanh(in * p1 * (1.0 + x1 * p2))
- *
- * The last expression value becomes 'out' if not explicitly assigned.
  */
 class ExpressionVM
 {
 public:
-    //==========================================================================
-    // Variable indices
-    enum VarID
-    {
-        VAR_IN = 0, VAR_IN2, VAR_OUT,
-        VAR_SR, VAR_T, VAR_DT,
-        VAR_P1, VAR_P2, VAR_P3, VAR_P4,
-        VAR_X1, VAR_X2, VAR_X3, VAR_X4,
-        VAR_X5, VAR_X6, VAR_X7, VAR_X8,
-        NUM_VARS
-    };
-
     //==========================================================================
     // Opcodes
     enum Op : uint8_t
@@ -71,16 +34,39 @@ public:
     };
 
     //==========================================================================
-    float vars[NUM_VARS] = {};
+    std::vector<float> vars;
+    std::map<std::string, int> varMap;
 
-    /** Reset state variables (x1-x8) and time. */
-    void resetState()
+    int registerVar(const std::string& name)
     {
-        for (int i = VAR_X1; i <= VAR_X8; ++i) vars[i] = 0.0f;
-        vars[VAR_T] = 0.0f;
+        if (varMap.count(name)) return varMap[name];
+        int idx = (int)vars.size();
+        if (idx > 250) return -1;
+        varMap[name] = idx;
+        vars.push_back(0.0f);
+        return idx;
     }
 
-    /** Compile an expression string. Returns true on success. */
+    int getVarIndex(const std::string& name) const
+    {
+        auto it = varMap.find(name);
+        return it != varMap.end() ? it->second : -1;
+    }
+
+    void clearVars()
+    {
+        varMap.clear();
+        vars.clear();
+        registerVar("sr");
+        registerVar("t");
+        registerVar("dt");
+    }
+
+    void resetState()
+    {
+        for (auto& v : vars) v = 0.0f;
+    }
+
     bool compile (const juce::String& source)
     {
         bytecode.clear();
@@ -96,7 +82,6 @@ public:
             if (! parseStatement())
                 return false;
             skipWhitespace();
-            // Skip statement separators
             if (pos < src.size() && (src[pos] == ';' || src[pos] == '\n'))
                 pos++;
             skipWhitespace();
@@ -107,12 +92,11 @@ public:
         return true;
     }
 
-    /** Evaluate the compiled expression. Call once per sample. */
     float evaluate()
     {
         if (! compiled) return 0.0f;
 
-        int sp = 0; // stack pointer
+        int sp = 0; 
         float stack[64];
         float lastVal = 0.0f;
 
@@ -121,15 +105,9 @@ public:
             Op op = (Op) bytecode[pc++];
             switch (op)
             {
-                case OP_PUSH_CONST:
-                    stack[sp++] = constants[bytecode[pc++]];
-                    break;
-                case OP_PUSH_VAR:
-                    stack[sp++] = vars[bytecode[pc++]];
-                    break;
-                case OP_STORE_VAR:
-                    vars[bytecode[pc++]] = stack[sp - 1];
-                    break;
+                case OP_PUSH_CONST: stack[sp++] = constants[bytecode[pc++]]; break;
+                case OP_PUSH_VAR:   stack[sp++] = vars[bytecode[pc++]]; break;
+                case OP_STORE_VAR:  vars[bytecode[pc++]] = stack[sp - 1]; break;
                 case OP_ADD: { float b = stack[--sp], a = stack[--sp]; stack[sp++] = a + b; } break;
                 case OP_SUB: { float b = stack[--sp], a = stack[--sp]; stack[sp++] = a - b; } break;
                 case OP_MUL: { float b = stack[--sp], a = stack[--sp]; stack[sp++] = a * b; } break;
@@ -163,16 +141,11 @@ public:
         }
         done:
         lastVal = (sp > 0) ? stack[sp - 1] : 0.0f;
-
-        // Auto-assign to out if not explicitly stored
-        // (the compiled code handles explicit assignments via OP_STORE_VAR)
         return lastVal;
     }
 
     bool isCompiled() const { return compiled; }
     const juce::String& getError() const { return errorMessage; }
-
-    /** Get the expression source for serialization */
     const juce::String& getSource() const { return sourceCode; }
 
     bool compile_and_store (const juce::String& source)
@@ -189,9 +162,6 @@ private:
     bool compiled = false;
     juce::String errorMessage;
     juce::String sourceCode;
-
-    //==========================================================================
-    // Lexer helpers
 
     void skipWhitespace()
     {
@@ -222,7 +192,6 @@ private:
         if (pos < src.size() && (src[pos] == '-' || src[pos] == '+')) pos++;
         while (pos < src.size() && (std::isdigit(src[pos]) || src[pos] == '.'))
             pos++;
-        // Handle scientific notation
         if (pos < src.size() && (src[pos] == 'e' || src[pos] == 'E'))
         {
             pos++;
@@ -234,29 +203,13 @@ private:
 
     int resolveVar (const std::string& name)
     {
-        if (name == "in")  return VAR_IN;
-        if (name == "in2") return VAR_IN2;
-        if (name == "out") return VAR_OUT;
-        if (name == "sr")  return VAR_SR;
-        if (name == "t")   return VAR_T;
-        if (name == "dt")  return VAR_DT;
-        if (name == "p1")  return VAR_P1;
-        if (name == "p2")  return VAR_P2;
-        if (name == "p3")  return VAR_P3;
-        if (name == "p4")  return VAR_P4;
-        if (name == "x1")  return VAR_X1;
-        if (name == "x2")  return VAR_X2;
-        if (name == "x3")  return VAR_X3;
-        if (name == "x4")  return VAR_X4;
-        if (name == "x5")  return VAR_X5;
-        if (name == "x6")  return VAR_X6;
-        if (name == "x7")  return VAR_X7;
-        if (name == "x8")  return VAR_X8;
-        // Constants
         if (name == "pi")  { emitConst(juce::MathConstants<float>::pi); return -1; }
         if (name == "e")   { emitConst(std::exp(1.0f)); return -1; }
         if (name == "twopi") { emitConst(juce::MathConstants<float>::twoPi); return -1; }
-        return -2; // unknown
+
+        int idx = registerVar(name);
+        if (idx == -1) { errorMessage = "Too many variables"; return -2; }
+        return idx;
     }
 
     int resolveFunc (const std::string& name)
@@ -294,9 +247,6 @@ private:
         }
     }
 
-    //==========================================================================
-    // Emitters
-
     void emitOp (uint8_t op) { bytecode.push_back(op); }
     void emitConst (float val)
     {
@@ -315,24 +265,25 @@ private:
         bytecode.push_back((uint8_t)varIdx);
     }
 
-    //==========================================================================
-    // Parser (recursive descent)
-
     bool parseStatement()
     {
         skipWhitespace();
         if (pos >= src.size()) return true;
 
-        // Look ahead for assignment: ident = expr
+        if (src[pos] == '@') {
+            while (pos < src.size() && src[pos] != '\n') pos++;
+            return true;
+        }
+
         size_t saved = pos;
         std::string ident = parseIdent();
         skipWhitespace();
 
         if (!ident.empty() && pos < src.size() && src[pos] == '=' && (pos+1 >= src.size() || src[pos+1] != '='))
         {
-            pos++; // skip '='
+            pos++; 
             int varIdx = resolveVar(ident);
-            if (varIdx == -2) { errorMessage = "Unknown variable: " + juce::String(ident); return false; }
+            if (varIdx == -2) return false;
             if (varIdx >= 0)
             {
                 if (! parseExpr()) return false;
@@ -341,7 +292,6 @@ private:
             }
         }
 
-        // Not an assignment — parse as expression
         pos = saved;
         return parseExpr();
     }
@@ -392,14 +342,12 @@ private:
         skipWhitespace();
         if (pos >= src.size()) { errorMessage = "Unexpected end of expression"; return false; }
 
-        // Number
         if (std::isdigit(src[pos]) || (src[pos] == '.' && pos+1 < src.size() && std::isdigit(src[pos+1])))
         {
             emitConst(parseNumber());
             return true;
         }
 
-        // Parenthesized expression
         if (src[pos] == '(')
         {
             pos++;
@@ -408,13 +356,11 @@ private:
             return true;
         }
 
-        // Identifier (variable or function)
         if (std::isalpha(src[pos]) || src[pos] == '_')
         {
             std::string ident = parseIdent();
             skipWhitespace();
 
-            // Function call?
             if (pos < src.size() && src[pos] == '(')
             {
                 int funcOp = resolveFunc(ident);
@@ -423,7 +369,6 @@ private:
                 pos++; // skip '('
                 int expectedArgs = funcArgCount(funcOp);
 
-                // Parse arguments
                 if (! parseExpr()) return false;
                 for (int a = 1; a < expectedArgs; ++a)
                 {
@@ -436,10 +381,9 @@ private:
                 return true;
             }
 
-            // Variable
             int varIdx = resolveVar(ident);
-            if (varIdx == -1) return true; // constant already emitted (pi, e, twopi)
-            if (varIdx == -2) { errorMessage = "Unknown variable: " + juce::String(ident); return false; }
+            if (varIdx == -1) return true; 
+            if (varIdx == -2) return false;
             emitVar(varIdx);
             return true;
         }

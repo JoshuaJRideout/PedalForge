@@ -52,6 +52,11 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
         activePedal = inst;
     };
 
+    grid.onOpenInventory = [this]
+    {
+        inventory.toggle();
+    };
+
     setSize (1200, 800);
     setResizable (true, true);
     setResizeLimits (900, 600, 2400, 1600);
@@ -138,6 +143,10 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     if (wasFX && activePedal != nullptr && activePedal->design != nullptr)
     {
         activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
+
+        // Rebuild processor so changes actually affect audio and parameters
+        auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, activePedal->design->effectsGraph);
+        processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
     }
 
     // ── Show/hide views ─────────────────────────────────────────────

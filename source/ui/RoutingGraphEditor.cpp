@@ -17,11 +17,20 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
 
 RoutingGraphEditor::~RoutingGraphEditor() = default;
 
-void RoutingGraphEditor::paint (juce::Graphics&) {}
+void RoutingGraphEditor::paint (juce::Graphics& g)
+{
+    // Tab Toolbar Background
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.fillRect (toolbarArea);
+    g.setColour (PedalForgeLookAndFeel::gridLine);
+    g.drawHorizontalLine (35, 0.0f, (float)getWidth());
+}
 
 void RoutingGraphEditor::resized()
 {
     auto area = getLocalBounds();
+    auto toolbar = area.removeFromTop (36);
     propertiesPanel.setBounds (area.removeFromRight (propertiesWidth));
     canvas.setBounds (area);
 }
@@ -212,6 +221,27 @@ int RoutingGraphEditor::RoutingCanvas::hitTestNode (juce::Point<float> cp) const
     return -1;
 }
 
+int RoutingGraphEditor::RoutingCanvas::hitTestConnection (juce::Point<float> cp) const
+{
+    for (int i = 0; i < (int) editor.connections.size(); ++i)
+    {
+        const auto& conn = editor.connections[(size_t) i];
+        auto start = editor.getPortPosition (conn.sourceNodeIdx, true, conn.sourcePortIdx);
+        auto end   = editor.getPortPosition (conn.destNodeIdx, false, conn.destPortIdx);
+
+        juce::Path path;
+        path.startNewSubPath (start);
+        float bezierCP = std::abs (end.x - start.x) * 0.5f;
+        path.cubicTo (start.x + bezierCP, start.y,
+                      end.x - bezierCP, end.y,
+                      end.x, end.y);
+
+        if (path.intersectsLine (juce::Line<float> (cp.x - 5, cp.y - 5, cp.x + 5, cp.y + 5), 4.0f))
+            return i;
+    }
+    return -1;
+}
+
 void RoutingGraphEditor::RoutingCanvas::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgDark);
@@ -353,6 +383,25 @@ void RoutingGraphEditor::RoutingCanvas::drawWirePreview (juce::Graphics& g) cons
 void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
 {
     auto cp = screenToCanvas ((float) e.x, (float) e.y);
+
+    if (e.mods.isRightButtonDown())
+    {
+        int connIdx = hitTestConnection (cp);
+        if (connIdx >= 0)
+        {
+            auto& conn = editor.connections[(size_t) connIdx];
+            auto& srcNode = editor.nodes[(size_t) conn.sourceNodeIdx];
+            auto& dstNode = editor.nodes[(size_t) conn.destNodeIdx];
+            auto& srcPort = srcNode.outputs[(size_t) conn.sourcePortIdx];
+            auto& dstPort = dstNode.inputs[(size_t) conn.destPortIdx];
+
+            editor.engine.disconnect (srcNode.engineNodeId, srcPort.engineChannel,
+                                      dstNode.engineNodeId, dstPort.engineChannel);
+            editor.connections.erase (editor.connections.begin() + connIdx);
+            repaint();
+        }
+        return;
+    }
 
     // Port hit?
     auto port = hitTestPort (cp);

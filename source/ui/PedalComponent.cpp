@@ -43,8 +43,6 @@ void PedalComponent::paint (juce::Graphics& g)
 //==============================================================================
 void PedalComponent::mouseDown (const juce::MouseEvent& e)
 {
-    if (parentGrid != nullptr && parentGrid->isRoutingVisible())
-        return;
 
     if (parentGrid != nullptr)
         parentGrid->grabKeyboardFocus();
@@ -62,6 +60,8 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                                 if (result == 1)
                                 {
                                     instance.bypassed = ! instance.bypassed;
+                                    if (auto* node = engine.getGraph().getNodeForId(instance.nodeID))
+                                        node->setBypassed(instance.bypassed);
                                     repaint();
                                 }
                                 else if (result == 2 && parentGrid != nullptr)
@@ -81,6 +81,59 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
         parentGrid->addPedalCopy (instance, instance.gridX + 1, instance.gridY + 1);
         dragging = false;
         return;
+    }
+
+    // Check if we clicked on a footswitch or toggle switch
+    if (instance.design != nullptr)
+    {
+        float scaleX = getWidth() / instance.design->chassisW;
+        float scaleY = getHeight() / instance.design->chassisH;
+        float mx = e.x / scaleX;
+        float my = e.y / scaleY;
+
+        for (const auto& ctrl : instance.design->controls)
+        {
+            if (ctrl.type == "footswitch" || ctrl.type == "switch" || ctrl.controlID.containsIgnoreCase("bypass"))
+            {
+                if (mx >= ctrl.x && mx <= ctrl.x + ctrl.width &&
+                    my >= ctrl.y && my <= ctrl.y + ctrl.height)
+                {
+                    instance.bypassed = !instance.bypassed;
+                    
+                    if (auto* node = engine.getGraph().getNodeForId(instance.nodeID))
+                    {
+                        // 1. Toggle node bypass state
+                        node->setBypassed(instance.bypassed);
+
+                        // 2. Also toggle the parameter mapped to this control, if any
+                        auto* proc = node->getProcessor();
+                        juce::String mappedParamID;
+                        for (const auto& m : instance.design->mappings)
+                            if (m.controlID == ctrl.controlID) { mappedParamID = m.nodeParam; break; }
+
+                        if (mappedParamID.isNotEmpty())
+                        {
+                            for (auto* p : proc->getParameters())
+                            {
+                                if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
+                                {
+                                    if (ranged->getParameterID() == mappedParamID)
+                                    {
+                                        ranged->setValueNotifyingHost(instance.bypassed ? 1.0f : 0.0f);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    repaint();
+                    // Don't drag if we just toggled a switch
+                    dragging = false;
+                    return;
+                }
+            }
+        }
     }
 
     // Record the mouse offset within the component for snapping
@@ -144,8 +197,6 @@ void PedalComponent::mouseUp (const juce::MouseEvent& /*e*/)
             int cellSize = parentGrid->getCellSize();
             setBounds (pos.x, pos.y,
                        instance.gridW * cellSize, instance.gridH * cellSize);
-
-            parentGrid->updateRoutes();
         }
         else
         {

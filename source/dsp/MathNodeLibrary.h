@@ -13,14 +13,16 @@ public:
         addInput ("a", NodePort::Control);
         addInput ("b", NodePort::Control);
         addOutput ("out", NodePort::Control);
+        addParam ("value", "Value", -10.0f, 10.0f, 0.0f);
     }
     void process (const float** in, int numIn, float** out, int numOut, int n) override
     {
         if (numOut == 0) return;
+        float val = getParam("value")->get();
         for (int i = 0; i < n; ++i)
         {
             float a = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
-            float b = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            float b = (numIn > 1 && in[1]) ? in[1][i] : val;
             out[0][i] = a - b;
         }
     }

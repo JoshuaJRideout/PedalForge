@@ -77,6 +77,9 @@ public:
     /** Callback fired when a pedal is selected/deselected. */
     std::function<void(PedalInstance*)> onPedalSelected;
 
+    /** Callback fired when the Tab menu button is clicked. */
+    std::function<void()> onOpenInventory;
+
     /** Get the currently selected pedal instance (or nullptr). */
     PedalInstance* getSelectedInstance()
     {
@@ -111,6 +114,7 @@ private:
     PedalComponent* selectedComponent = nullptr;
 
     PedalDetailPanel detailPanel;
+    juce::TextButton btnInventory { "+ Add Pedal (Tab)" };
 
     // Fixed cell size — never changes with window resize
     static constexpr int cellSize = 60;

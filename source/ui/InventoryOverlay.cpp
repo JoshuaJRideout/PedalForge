@@ -227,6 +227,8 @@ void InventoryOverlay::ItemGrid::GridCell::mouseDrag (const juce::MouseEvent& e)
                 desc = "pedal:" + item.pedalInfo.name + ":" + juce::String (ratioX) + ":" + juce::String (ratioY);
             else if (item.mainCategory == "Parts")
                 desc = "hardware:" + item.hardwareType + ":" + juce::String (ratioX) + ":" + juce::String (ratioY);
+            else if (item.mainCategory == "Nodes" || item.mainCategory == "Effects")
+                desc = "node:" + item.hardwareType + ":" + juce::String (ratioX) + ":" + juce::String (ratioY);
 
             juce::Image emptyImage (juce::Image::ARGB, 1, 1, true);
 
@@ -419,7 +421,47 @@ InventoryOverlay::~InventoryOverlay() = default;
 
 void InventoryOverlay::setContext (Context ctx)
 {
+    if (context == ctx) return;
     context = ctx;
+    
+    juce::StringArray mainCats;
+    std::map<juce::String, juce::StringArray> subCats;
+
+    switch (context)
+    {
+        case Context::Board:
+        case Context::Route:
+            mainCats.add ("Pedals");
+            break;
+        case Context::Forge:
+            mainCats.add ("Parts");
+            break;
+        case Context::FX:
+            mainCats.add ("Nodes");
+            mainCats.add ("Effects");
+            break;
+    }
+
+    for (auto& item : allItems)
+    {
+        if (mainCats.contains (item.mainCategory))
+        {
+            auto& subs = subCats[item.mainCategory];
+            if (! subs.contains (item.category))
+                subs.add (item.category);
+        }
+    }
+
+    categoryPanel.setCategories (mainCats, subCats);
+
+    if (mainCats.size() > 0)
+    {
+        currentMainCategory = mainCats[0];
+        currentSubCategory = "";
+        categoryPanel.selectCategory (currentMainCategory, "");
+    }
+
+    filterItems();
 }
 
 void InventoryOverlay::buildItemDatabase()
@@ -507,6 +549,104 @@ void InventoryOverlay::buildItemDatabase()
         allItems.push_back (std::move (item));
     }
 
+    // ── Nodes (DSP Blocks) ──────────────────────────────────────────────
+    struct NodeDef { const char* type; const char* name; const char* category; const char* mainCategory; const char* desc; };
+    NodeDef nodes[] = {
+        {"audio_input", "Audio Input", "I/O", "Nodes", "Receives audio from the pedalboard input."},
+        {"audio_output", "Audio Output", "I/O", "Nodes", "Sends audio to the pedalboard output."},
+        {"midi_input", "MIDI Input", "I/O", "Nodes", "Receives MIDI events."},
+        {"midi_output", "MIDI Output", "I/O", "Nodes", "Sends MIDI events out."},
+        {"expression", "Expression Pedal", "I/O", "Nodes", "Reads expression pedal input."},
+        
+        {"gain", "Gain", "Utility", "Nodes", "Simple volume adjustment."},
+        {"mix", "Mix", "Utility", "Nodes", "Crossfades between two signals."},
+        {"split", "Split", "Utility", "Nodes", "Splits one signal into two."},
+
+        {"lowpass", "Low Pass", "Filters", "Effects", "Cuts high frequencies."},
+        {"highpass", "High Pass", "Filters", "Effects", "Cuts low frequencies."},
+        {"allpass", "All Pass", "Filters", "Effects", "Changes phase without affecting amplitude."},
+        {"tonestack", "Tone Stack", "Filters", "Effects", "Classic guitar amp 3-band EQ."},
+        {"peq", "Parametric EQ", "Filters", "Effects", "Precise multi-band equalization."},
+
+        {"softclip", "Soft Clip", "Drive", "Effects", "Smooth overdrive."},
+        {"hardclip", "Hard Clip", "Drive", "Effects", "Harsh distortion."},
+        {"fuzz", "Fuzz", "Drive", "Effects", "Classic transistor fuzz."},
+
+        {"lfo", "LFO", "Modulation", "Effects", "Low frequency oscillator for CV."},
+        {"phaser", "Phaser", "Modulation", "Effects", "Phase shifting effect."},
+        {"flanger", "Flanger", "Modulation", "Effects", "Classic flanging effect."},
+
+        {"delay", "Delay", "Delay", "Effects", "Standard digital delay."},
+        {"mod_delay", "Mod Delay", "Delay", "Effects", "Delay with modulated time."},
+
+        {"compressor", "Compressor", "Dynamics", "Effects", "Reduces dynamic range."},
+        {"noisegate", "Noise Gate", "Dynamics", "Effects", "Mutes signal below threshold."},
+
+        {"reverb", "Reverb", "Reverb", "Effects", "Algorithmic room/hall simulation."},
+        {"ir", "IR Convolution", "Reverb", "Effects", "Loads impulse responses."},
+        {"cabinet", "Cabinet Sim", "Guitar Utility", "Effects", "Speaker cabinet simulation."},
+
+        {"ram", "RAM / Delay Line", "Memory", "Nodes", "Raw memory buffer."},
+        {"sampler", "File Sampler", "Memory", "Nodes", "Plays back audio files."},
+
+        {"oscillator", "Oscillator", "Synth", "Nodes", "Standard waveform generator."},
+        {"noise", "Noise Gen", "Synth", "Nodes", "White/pink noise source."},
+        {"adsr", "ADSR Envelope", "Synth", "Nodes", "4-stage envelope generator."},
+        {"ar_env", "AR Envelope", "Synth", "Nodes", "2-stage attack/release envelope."},
+        {"svf", "State Variable Filter", "Synth", "Nodes", "Multi-mode resonant filter."},
+        {"ladder_filter", "Ladder Filter", "Synth", "Nodes", "Moog-style resonant lowpass."},
+        {"vca", "VCA", "Synth", "Nodes", "Voltage controlled amplifier."},
+
+        {"and_gate", "AND Gate", "Logic", "Nodes", "Outputs 1 if all inputs are 1."},
+        {"or_gate", "OR Gate", "Logic", "Nodes", "Outputs 1 if any input is 1."},
+        {"not_gate", "NOT Gate", "Logic", "Nodes", "Inverts a binary signal."},
+        {"comparator", "Comparator", "Logic", "Nodes", "Compares two signals."},
+        {"latch", "Latch", "Logic", "Nodes", "Holds a value on trigger."},
+        {"mux", "Mux", "Logic", "Nodes", "Selects between multiple inputs."},
+        {"constant", "Constant", "Logic", "Nodes", "Outputs a fixed value."},
+
+        {"add", "Add", "Math", "Nodes", "A + B"},
+        {"subtract", "Subtract", "Math", "Nodes", "A - B"},
+        {"multiply", "Multiply", "Math", "Nodes", "A * B"},
+        {"divide", "Divide", "Math", "Nodes", "A / B"},
+        {"modulo", "Modulo", "Math", "Nodes", "A % B"},
+        {"ranger", "Ranger", "Math", "Nodes", "Remaps a value from one range to another."},
+        {"smooth", "Smooth", "Math", "Nodes", "Slews a signal to prevent clicks."},
+        {"clamp", "Clamp", "Math", "Nodes", "Constrains a signal between min/max."},
+        {"abs", "Abs", "Math", "Nodes", "Absolute value."},
+
+        {"clock", "Clock", "Timing", "Nodes", "Generates steady trigger pulses."},
+        {"counter", "Counter", "Timing", "Nodes", "Counts trigger pulses."},
+        {"sequencer", "Sequencer", "Timing", "Nodes", "8-step CV sequencer."},
+        {"env_follower", "Env Follower", "Timing", "Nodes", "Tracks the amplitude of an audio signal."},
+        {"sample_hold", "Sample & Hold", "Timing", "Nodes", "Samples a value on trigger."},
+
+        {"midi_note", "MIDI Note Rx", "MIDI", "Nodes", "Receives MIDI notes as pitch/gate."},
+        {"midi_cc", "MIDI CC Rx", "MIDI", "Nodes", "Receives MIDI CC values."},
+        {"midi_note_gen", "MIDI Note Tx", "MIDI", "Nodes", "Generates MIDI notes from CV."},
+
+        {"ctrl_knob", "UI Knob", "UI Controls", "Nodes", "Exposes a knob on the pedal face."},
+        {"ctrl_switch", "UI Switch", "UI Controls", "Nodes", "Exposes a switch on the pedal face."},
+        {"ctrl_button", "UI Button", "UI Controls", "Nodes", "Exposes a momentary button."},
+        
+        {"led", "UI LED", "Displays", "Nodes", "A simple light on the pedal face."},
+        {"vu_meter", "UI VU Meter", "Displays", "Nodes", "Shows audio level on the pedal face."}
+    };
+
+    for (auto& n : nodes)
+    {
+        InventoryItem item;
+        item.id = n.type;
+        item.displayName = n.name;
+        item.category = n.category;
+        item.mainCategory = n.mainCategory;
+        item.description = n.desc;
+        item.isFactory = true;
+        // Hardware type can be re-used to store the node type for drag-and-drop
+        item.hardwareType = n.type;
+        allItems.push_back (std::move (item));
+    }
+
     // ── Build category tree (context-aware) ─────────────────────────
     juce::StringArray mainCats;
     std::map<juce::String, juce::StringArray> subCats;
@@ -523,6 +663,7 @@ void InventoryOverlay::buildItemDatabase()
             break;
         case Context::FX:
             mainCats.add ("Nodes");
+            mainCats.add ("Effects");
             break;
     }
 

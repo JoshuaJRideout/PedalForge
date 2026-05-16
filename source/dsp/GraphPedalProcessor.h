@@ -51,6 +51,9 @@ public:
     {
         paramBridge.clear();
 
+        bypassParam = new juce::AudioParameterBool ({"bypass", 1}, "Bypass", false);
+        addParameter (bypassParam);
+
         for (const auto& [nodeID, node] : dspGraph.getNodes())
         {
             // Skip I/O nodes — they have no user-facing params
@@ -105,7 +108,63 @@ public:
         for (auto& bridge : paramBridge)
             bridge.nodeParam->set (bridge.juceParam->get());
 
-        dspGraph.processBlock (buffer, buffer.getNumSamples(), &midi);
+        // Check the graph to see if it's Mono or Stereo
+        int maxInChannel = -1;
+        int maxOutChannel = -1;
+        for (const auto& [id, node] : dspGraph.getNodes())
+        {
+            if (node->getType() == "audio_input")
+            {
+                if (auto* param = node->getParam("channel"))
+                    maxInChannel = juce::jmax(maxInChannel, (int)param->get() - 1);
+            }
+            if (node->getType() == "audio_output")
+            {
+                if (auto* param = node->getParam("channel"))
+                    maxOutChannel = juce::jmax(maxOutChannel, (int)param->get() - 1);
+            }
+        }
+
+        int numChans = buffer.getNumChannels();
+
+        // If graph is Mono Input but we have Stereo (or more) data, mix to Mono L
+        if (maxInChannel == 0 && numChans > 1)
+        {
+            auto* writeL = buffer.getWritePointer(0);
+            for (int ch = 1; ch < numChans; ++ch)
+            {
+                auto* readR = buffer.getReadPointer(ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    writeL[i] += readR[i];
+            }
+            // Normalize gain
+            float gain = 1.0f / (float)numChans;
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                writeL[i] *= gain;
+        }
+
+        if (bypassParam != nullptr && bypassParam->get())
+        {
+            // If bypassed, do not run DSP graph, and output original input.
+            // Wait, since we mix Mono L above, the buffer has the input already.
+            // Just copy it to output channels if needed below.
+        }
+        else
+        {
+            dspGraph.processBlock (buffer, buffer.getNumSamples(), &midi);
+        }
+
+        // If graph is Mono Output but we are outputting to Stereo (or more), copy L to all
+        if (maxOutChannel == 0 && numChans > 1)
+        {
+            auto* readL = buffer.getReadPointer(0);
+            for (int ch = 1; ch < numChans; ++ch)
+            {
+                auto* writeCh = buffer.getWritePointer(ch);
+                if (readL != writeCh)
+                    std::copy(readL, readL + buffer.getNumSamples(), writeCh);
+            }
+        }
     }
 
     //==========================================================================
@@ -139,6 +198,8 @@ public:
 private:
     juce::String pedalName;
     DSPGraph dspGraph;
+
+    juce::AudioParameterBool* bypassParam = nullptr;
 
     /** Bridge between JUCE parameters and graph NodeParam atomics. */
     struct ParamBridge

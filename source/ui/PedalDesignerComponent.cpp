@@ -188,8 +188,7 @@ public:
         updateGridLabel();
     }
 
-    /** Callback: parent sets this to inject the effects graph into the PedalDesign. */
-    std::function<juce::var()> onGetEffectsGraph;
+    juce::var cachedEffectsGraph;
 
     juce::String pedalName = "My Pedal";
     juce::String pedalAuthor = "User";
@@ -257,9 +256,8 @@ public:
             }
         }
 
-        // Effects graph from the NodeGraphEditor
-        if (onGetEffectsGraph)
-            design.effectsGraph = onGetEffectsGraph();
+        // Preserve the effects graph that was loaded
+        design.effectsGraph = cachedEffectsGraph;
 
         return design;
     }
@@ -1447,11 +1445,20 @@ private:
 
 PedalDesignerComponent::~PedalDesignerComponent() = default;
 
-void PedalDesignerComponent::paint (juce::Graphics&) {}
+void PedalDesignerComponent::paint (juce::Graphics& g)
+{
+    // Tab Toolbar Background
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.fillRect (toolbarArea);
+    g.setColour (PedalForgeLookAndFeel::gridLine);
+    g.drawHorizontalLine (35, 0.0f, (float)getWidth());
+}
 
 void PedalDesignerComponent::resized()
 {
     auto area = getLocalBounds();
+    auto toolbar = area.removeFromTop (36);
     properties->setBounds (area.removeFromRight (250));
     canvas->setBounds (area);
 }
@@ -1461,10 +1468,6 @@ void PedalDesignerComponent::setEffectsGraph (DSPGraph* graph)
     effectsGraph = graph;
     if (properties)
         properties->effectsGraph = graph;
-    if (canvas)
-        canvas->onGetEffectsGraph = [graph]() -> juce::var {
-            return graph ? graph->toJSON() : juce::var();
-        };
 }
 
 void PedalDesignerComponent::loadDesign (const PedalDesign& design)
@@ -1480,6 +1483,7 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         canvas->pedalAuthor = design.author;
         canvas->pedalDescription = design.description;
         canvas->pedalCategory = design.category;
+        canvas->cachedEffectsGraph = design.effectsGraph;
 
         // Find matching preset index
         for (int i = 0; i < canvas->numChassisPresets; ++i)

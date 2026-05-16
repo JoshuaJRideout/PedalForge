@@ -45,6 +45,7 @@ namespace FactoryDesigns
         knob.controlID = "knob_1";
         d->controls.push_back(knob);
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_gain"}); // 2 is GainNode
         return d;
     }
@@ -76,8 +77,9 @@ namespace FactoryDesigns
         d->controls[3].label = "Tone";
         d->controls[4].label = "Vol";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
-        d->mappings.push_back({"knob_2", "4_tone"}); // ToneStackNode
+        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
         return d;
     }
@@ -109,8 +111,9 @@ namespace FactoryDesigns
         d->controls[3].label = "Tone";
         d->controls[4].label = "Vol";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
-        d->mappings.push_back({"knob_2", "4_tone"}); // ToneStackNode
+        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
         return d;
     }
@@ -140,8 +143,9 @@ namespace FactoryDesigns
         d->controls[3].label = "Tone";
         d->controls[4].label = "Vol";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_gain"}); // FuzzNode gain
-        d->mappings.push_back({"knob_2", "4_tone"}); // ToneStackNode
+        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
         return d;
     }
@@ -171,6 +175,7 @@ namespace FactoryDesigns
         d->controls[4].label = "Time";
         d->controls[5].label = "Mix";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "4_depth"}); // ModDelay depth
         d->mappings.push_back({"knob_3", "4_time"}); // ModDelay time
@@ -202,6 +207,7 @@ namespace FactoryDesigns
         d->controls[3].label = "Depth";
         d->controls[4].label = "Mix";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "4_depth"}); // PhaserNode depth
         d->mappings.push_back({"knob_3", "5_mix"}); // MixNode mix
@@ -233,6 +239,7 @@ namespace FactoryDesigns
         d->controls[4].label = "Fdbk";
         d->controls[5].label = "Mix";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "4_depth"}); // FlangerNode depth
         d->mappings.push_back({"knob_3", "4_feedback"}); // FlangerNode feedback
@@ -263,6 +270,7 @@ namespace FactoryDesigns
         d->controls[2].label = "Rate";
         d->controls[3].label = "Depth";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "2_depth"}); // LFONode depth
         return d;
@@ -292,6 +300,7 @@ namespace FactoryDesigns
         d->controls[3].label = "Fdbk";
         d->controls[4].label = "Mix";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_time"}); // DelayNode time
         d->mappings.push_back({"knob_2", "3_feedback"}); // DelayNode feedback
         d->mappings.push_back({"knob_3", "4_mix"}); // MixNode mix
@@ -321,6 +330,7 @@ namespace FactoryDesigns
         d->controls[2].label = "Size";
         d->controls[3].label = "Mix";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_size"}); // Reverb size
         d->mappings.push_back({"knob_2", "2_mix"}); // Reverb mix
         return d;
@@ -349,6 +359,7 @@ namespace FactoryDesigns
         d->controls[2].label = "Thresh";
         d->controls[3].label = "Ratio";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_threshold"}); 
         d->mappings.push_back({"knob_2", "2_ratio"}); 
         return d;
@@ -373,6 +384,7 @@ namespace FactoryDesigns
         knob.controlID = "knob_1";
         d->controls.push_back(knob);
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_threshold"}); 
         return d;
     }
@@ -408,6 +420,8 @@ namespace FactoryDesigns
                 d->mappings.push_back({knob.controlID, nodeID + "_" + paramID});
             }
         }
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
         return d;
     }
 
@@ -435,6 +449,7 @@ namespace FactoryDesigns
         d->controls[3].label = "Mid";
         d->controls[4].label = "Treble";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_bass"}); 
         d->mappings.push_back({"knob_2", "2_mid"}); 
         d->mappings.push_back({"knob_3", "2_treble"}); 
@@ -464,6 +479,7 @@ namespace FactoryDesigns
         d->controls[2].label = "Cutoff";
         d->controls[3].label = "Res";
 
+        d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_cutoff"}); 
         d->mappings.push_back({"knob_2", "2_resonance"}); 
         return d;

@@ -193,6 +193,7 @@ public:
     {
         int id = nextID++;
         node->setNodeID (id);
+        node->autoExposeParams();
         nodes[id] = std::move (node);
         sortDirty = true;
         return id;
@@ -279,7 +280,10 @@ public:
         maxBlock = maxBlockSize;
 
         for (auto& [id, node] : nodes)
+        {
+            node->autoExposeParams();
             node->prepare (sampleRate, maxBlockSize);
+        }
 
         // Allocate buffers
         int maxPorts = 0;
@@ -383,6 +387,9 @@ public:
             // Set MIDI buffer on node for MIDI-aware nodes
             node->setMidiBuffer (currentMidiBuffer);
 
+            // Apply block-rate CV modulation
+            node->applyControlInputs (inPtrs.data(), numInputs, 0);
+
             // Process!
             node->process (inPtrs.data(), numInputs, outPtrs.data(), numOutputs, numSamples);
 
@@ -463,6 +470,7 @@ public:
                         {
                             node->setNodeID (id);
                             node->fromJSON (nv);
+                            node->autoExposeParams();
                             nextID = juce::jmax (nextID, id + 1);
                             nodes[id] = std::move (node);
                         }

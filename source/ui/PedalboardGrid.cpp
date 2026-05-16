@@ -11,6 +11,9 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng)
     addAndMakeVisible (detailPanel);
     detailPanel.addListener (&detailListener);
 
+    addAndMakeVisible (btnInventory);
+    btnInventory.onClick = [this] { if (onOpenInventory) onOpenInventory(); };
+
     // Apply default board preset
     setBoardPreset (currentPresetIndex);
 
@@ -25,12 +28,20 @@ PedalboardGrid::~PedalboardGrid()
 void PedalboardGrid::paint (juce::Graphics& g)
 {
     // Fill entire background
-    int gridAreaWidth = detailPanel.hasSelection()
-                            ? getWidth() - detailPanelWidth
-                            : getWidth();
-    auto fullArea = juce::Rectangle<int> (0, 0, gridAreaWidth, getHeight());
+    auto fullArea = getLocalBounds();
+    fullArea.removeFromTop (36); // Skip toolbar area
+    if (detailPanel.hasSelection())
+        fullArea.removeFromRight (detailPanelWidth);
+    
     g.setColour (PedalForgeLookAndFeel::bgDark);
     g.fillRect (fullArea);
+
+    // Tab Toolbar Background
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.fillRect (toolbarArea);
+    g.setColour (PedalForgeLookAndFeel::gridLine);
+    g.drawHorizontalLine (35, 0.0f, (float)getWidth());
 
     // The fixed-size board rect (centred)
     auto boardRect = juce::Rectangle<int> (
@@ -177,6 +188,10 @@ void PedalboardGrid::resized()
 {
     // Detail panel on the right when a pedal is selected
     auto bounds = getLocalBounds();
+
+    // Tab-specific toolbar area
+    auto toolbar = bounds.removeFromTop (36);
+    btnInventory.setBounds (toolbar.removeFromLeft (140).reduced (8, 6));
 
     if (detailPanel.hasSelection())
     {
