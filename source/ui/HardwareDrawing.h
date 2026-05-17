@@ -13,6 +13,7 @@ struct CustomStyles
     bool stretchImage = true;
     juce::String fontFamily = "Sans";
     int fontStyle = 1;
+    float fontSize = 0.0f;
     float rotationRangeDeg = 270.0f;  // visual arc for knobs, in degrees
 };
 
@@ -63,7 +64,8 @@ inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float valu
     float ix2 = cx + std::sin (angle) * r * 0.3f;
     float iy2 = cy - std::cos (angle) * r * 0.3f;
     g.setColour (juce::Colours::white);
-    g.drawLine (ix2, iy2, ix, iy, 2.5f);
+    float lineW = juce::jmax (1.0f, r * 0.125f);
+    g.drawLine (ix2, iy2, ix, iy, lineW);
     // Highlight
     g.setColour (juce::Colour (0x15FFFFFF));
     g.fillEllipse (cx - r * 0.5f, cy - r * 0.7f, r, r * 0.5f);
@@ -93,8 +95,10 @@ inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float va
     // Bat lever
     float leverY = isOn ? (cy - r * 1.4f) : (cy + r * 1.4f);
     g.setColour (juce::Colour (0xFFB0B0C0));
-    g.drawLine (cx, cy, cx, leverY, 3.0f);
-    g.fillEllipse (cx - 3.0f, leverY - 3.0f, 6.0f, 6.0f);
+    float lineW = juce::jmax (1.0f, r * 0.15f);
+    g.drawLine (cx, cy, cx, leverY, lineW);
+    float batSize = juce::jmax (2.0f, r * 0.3f);
+    g.fillEllipse (cx - batSize * 0.5f, leverY - batSize * 0.5f, batSize, batSize);
 }
 
 inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value = 1.0f, const CustomStyles* custom = nullptr)
@@ -162,7 +166,8 @@ inline void drawFootswitch (juce::Graphics& g, juce::Rectangle<float> area, floa
     g.setColour (juce::Colours::whitesmoke);
     g.fillEllipse (cx - pr, cy - pr, pr * 2, pr * 2);
     g.setColour (juce::Colours::black.withAlpha(0.3f));
-    g.drawEllipse (cx - pr, cy - pr, pr * 2, pr * 2, 2.0f);
+    float lineW = juce::jmax (0.5f, r * 0.1f);
+    g.drawEllipse (cx - pr, cy - pr, pr * 2, pr * 2, lineW);
 }
 
 inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr)
@@ -179,16 +184,17 @@ inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float val
         auto b = area.reduced (area.getWidth() * 0.1f, area.getHeight() * 0.15f);
         // Track
         g.setColour (juce::Colour (0xFF2A2A3A));
-        g.fillRoundedRectangle (b, 3.0f);
+        g.fillRoundedRectangle (b, b.getHeight() * 0.2f);
         // Slot
-        float slotH = 3.0f;
+        float slotH = juce::jmax (1.0f, b.getHeight() * 0.1f);
         g.setColour (juce::Colour (0xFF0A0A14));
-        g.fillRoundedRectangle (b.getX() + 4, b.getCentreY() - slotH/2, b.getWidth() - 8, slotH, 1.5f);
+        g.fillRoundedRectangle (b.getX() + 4, b.getCentreY() - slotH/2, b.getWidth() - 8, slotH, slotH/2);
     }
 
     // Draw cap
     auto b = area.reduced (area.getWidth() * 0.1f, area.getHeight() * 0.15f);
-    float capW = 10.0f, capH = b.getHeight() * 0.5f;
+    float capW = juce::jmax (3.0f, b.getWidth() * 0.15f);
+    float capH = b.getHeight() * 0.5f;
     float travel = b.getWidth() - 8 - capW;
     float capX = b.getX() + 4 + travel * value;
     juce::Rectangle<float> capArea (capX, b.getCentreY() - capH/2, capW, capH);
@@ -207,7 +213,8 @@ inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float val
     }
 
     g.setColour (juce::Colour (0xFFCCCCDD));
-    g.fillRoundedRectangle (capArea, 3.0f);
+    float capCorner = juce::jmax(1.0f, capW * 0.2f);
+    g.fillRoundedRectangle (capArea, capCorner);
 }
 
 inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
@@ -225,14 +232,17 @@ inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
 
     // Body fill
     g.setColour (baseColour);
-    g.fillRoundedRectangle (area, 6.0f);
+    float corner = juce::jmax(2.0f, area.getWidth() * 0.05f);
+    g.fillRoundedRectangle (area, corner);
     // Edge bevel
     g.setColour (baseColour.darker (0.3f));
-    g.drawRoundedRectangle (area, 6.0f, 2.0f);
+    float borderW = juce::jmax(1.0f, corner * 0.3f);
+    g.drawRoundedRectangle (area, corner, borderW);
     // Brushed texture lines
     g.setColour (juce::Colour (0x08FFFFFF));
-    for (float yy = area.getY() + 3; yy < area.getBottom() - 3; yy += 4.0f)
-        g.drawHorizontalLine ((int) yy, area.getX() + 4, area.getRight() - 4);
+    float step = juce::jmax(2.0f, area.getHeight() * 0.02f);
+    for (float yy = area.getY() + step; yy < area.getBottom() - step; yy += step)
+        g.drawHorizontalLine ((int) yy, area.getX() + step, area.getRight() - step);
 
 }
 
@@ -253,10 +263,12 @@ inline bool drawFrameOrDefault (juce::Graphics& g, juce::Rectangle<float> area,
         juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
         if (!img.isNull()) { drawImageScaled (g, img, area, custom->stretchImage); return true; }
     }
+    float corner = juce::jmax(1.0f, area.getWidth() * 0.05f);
     g.setColour (defaultBg);
-    g.fillRoundedRectangle (area, 3.0f);
+    g.fillRoundedRectangle (area, corner);
     g.setColour (defaultBorder);
-    g.drawRoundedRectangle (area, 3.0f, 1.0f);
+    float borderW = juce::jmax(1.0f, corner * 0.3f);
+    g.drawRoundedRectangle (area, corner, borderW);
     return false;
 }
 
@@ -274,7 +286,7 @@ inline void drawSevenSegDigit (juce::Graphics& g, juce::Rectangle<float> area,
 
     float x = area.getX(), y = area.getY();
     float w = area.getWidth(), h = area.getHeight();
-    float t = juce::jmax (1.5f, w * 0.12f); // segment thickness
+    float t = juce::jmax (0.5f, w * 0.12f); // segment thickness
     float m = t * 0.3f; // margin
 
     juce::Colour off = segColour.withAlpha (0.08f);
@@ -331,7 +343,7 @@ inline void drawNumericDisplay (juce::Graphics& g, juce::Rectangle<float> area, 
                                 const CustomStyles* custom = nullptr)
 {
     drawFrameOrDefault (g, area, custom, juce::Colour (0xFF1A2A1A), juce::Colour (0xFF3A4A3A));
-    float fontSize = juce::jmax (8.0f, area.getHeight() * 0.55f);
+    float fontSize = area.getHeight() * 0.55f;
     juce::Colour textCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF33FF66);
     g.setColour (textCol);
     g.setFont (juce::FontOptions (fontSize).withStyle ("Bold"));
@@ -499,7 +511,8 @@ inline void drawTextScreen (juce::Graphics& g, juce::Rectangle<float> area,
     auto inner = area.reduced (4.0f);
     int numLines = juce::jmax (1, lines.size());
     float lineH = inner.getHeight() / (float) numLines;
-    float fontSize = juce::jmax (7.0f, lineH * 0.8f);
+    float fontSize = lineH * 0.8f;
+    if (custom && custom->fontSize > 0) fontSize = custom->fontSize;
     juce::Colour textCol = (custom && custom->customColour != juce::Colours::red) ? custom->customColour : juce::Colour (0xFF88BBFF);
     for (int i = 0; i < lines.size(); ++i)
     {
@@ -568,7 +581,7 @@ inline void drawTextLabel (juce::Graphics& g, juce::Rectangle<float> area, const
     }
 
     // Determine size, using area height
-    float fontSize = juce::jmax (8.0f, area.getHeight());
+    float fontSize = area.getHeight();
     juce::Font font (fontName, fontSize, styleFlags);
     g.setFont (font);
 

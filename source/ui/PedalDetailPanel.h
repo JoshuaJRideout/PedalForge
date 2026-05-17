@@ -22,6 +22,7 @@ public:
     public:
         virtual ~Listener() = default;
         virtual void pedalRemoved (juce::AudioProcessorGraph::NodeID nodeId) = 0;
+        virtual void pedalValuesChanged (juce::AudioProcessorGraph::NodeID nodeId) {}
     };
 
     PedalDetailPanel();
@@ -32,6 +33,8 @@ public:
 
     void sliderValueChanged (juce::Slider* slider) override;
     void buttonClicked (juce::Button* button) override;
+
+    juce::Rectangle<float> getPedalRect() const;
 
     /** Show the detail panel for a specific pedal. */
     void showPedal (PedalInstance& instance, AudioGraphEngine& engine);
@@ -46,7 +49,10 @@ public:
     void removeListener (Listener* l) { listeners.remove (l); }
 
     /** Called when a library_loader control is clicked in the detail panel. */
-    std::function<void (const juce::String& category, int targetNodeID)> onOpenLibrary;
+    std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
+
+    /** Called when an overlay_launcher control is clicked on the pedal chassis. */
+    std::function<void (PedalInstance* instance, const juce::String& controlID)> onOpenOverlay;
 
 private:
     struct KnobEntry

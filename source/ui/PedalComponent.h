@@ -23,6 +23,9 @@ public:
     
     bool isDraggingKnob() const { return draggedKnobID.isNotEmpty(); }
 
+
+
+    juce::Rectangle<float> getRenderBounds() const;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp   (const juce::MouseEvent& e) override;
@@ -40,7 +43,10 @@ public:
 
     /** Called when user clicks a library_loader control.
         Parameters: category ID (e.g. "NAM"), target DSP node ID within the pedal. */
-    std::function<void (const juce::String& category, int targetNodeID)> onOpenLibrary;
+    std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
+
+    /** Called when user clicks an overlay_launcher control. */
+    std::function<void (const juce::String& pageName)> onOpenOverlay;
 
 private:
     PedalInstance& instance;

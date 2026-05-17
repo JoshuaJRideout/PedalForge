@@ -13,9 +13,22 @@ PedalComponent::PedalComponent (PedalInstance& inst, AudioGraphEngine& eng, Midi
 }
 
 //==============================================================================
-void PedalComponent::paint (juce::Graphics& g)
+juce::Rectangle<float> PedalComponent::getRenderBounds() const
 {
     auto bounds = getLocalBounds().toFloat();
+    if (instance.design != nullptr)
+    {
+        float cw = instance.design->chassisW;
+        float ch = instance.design->chassisH;
+        return juce::Rectangle<float> (cw, ch).withCentre (bounds.getCentre());
+    }
+    return bounds;
+}
+
+//==============================================================================
+void PedalComponent::paint (juce::Graphics& g)
+{
+    auto bounds = getRenderBounds();
 
     // ── Drag tint ──
     float alpha = 1.0f;
@@ -52,7 +65,7 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
     // 1. Check if we clicked on a control
     if (instance.design != nullptr)
     {
-        auto bounds = getLocalBounds().toFloat();
+        auto bounds = getRenderBounds();
         float margin = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.04f;
         auto body = bounds.reduced (margin);
         float scaleX = body.getWidth() / instance.design->chassisW;
@@ -201,11 +214,29 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                         if (mappedParamID.isNotEmpty())
                             targetNodeID = mappedParamID.upToFirstOccurrenceOf("_", false, false).getIntValue();
 
-                        // Determine library category from context
-                        juce::String category = "NAM"; // Default; could be derived from node type
+                        juce::String category = ctrl.libraryCategory.isNotEmpty() ? ctrl.libraryCategory : "NAM";
                         if (onOpenLibrary)
-                            onOpenLibrary (category, targetNodeID);
+                        {
+                            auto safeEngineRef = &engine;
+                            auto safeNodeID = instance.nodeID;
+                            onOpenLibrary (category, [safeEngineRef, safeNodeID, targetNodeID](const juce::File& file) {
+                                if (auto* node = safeEngineRef->getGraph().getNodeForId (safeNodeID))
+                                {
+                                    if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
+                                        graphProc->setNodeFilePath (targetNodeID, file.getFullPathName());
+                                }
+                            });
+                        }
 
+                        dragging = false;
+                        return;
+                    }
+                    else if (ctrl.type == "overlay_launcher")
+                    {
+                        if (onOpenOverlay)
+                        {
+                            onOpenOverlay (ctrl.overlayPage);
+                        }
                         dragging = false;
                         return;
                     }

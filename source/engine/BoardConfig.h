@@ -11,7 +11,14 @@ struct BoardConfig
     int activePage = 0;
     int displayIndex = -1; // -1 = main window, >= 0 external monitors
     
-    // Canvas position (in pixels or cells)
+    // Virtual ID for routing connections
+    uint32_t engineNodeId = 0;
+    
+    // Position on the Routing Canvas (for routing hardware MIDI to the board)
+    float routeX = 100.0f;
+    float routeY = 100.0f;
+    
+    // Canvas position (in pixels or cells) for its own internal grid view
     int canvasX = 0;
     int canvasY = 0;
     

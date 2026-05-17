@@ -1,13 +1,15 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_dsp/juce_dsp.h>
 #include "engine/AudioGraphEngine.h"
 #include "preset/PresetManager.h"
 #include "midi/MidiLearn.h"
 
 //==============================================================================
-class PedalForgeProcessor : public juce::AudioProcessor
+class PedalForgeProcessor : public juce::AudioProcessor,
+                             public juce::MidiInputCallback
 {
 public:
     PedalForgeProcessor();
@@ -60,5 +62,25 @@ public:
 
     bool isPlayModeActive = false;
 
+    //==========================================================================
+    // Hardware MIDI I/O — opened when the user enables devices in the Routing Tab
+    std::vector<std::unique_ptr<juce::MidiInput>>  openMidiInputs;
+    std::vector<std::unique_ptr<juce::MidiOutput>> openMidiOutputs;
+    juce::MidiBuffer    hardwareMidiInBuffer;  // filled by callback thread
+    juce::CriticalSection midiInputLock;
+    juce::CriticalSection midiOutputLock;
+
+    /** Called on the MIDI callback thread by each open MidiInput device. */
+    void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& msg) override
+    {
+        if (source != nullptr)
+        {
+            graphEngine.injectHardwareMidi (source->getName(), msg);
+            playGraphEngine.injectHardwareMidi (source->getName(), msg);
+        }
+    }
+
+    /** Opens/closes hardware MIDI devices based on what the engine has enabled. */
+    void refreshHardwareMidiConnections();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalForgeProcessor)
 };

@@ -2038,5 +2038,6 @@ private:
 #include "MathNodeLibrary.h"
 #include "LogicNodeLibrary.h"
 #include "MidiNodeLibrary.h"
+#include "GridSequencerNode.h"
 #include "ControlNodeLibrary.h"
 #include "PeripheralNodeLibrary.h"

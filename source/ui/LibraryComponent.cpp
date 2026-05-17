@@ -2,28 +2,70 @@
 #include "LookAndFeel.h"
 
 //==============================================================================
+class CategoryTreeItem : public juce::TreeViewItem
+{
+public:
+    CategoryTreeItem(const juce::String& name, const juce::String& id, LibraryComponent& lib, bool isHeader = false)
+        : displayName(name), categoryID(id), library(lib), header(isHeader) {}
+
+    bool mightContainSubItems() override { return getNumSubItems() > 0; }
+    int getItemHeight() const override { return 36; }
+    void paintItem(juce::Graphics& g, int width, int height) override
+    {
+        if (isSelected() && !header)
+        {
+            g.fillAll(PedalForgeLookAndFeel::bgMid);
+            g.setColour(PedalForgeLookAndFeel::accent);
+            g.fillRect(0, 0, 4, height);
+        }
+
+        g.setColour(isSelected() && !header ? juce::Colours::white : juce::Colour(0xffaaaaaa));
+        g.setFont(header ? juce::FontOptions(13.0f).withStyle("Bold") : juce::FontOptions(16.0f));
+        g.drawText(displayName, header ? 0 : 5, 0, width - (header ? 0 : 5), height, juce::Justification::centredLeft, true);
+    }
+    void itemSelectionChanged(bool isNowSelected) override
+    {
+        if (isNowSelected && !header)
+        {
+            library.setCategory(displayName, categoryID);
+        }
+    }
+    bool canBeSelected() const override { return !header; }
+    juce::String getUniqueName() const override { return displayName; }
+
+    juce::String displayName;
+    juce::String categoryID;
+    LibraryComponent& library;
+    bool header;
+};
+
+//==============================================================================
 LibraryComponent::LibraryComponent()
 {
-    addAndMakeVisible (categoryList);
-    categoryList.setModel (this);
-    categoryList.setRowHeight (40);
-    categoryList.setColour (juce::ListBox::backgroundColourId, PedalForgeLookAndFeel::bgDark);
+    addAndMakeVisible (categoryTree);
+    categoryTree.setColour(juce::TreeView::backgroundColourId, PedalForgeLookAndFeel::bgDark);
+    categoryTree.setDefaultOpenness(true);
 
+    auto* root = new CategoryTreeItem("Root", "", *this, true);
+    categoryTree.setRootItem(root);
+    categoryTree.setRootItemVisible(false);
+
+    root->addSubItem(new CategoryTreeItem("Pedals", "Pedals", *this));
+    root->addSubItem(new CategoryTreeItem("NAM Models", "NAM", *this));
+
+    auto* irNode = new CategoryTreeItem("IMPULSE RESPONSES", "", *this, true);
+    irNode->addSubItem(new CategoryTreeItem("Cabinets", "IR_CAB", *this));
+    irNode->addSubItem(new CategoryTreeItem("Reverbs", "IR_REV", *this));
+    irNode->addSubItem(new CategoryTreeItem("Mics", "IR_MIC", *this));
+    irNode->addSubItem(new CategoryTreeItem("Instruments", "IR_INST", *this));
+    root->addSubItem(irNode);
+
+    root->addSubItem(new CategoryTreeItem("Presets", "Presets", *this));
     addAndMakeVisible (searchBox);
     searchBox.setTextToShowWhenEmpty ("Search library...", juce::Colours::grey);
     searchBox.setColour (juce::TextEditor::backgroundColourId, PedalForgeLookAndFeel::bgMid);
     searchBox.setColour (juce::TextEditor::outlineColourId, PedalForgeLookAndFeel::gridLine);
     searchBox.onTextChange = [this] { applyFilter(); };
-
-    addChildComponent(irSubcategoryMenu);
-    irSubcategoryMenu.addItem("Cabinets", 1);
-    irSubcategoryMenu.addItem("Reverbs", 2);
-    irSubcategoryMenu.addItem("Mics", 3);
-    irSubcategoryMenu.addItem("Instruments", 4);
-    irSubcategoryMenu.setSelectedId(1, juce::dontSendNotification);
-    irSubcategoryMenu.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgMid);
-    irSubcategoryMenu.setColour (juce::ComboBox::outlineColourId, PedalForgeLookAndFeel::gridLine);
-    irSubcategoryMenu.onChange = [this] { refreshAssets(); };
 
     addAndMakeVisible (importBtn);
     importBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
@@ -53,7 +95,8 @@ LibraryComponent::LibraryComponent()
     gridViewport.setScrollBarsShown (true, false);
     addAndMakeVisible (gridViewport);
 
-    categoryList.selectRow (0);
+    if (auto* first = root->getSubItem(0))
+        first->setSelected(true, true);
 }
 
 //==============================================================================
@@ -61,27 +104,33 @@ void LibraryComponent::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgDark);
 
-    // Sidebar separator
-    g.setColour (PedalForgeLookAndFeel::gridLine);
-    g.drawVerticalLine (200, 0.0f, (float) getHeight());
+    if (sidebarVisible)
+    {
+        // Sidebar separator
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawVerticalLine (200, 0.0f, (float) getHeight());
+
+        // Sidebar header
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (16.0f).withStyle ("Bold"));
+        g.drawText ("Library", 0, 10, 200, 30, juce::Justification::centred);
+    }
 
     // Top bar separator
-    g.drawHorizontalLine (60, 201.0f, (float) getWidth());
-
-    // Sidebar header
-    g.setColour (PedalForgeLookAndFeel::textPrimary);
-    g.setFont (juce::FontOptions (16.0f).withStyle ("Bold"));
-    g.drawText ("Library", 0, 10, 200, 30, juce::Justification::centred);
+    g.drawHorizontalLine (60, sidebarVisible ? 201.0f : 0.0f, (float) getWidth());
 }
 
 void LibraryComponent::resized()
 {
     auto bounds = getLocalBounds();
 
-    // Sidebar
-    auto sidebar = bounds.removeFromLeft (200);
-    sidebar.removeFromTop (50); // header space
-    categoryList.setBounds (sidebar);
+    if (sidebarVisible)
+    {
+        // Sidebar
+        auto sidebar = bounds.removeFromLeft (200);
+        sidebar.removeFromTop (50); // header space
+        categoryTree.setBounds (sidebar);
+    }
 
     // Main Content
     auto topBar = bounds.removeFromTop (60);
@@ -89,7 +138,6 @@ void LibraryComponent::resized()
 
     searchBox.setBounds (topBar.removeFromLeft (300));
     topBar.removeFromLeft (20);
-    irSubcategoryMenu.setBounds(topBar.removeFromLeft (150));
     importBtn.setBounds (topBar.removeFromRight (100));
 
     auto gridBounds = bounds.reduced (12);
@@ -97,44 +145,9 @@ void LibraryComponent::resized()
     assetGrid.updateSize (gridBounds.getWidth());
 }
 
-//==============================================================================
-int LibraryComponent::getNumRows()
-{
-    return categories.size();
-}
 
-void LibraryComponent::paintListBoxItem (int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected)
-{
-    if (! juce::isPositiveAndBelow (rowNumber, categories.size()))
-        return;
-
-    if (rowIsSelected)
-    {
-        g.fillAll (PedalForgeLookAndFeel::bgMid);
-        g.setColour (PedalForgeLookAndFeel::accent);
-        g.fillRect (0, 0, 4, height);
-    }
-
-    g.setColour (rowIsSelected ? juce::Colours::white : juce::Colour (0xffaaaaaa));
-    g.setFont (16.0f);
-    g.drawText (categories[rowNumber], 20, 0, width - 20, height, juce::Justification::centredLeft, true);
-}
-
-void LibraryComponent::selectedRowsChanged (int lastRowSelected)
-{
-    if (juce::isPositiveAndBelow (lastRowSelected, categories.size()))
-    {
-        currentCategoryDisplay = categories[lastRowSelected];
-        irSubcategoryMenu.setVisible(currentCategoryDisplay == "Impulse Responses");
-        currentCategoryID = getCategoryID (currentCategoryDisplay);
-        refreshAssets();
-    }
-}
-
-//==============================================================================
 void LibraryComponent::refreshAssets()
 {
-    currentCategoryID = getCategoryID (currentCategoryDisplay);
 
     if (currentCategoryID == "Pedals")
     {
@@ -173,13 +186,26 @@ void LibraryComponent::applyFilter()
 
 void LibraryComponent::selectCategory (const juce::String& category)
 {
-    for (int i = 0; i < categories.size(); ++i)
+    if (auto* root = categoryTree.getRootItem())
     {
-        if (getCategoryID (categories[i]) == category)
+        std::function<bool(juce::TreeViewItem*)> search = [&](juce::TreeViewItem* item) -> bool
         {
-            categoryList.selectRow (i);
-            return;
-        }
+            if (auto* catItem = dynamic_cast<CategoryTreeItem*>(item))
+            {
+                if (catItem->categoryID == category)
+                {
+                    catItem->setSelected(true, true);
+                    return true;
+                }
+            }
+            for (int i = 0; i < item->getNumSubItems(); ++i)
+            {
+                if (search(item->getSubItem(i)))
+                    return true;
+            }
+            return false;
+        };
+        search(root);
     }
 }
 
@@ -217,7 +243,7 @@ void LibraryComponent::AssetGrid::paint (juce::Graphics& g)
         int y = padding + row * (itemH + padding);
 
         auto itemBounds = juce::Rectangle<int> (x, y, itemW, itemH);
-        bool isSelected = (i == selectedIndex);
+        bool isSelected = selectedIndices.count(i) > 0;
 
         // Card background
         g.setColour (isSelected ? juce::Colour (0xff2a2a4a) : juce::Colour (0xff1e1e2e));
@@ -274,28 +300,45 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
 
         if (e.mods.isRightButtonDown())
         {
-            selectedIndex = idx;
-            repaint();
+            if (selectedIndices.count(idx) == 0)
+            {
+                selectedIndices.clear();
+                selectedIndices.insert(idx);
+                repaint();
+            }
 
             // Right-click context menu
             juce::PopupMenu menu;
-            menu.addItem (1, "Load");
-            menu.addItem (2, "Show in Finder");
-            menu.addSeparator();
-            menu.addItem (3, "Remove from Library");
+            if (selectedIndices.size() == 1)
+            {
+                menu.addItem (1, "Load");
+                menu.addItem (2, "Show in Finder");
+                menu.addSeparator();
+            }
+            menu.addItem (3, selectedIndices.size() > 1 ? "Remove Selected from Library" : "Remove from Library");
 
             juce::Component::SafePointer<LibraryComponent> sp (&parent);
-            auto fileCopy = asset.file;
-            menu.showMenuAsync (juce::PopupMenu::Options(), [sp, fileCopy] (int result)
+            
+            std::vector<juce::File> filesToDelete;
+            for (int si : selectedIndices)
+            {
+                if (si >= 0 && si < parent.filteredAssets.size())
+                    filesToDelete.push_back(parent.filteredAssets[si].file);
+            }
+            auto fileToLoad = asset.file;
+            
+            menu.showMenuAsync (juce::PopupMenu::Options(), [sp, fileToLoad, filesToDelete] (int result)
             {
                 if (sp == nullptr) return;
                 if (result == 1 && sp->onAssetSelected)
-                    sp->onAssetSelected (fileCopy);
+                    sp->onAssetSelected (fileToLoad);
                 else if (result == 2)
-                    fileCopy.revealToUser();
+                    fileToLoad.revealToUser();
                 else if (result == 3)
                 {
-                    fileCopy.deleteFile();
+                    for (auto& f : filesToDelete)
+                        f.deleteFile();
+                    sp->assetGrid.selectedIndices.clear();
                     sp->refreshAssets();
                 }
             });
@@ -309,14 +352,34 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
         else
         {
             // Single-click: select
-            selectedIndex = idx;
+            if (e.mods.isShiftDown() && !selectedIndices.empty())
+            {
+                int first = *selectedIndices.begin(); // Simple approach: from first selected to this
+                int startIdx = juce::jmin(first, idx);
+                int endIdx = juce::jmax(first, idx);
+                selectedIndices.clear();
+                for (int i = startIdx; i <= endIdx; ++i)
+                    selectedIndices.insert(i);
+            }
+            else if (e.mods.isCommandDown() || e.mods.isCtrlDown())
+            {
+                if (selectedIndices.count(idx) > 0)
+                    selectedIndices.erase(idx);
+                else
+                    selectedIndices.insert(idx);
+            }
+            else
+            {
+                selectedIndices.clear();
+                selectedIndices.insert(idx);
+            }
             repaint();
         }
     }
     else
     {
         // Clicked empty space — deselect
-        selectedIndex = -1;
+        selectedIndices.clear();
         repaint();
     }
 }
@@ -325,22 +388,31 @@ bool LibraryComponent::AssetGrid::keyPressed (const juce::KeyPress& key)
 {
     if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey)
     {
-        if (selectedIndex >= 0 && selectedIndex < (int) parent.filteredAssets.size())
+        if (!selectedIndices.empty())
         {
-            auto& asset = parent.filteredAssets[(size_t) selectedIndex];
-            asset.file.deleteFile();
-            selectedIndex = -1;
+            for (int si : selectedIndices)
+            {
+                if (si >= 0 && si < (int)parent.filteredAssets.size())
+                {
+                    parent.filteredAssets[(size_t)si].file.deleteFile();
+                }
+            }
+            selectedIndices.clear();
             parent.refreshAssets();
             return true;
         }
     }
     else if (key == juce::KeyPress::returnKey)
     {
-        if (selectedIndex >= 0 && selectedIndex < (int) parent.filteredAssets.size())
+        if (selectedIndices.size() == 1)
         {
-            if (parent.onAssetSelected)
-                parent.onAssetSelected (parent.filteredAssets[(size_t) selectedIndex].file);
-            return true;
+            int si = *selectedIndices.begin();
+            if (si >= 0 && si < (int)parent.filteredAssets.size())
+            {
+                if (parent.onAssetSelected)
+                    parent.onAssetSelected (parent.filteredAssets[(size_t)si].file);
+                return true;
+            }
         }
     }
     return false;

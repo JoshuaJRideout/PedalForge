@@ -226,6 +226,25 @@ private:
  */
 namespace GraphPedalFactory
 {
+    // ─── MIDI & CV ───────────────────────────────────────────────────────────────
+
+    inline std::unique_ptr<GraphPedalProcessor> createStepSequencer()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Step Sequencer");
+        auto& g = proc->getDSPGraph();
+        
+        // Audio just passes through transparently
+        int inID  = g.addNode (std::make_unique<AudioInputNode>());
+        int outID = g.addNode (std::make_unique<AudioOutputNode>());
+        g.connect (inID, 0, outID, 0);
+        
+        // Add the Grid Sequencer node
+        g.addNode (std::make_unique<GridSequencerNode>());
+        
+        proc->rebuildParameters();
+        return proc;
+    }
+
     // ─── DRIVE ───────────────────────────────────────────────────────────────────
 
     /** 1. Clean Boost: Input → Gain → Output */

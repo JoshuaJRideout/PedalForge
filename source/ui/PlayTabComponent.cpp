@@ -28,6 +28,8 @@ public:
 
         pedalComponent->addMouseListener (this, true); // Catch drags from pedal
     }
+
+    PedalComponent* getPedalComponent() const { return pedalComponent.get(); }
     
     void resized() override
     {
@@ -295,6 +297,129 @@ void PlayTabComponent::timerCallback()
         rebuildSlots();
         lastPedalCount = currentCount;
     }
+
+    bool needsRepaint = false;
+    for (auto& s : slots)
+    {
+        if (s->wrapper != nullptr)
+        {
+            if (auto* pedalComp = s->wrapper->getPedalComponent())
+            {
+                auto& instance = pedalComp->getInstance();
+                if (instance.design != nullptr)
+                {
+                    auto* node = playEngine.getGraph().getNodeForId (instance.nodeID);
+                    if (node != nullptr)
+                    {
+                        if (auto* proc = node->getProcessor())
+                        {
+                            auto params = proc->getParameters();
+                            for (const auto& mapping : instance.design->mappings)
+                            {
+                                if (mapping.nodeParam.endsWith("_filepath"))
+                                {
+                                    int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
+                                    if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
+                                    {
+                                        if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
+                                        {
+                                            juce::String path = targetNode->getFilePath();
+                                            juce::String text = "Empty";
+                                            if (path.isNotEmpty())
+                                                text = juce::File(path).getFileNameWithoutExtension();
+                                                
+                                            juce::String baseControlID = mapping.controlID;
+                                            int lineIndex = -1;
+                                            if (baseControlID.containsChar(':'))
+                                            {
+                                                lineIndex = baseControlID.fromLastOccurrenceOf(":", false, false).getIntValue();
+                                                baseControlID = baseControlID.upToFirstOccurrenceOf(":", false, false);
+                                            }
+
+                                            if (lineIndex >= 0)
+                                            {
+                                                juce::StringArray lines;
+                                                lines.addLines (instance.controlTexts[baseControlID]);
+                                                while (lines.size() <= lineIndex) lines.add ("");
+                                                if (lines[lineIndex] != text)
+                                                {
+                                                    lines.set (lineIndex, text);
+                                                    instance.controlTexts[baseControlID] = lines.joinIntoString ("\n");
+                                                    needsRepaint = true;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                if (instance.controlTexts[baseControlID] != text)
+                                                {
+                                                    instance.controlTexts[baseControlID] = text;
+                                                    needsRepaint = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    for (auto* p : params)
+                                    {
+                                        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                                        {
+                                            if (ranged->getParameterID() == mapping.nodeParam)
+                                            {
+                                                float val = ranged->convertFrom0to1 (ranged->getValue());
+                                                juce::String text = ranged->getText (ranged->getValue(), 32);
+
+                                                juce::String baseControlID = mapping.controlID;
+                                                int lineIndex = -1;
+                                                if (baseControlID.containsChar(':'))
+                                                {
+                                                    lineIndex = baseControlID.fromLastOccurrenceOf(":", false, false).getIntValue();
+                                                    baseControlID = baseControlID.upToFirstOccurrenceOf(":", false, false);
+                                                }
+
+                                                bool textChanged = false;
+                                                if (lineIndex >= 0)
+                                                {
+                                                    juce::StringArray lines;
+                                                    lines.addLines (instance.controlTexts[baseControlID]);
+                                                    while (lines.size() <= lineIndex) lines.add ("");
+                                                    if (lines[lineIndex] != text)
+                                                    {
+                                                        lines.set (lineIndex, text);
+                                                        instance.controlTexts[baseControlID] = lines.joinIntoString ("\n");
+                                                        textChanged = true;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    if (instance.controlTexts[baseControlID] != text)
+                                                    {
+                                                        instance.controlTexts[baseControlID] = text;
+                                                        textChanged = true;
+                                                    }
+                                                }
+
+                                                if (instance.controlValues[baseControlID] != val || textChanged)
+                                                {
+                                                    instance.controlValues[baseControlID] = val;
+                                                    needsRepaint = true;
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (needsRepaint)
+        repaint();
 }
 
 void PlayTabComponent::rebuildSlots()
@@ -316,6 +441,15 @@ void PlayTabComponent::rebuildSlots()
             {
                 s->pedalId = inst.nodeID;
                 auto comp = std::make_unique<PedalComponent> (const_cast<PedalInstance&>(inst), playEngine, playMidiLearn);
+                if (onOpenLibrary)
+                    comp->onOpenLibrary = onOpenLibrary;
+                if (onOpenOverlay)
+                {
+                    comp->onOpenOverlay = [this, compPtr = comp.get()](const juce::String& pageName) {
+                        if (onOpenOverlay)
+                            onOpenOverlay(&compPtr->getInstance(), pageName);
+                    };
+                }
                 s->wrapper->setPedal (std::move (comp), inst.name);
                 break;
             }
@@ -326,6 +460,40 @@ void PlayTabComponent::rebuildSlots()
     
     rebuildRouting();
     resized();
+}
+
+void PlayTabComponent::setOnOpenLibrary(std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> cb)
+{
+    onOpenLibrary = cb;
+    for (auto& s : slots)
+    {
+        if (s->wrapper != nullptr)
+        {
+            if (auto* pc = s->wrapper->getPedalComponent())
+            {
+                pc->onOpenLibrary = cb;
+            }
+        }
+    }
+}
+
+void PlayTabComponent::setOnOpenOverlay(std::function<void (PedalInstance* instance, const juce::String& pageName)> cb)
+{
+    onOpenOverlay = cb;
+    for (auto& s : slots)
+    {
+        if (s->wrapper != nullptr)
+        {
+            if (auto* pc = s->wrapper->getPedalComponent())
+            {
+                pc->onOpenOverlay = [cb, s=s.get()](const juce::String& pageName) {
+                    if (cb && s->wrapper && s->wrapper->getPedalComponent()) {
+                        cb(&s->wrapper->getPedalComponent()->getInstance(), pageName);
+                    }
+                };
+            }
+        }
+    }
 }
 
 void PlayTabComponent::rebuildRouting()

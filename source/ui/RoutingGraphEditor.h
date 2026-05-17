@@ -44,7 +44,8 @@ private:
         juce::String name;
         PortType type;
         bool isOutput;
-        int engineChannel = 0;  // maps to the AudioProcessorGraph channel index
+        int engineChannel = 0;      // maps to the AudioProcessorGraph channel index (audio only)
+        juce::String routingPortId; // for MIDI/Expression ports — matches PedalDesign::RoutingPort::id
     };
 
     //==========================================================================
@@ -55,9 +56,12 @@ private:
         AudioGraphEngine::NodeID engineNodeId {};
         juce::String name;
         float x = 0, y = 0;
-        float width = 160, height = 80;
+        float width = 180, height = 80;
         bool selected = false;
-        bool isIONode = false;  // true for Audio In/Out, MIDI In/Out
+        bool isIONode = false;    // true for Audio In/Out, MIDI In/Out
+        bool isHwMidi = false;    // true for physical hardware MIDI device nodes
+        juce::String hwMidiName;  // the system device name
+        bool hwMidiIsInput = true;
 
         std::vector<RoutingPort> inputs;
         std::vector<RoutingPort> outputs;

@@ -22,6 +22,38 @@ PedalDetailPanel::~PedalDetailPanel()
 }
 
 //==============================================================================
+juce::Rectangle<float> PedalDetailPanel::getPedalRect() const
+{
+    auto bounds = getLocalBounds();
+    auto pedalArea = bounds.reduced (12, 0);
+
+    // Reserve bottom for buttons
+    pedalArea.removeFromBottom (80);
+    // Reserve top for close button and title
+    pedalArea.removeFromTop (40);
+
+    float desiredRatio = 0.55f;
+    float availW = (float) pedalArea.getWidth();
+    float availH = (float) pedalArea.getHeight();
+
+    float pedalW, pedalH;
+    if (availW / availH > desiredRatio)
+    {
+        pedalH = availH;
+        pedalW = pedalH * desiredRatio;
+    }
+    else
+    {
+        pedalW = availW;
+        pedalH = pedalW / desiredRatio;
+    }
+
+    return juce::Rectangle<float> (
+        pedalArea.getCentreX() - pedalW * 0.5f,
+        pedalArea.getY() + (availH - pedalH) * 0.5f,
+        pedalW, pedalH);
+}
+
 void PedalDetailPanel::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgMid);
@@ -42,37 +74,7 @@ void PedalDetailPanel::paint (juce::Graphics& g)
     //==========================================================================
     // Draw the pedal visual (large version, same as grid/palette)
     //==========================================================================
-    auto bounds = getLocalBounds();
-    auto pedalArea = bounds.reduced (12, 0);
-
-    // Reserve bottom for buttons
-    pedalArea.removeFromBottom (80);
-    // Reserve top for close button and title
-    pedalArea.removeFromTop (40);
-
-    // The pedal visual should be centred and maintain a portrait aspect ratio
-    float desiredRatio = 0.55f; // w/h (typical pedal proportion)
-    float availW = (float) pedalArea.getWidth();
-    float availH = (float) pedalArea.getHeight();
-
-    float pedalW, pedalH;
-    if (availW / availH > desiredRatio)
-    {
-        // Constrained by height
-        pedalH = availH;
-        pedalW = pedalH * desiredRatio;
-    }
-    else
-    {
-        // Constrained by width
-        pedalW = availW;
-        pedalH = pedalW / desiredRatio;
-    }
-
-    auto pedalRect = juce::Rectangle<float> (
-        pedalArea.getCentreX() - pedalW * 0.5f,
-        pedalArea.getY() + (availH - pedalH) * 0.5f,
-        pedalW, pedalH);
+    auto pedalRect = getPedalRect();
 
     PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->controlTexts, selectedInstance->bypassed, 1.0f);
 
@@ -101,29 +103,7 @@ void PedalDetailPanel::resized()
     //==========================================================================
     if (selectedInstance != nullptr && selectedInstance->design != nullptr && (!knobEntries.empty() || !fileLoaders.empty()))
     {
-        auto pedalArea = bounds.reduced (12, 0);
-        pedalArea.removeFromTop (8);
-
-        float desiredRatio = 0.55f;
-        float availW = (float) pedalArea.getWidth();
-        float availH = (float) pedalArea.getHeight();
-
-        float pedalW, pedalH;
-        if (availW / availH > desiredRatio)
-        {
-            pedalH = availH;
-            pedalW = pedalH * desiredRatio;
-        }
-        else
-        {
-            pedalW = availW;
-            pedalH = pedalW / desiredRatio;
-        }
-
-        auto pedalRect = juce::Rectangle<float> (
-            pedalArea.getCentreX() - pedalW * 0.5f,
-            pedalArea.getY() + (availH - pedalH) * 0.5f,
-            pedalW, pedalH);
+        auto pedalRect = getPedalRect();
             
         float margin = juce::jmin (pedalRect.getWidth(), pedalRect.getHeight()) * 0.04f;
         auto body = pedalRect.reduced (margin);
@@ -304,9 +284,9 @@ void PedalDetailPanel::rebuildKnobs()
         for (const auto& ctrl : selectedInstance->design->controls)
         {
             if (ctrl.type == "file_loader" || ctrl.type == "file_browser"
-                || ctrl.type == "library_loader")
+                || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher")
             {
-                // Find what node this is mapped to
+                // Find what node this is mapped to (if applicable)
                 juce::String nodeParamStr;
                 for (const auto& mapping : selectedInstance->design->mappings)
                 {
@@ -321,7 +301,7 @@ void PedalDetailPanel::rebuildKnobs()
                 if (nodeParamStr.isNotEmpty())
                     targetNodeID = nodeParamStr.upToFirstOccurrenceOf("_", false, false).getIntValue();
 
-                if (targetNodeID >= 0)
+                if (targetNodeID >= 0 || ctrl.type == "overlay_launcher")
                 {
                     FileLoaderEntry fe;
                     fe.controlID = ctrl.controlID;
@@ -335,9 +315,30 @@ void PedalDetailPanel::rebuildKnobs()
                     if (ctrl.type == "library_loader")
                     {
                         // Library loader — trigger onOpenLibrary callback
-                        fe.button->onClick = [this, targetNodeID]() {
+                        juce::String categoryToLoad = ctrl.libraryCategory.isNotEmpty() ? ctrl.libraryCategory : "NAM";
+                        fe.button->onClick = [this, targetNodeID, categoryToLoad]() {
                             if (onOpenLibrary)
-                                onOpenLibrary("NAM", targetNodeID);
+                            {
+                                auto safeEngineRef = engineRef;
+                                auto safeNodeID = selectedInstance->nodeID;
+                                onOpenLibrary(categoryToLoad, [safeEngineRef, safeNodeID, targetNodeID](const juce::File& file) {
+                                    if (auto* node = safeEngineRef->getGraph().getNodeForId (safeNodeID))
+                                    {
+                                        if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
+                                            graphProc->setNodeFilePath (targetNodeID, file.getFullPathName());
+                                    }
+                                });
+                            }
+                        };
+                    }
+                    else if (ctrl.type == "overlay_launcher")
+                    {
+                        // Custom overlay launcher — trigger onOpenOverlay callback
+                        juce::String overlayPage = ctrl.overlayPage;
+                        auto* inst = selectedInstance;
+                        fe.button->onClick = [this, inst, overlayPage]() {
+                            if (onOpenOverlay && overlayPage.isNotEmpty())
+                                onOpenOverlay (inst, overlayPage);
                         };
                     }
                     else
@@ -376,6 +377,19 @@ void PedalDetailPanel::sliderValueChanged (juce::Slider* slider)
     auto* node = engineRef->getGraph().getNodeForId (selectedInstance->nodeID);
     if (node == nullptr) return;
 
+    juce::String controlID;
+    if (selectedInstance->design != nullptr)
+    {
+        for (const auto& mapping : selectedInstance->design->mappings)
+        {
+            if (mapping.nodeParam == slider->getName())
+            {
+                controlID = mapping.controlID;
+                break;
+            }
+        }
+    }
+
     auto* proc = node->getProcessor();
     for (auto* param : proc->getParameters())
     {
@@ -383,9 +397,18 @@ void PedalDetailPanel::sliderValueChanged (juce::Slider* slider)
         {
             if (rp->getParameterID() == slider->getName())
             {
-                rp->setValueNotifyingHost (
-                    rp->getNormalisableRange().convertTo0to1 (
-                        static_cast<float> (slider->getValue())));
+                float normalizedVal = rp->getNormalisableRange().convertTo0to1 (
+                        static_cast<float> (slider->getValue()));
+                rp->setValueNotifyingHost (normalizedVal);
+                
+                if (controlID.isNotEmpty())
+                {
+                    selectedInstance->controlValues[controlID] = normalizedVal;
+                }
+                
+                auto id = selectedInstance->nodeID;
+                listeners.call ([id] (Listener& l) { l.pedalValuesChanged (id); });
+                
                 break;
             }
         }

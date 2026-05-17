@@ -104,8 +104,10 @@ void BoardCanvas::mouseDown (const juce::MouseEvent& e)
 
 void BoardCanvas::mouseDrag (const juce::MouseEvent& e)
 {
-    panX = dragStartPan.x + (float) e.getOffsetFromDragStart().x;
-    panY = dragStartPan.y + (float) e.getOffsetFromDragStart().y;
+    float dx = (float) (e.getScreenPosition().x - e.getMouseDownScreenPosition().x);
+    float dy = (float) (e.getScreenPosition().y - e.getMouseDownScreenPosition().y);
+    panX = dragStartPan.x + dx;
+    panY = dragStartPan.y + dy;
     resized();
     repaint();
 }

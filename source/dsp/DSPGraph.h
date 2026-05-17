@@ -159,6 +159,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "clock")        return std::make_unique<ClockNode>();
     if (type == "counter")      return std::make_unique<CounterNode>();
     if (type == "sequencer")    return std::make_unique<SequencerNode>();
+    if (type == "grid_sequencer") return std::make_unique<GridSequencerNode>();
     
     // Audio Sensors / Advanced Processing
     if (type == "pitch_det")    return std::make_unique<PitchDetectorNode>();

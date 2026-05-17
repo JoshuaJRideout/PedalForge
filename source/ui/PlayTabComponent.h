@@ -25,6 +25,12 @@ public:
     
     void removeSlot (int slotIndex);
 
+    std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
+    void setOnOpenLibrary (std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> cb);
+
+    std::function<void (PedalInstance* instance, const juce::String& pageName)> onOpenOverlay;
+    void setOnOpenOverlay (std::function<void (PedalInstance* instance, const juce::String& pageName)> cb);
+
 private:
     AudioGraphEngine& playEngine;
     InventoryOverlay& inventoryOverlay;

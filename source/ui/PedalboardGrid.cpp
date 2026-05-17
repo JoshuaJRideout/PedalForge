@@ -11,9 +11,13 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
 {
     addAndMakeVisible (detailPanel);
     detailPanel.addListener (&detailListener);
-    detailPanel.onOpenLibrary = [this] (const juce::String& category, int targetNodeID)
+    detailPanel.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
     {
-        if (onOpenLibrary) onOpenLibrary (category, targetNodeID);
+        if (onOpenLibrary) onOpenLibrary (category, cb);
+    };
+    detailPanel.onOpenOverlay = [this] (PedalInstance* inst, const juce::String& controlID)
+    {
+        if (onOpenOverlay) onOpenOverlay (inst, controlID);
     };
 
     addAndMakeVisible (btnInventory);
@@ -22,8 +26,7 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
     addAndMakeVisible (activePedalsList);
     activePedalsList.onPedalClicked = [this] (PedalInstance* inst)
     {
-        if (onPedalSelected)
-            onPedalSelected (inst);
+        selectPedalByInstance (inst);
     };
 
     boardCanvas = std::make_unique<BoardCanvas> (engine, this);
@@ -42,6 +45,18 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
         engine.addBoard (newCfg);
         boardCanvas->rebuildBoards();
     };
+
+    addAndMakeVisible (btnToggleLeft);
+    btnToggleLeft.setTooltip ("Toggle Left Panel");
+    btnToggleLeft.onClick = [this] { showLeftPanel = !showLeftPanel; resized(); };
+
+    addAndMakeVisible (btnToggleRight);
+    btnToggleRight.setTooltip ("Toggle Right Panel");
+    btnToggleRight.onClick = [this] { showRightPanel = !showRightPanel; resized(); };
+
+    addAndMakeVisible (btnMaximizeRight);
+    btnMaximizeRight.setTooltip ("Maximize Detail View");
+    btnMaximizeRight.onClick = [this] { rightPanelMaximized = !rightPanelMaximized; resized(); };
 
     startTimerHz (30);
 }
@@ -90,24 +105,97 @@ void PedalboardGrid::timerCallback()
                         auto params = proc->getParameters();
                         for (const auto& mapping : instance.design->mappings)
                         {
-                            for (auto* p : params)
+                            if (mapping.nodeParam.endsWith("_filepath"))
                             {
-                                if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                                int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
+                                if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
                                 {
-                                    if (ranged->getParameterID() == mapping.nodeParam)
+                                    if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
                                     {
-                                        float val = ranged->convertFrom0to1 (ranged->getValue());
-                                        juce::String text = ranged->getText (ranged->getValue(), 32);
-
-                                        // Only repaint if changed
-                                        if (instance.controlValues[mapping.controlID] != val ||
-                                            instance.controlTexts[mapping.controlID] != text)
+                                        juce::String path = targetNode->getFilePath();
+                                        juce::String text = "Empty";
+                                        if (path.isNotEmpty())
+                                            text = juce::File(path).getFileNameWithoutExtension();
+                                            
+                                        juce::String baseControlID = mapping.controlID;
+                                        int lineIndex = -1;
+                                        if (baseControlID.containsChar(':'))
                                         {
-                                            instance.controlValues[mapping.controlID] = val;
-                                            instance.controlTexts[mapping.controlID] = text;
-                                            needsRepaint = true;
+                                            lineIndex = baseControlID.fromLastOccurrenceOf(":", false, false).getIntValue();
+                                            baseControlID = baseControlID.upToFirstOccurrenceOf(":", false, false);
                                         }
-                                        break;
+
+                                        if (lineIndex >= 0)
+                                        {
+                                            juce::StringArray lines;
+                                            lines.addLines (instance.controlTexts[baseControlID]);
+                                            while (lines.size() <= lineIndex) lines.add ("");
+                                            if (lines[lineIndex] != text)
+                                            {
+                                                lines.set (lineIndex, text);
+                                                instance.controlTexts[baseControlID] = lines.joinIntoString ("\n");
+                                                needsRepaint = true;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (instance.controlTexts[baseControlID] != text)
+                                            {
+                                                instance.controlTexts[baseControlID] = text;
+                                                needsRepaint = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                for (auto* p : params)
+                                {
+                                    if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                                    {
+                                        if (ranged->getParameterID() == mapping.nodeParam)
+                                        {
+                                            float val = ranged->convertFrom0to1 (ranged->getValue());
+                                            juce::String text = ranged->getText (ranged->getValue(), 32);
+
+                                            juce::String baseControlID = mapping.controlID;
+                                            int lineIndex = -1;
+                                            if (baseControlID.containsChar(':'))
+                                            {
+                                                lineIndex = baseControlID.fromLastOccurrenceOf(":", false, false).getIntValue();
+                                                baseControlID = baseControlID.upToFirstOccurrenceOf(":", false, false);
+                                            }
+
+                                            bool textChanged = false;
+                                            if (lineIndex >= 0)
+                                            {
+                                                juce::StringArray lines;
+                                                lines.addLines (instance.controlTexts[baseControlID]);
+                                                while (lines.size() <= lineIndex) lines.add ("");
+                                                if (lines[lineIndex] != text)
+                                                {
+                                                    lines.set (lineIndex, text);
+                                                    instance.controlTexts[baseControlID] = lines.joinIntoString ("\n");
+                                                    textChanged = true;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                if (instance.controlTexts[baseControlID] != text)
+                                                {
+                                                    instance.controlTexts[baseControlID] = text;
+                                                    textChanged = true;
+                                                }
+                                            }
+
+                                            if (instance.controlValues[baseControlID] != val || textChanged)
+                                            {
+                                                instance.controlValues[baseControlID] = val;
+                                                needsRepaint = true;
+                                            }
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -133,15 +221,35 @@ void PedalboardGrid::resized()
 
     // Tab-specific toolbar area
     auto toolbar = area.removeFromTop (36);
+    btnToggleLeft.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
     btnInventory.setBounds (toolbar.removeFromLeft (140).reduced (8, 6));
 
-    // Board / Page navigation controls on the right of the toolbar
-    auto tbRight = toolbar.removeFromRight (150);
-    btnAddBoard.setBounds (tbRight.removeFromLeft (100).reduced (4, 6));
+    btnToggleRight.setBounds (toolbar.removeFromRight (60).reduced (4, 6));
+    btnMaximizeRight.setBounds (toolbar.removeFromRight (50).reduced (4, 6));
+    btnAddBoard.setBounds (toolbar.removeFromRight (100).reduced (4, 6));
 
-    if (detailPanel.hasSelection())
+    // Active pedals sidebar on the left
+    if (showLeftPanel)
     {
-        detailPanel.setBounds (area.removeFromRight (detailPanelWidth));
+        activePedalsList.setBounds (area.removeFromLeft (170));
+        activePedalsList.setVisible (true);
+    }
+    else
+    {
+        activePedalsList.setVisible (false);
+    }
+
+    if (detailPanel.hasSelection() && showRightPanel)
+    {
+        if (rightPanelMaximized)
+        {
+            detailPanel.setBounds (area);
+            area.setWidth (0); // consumes all remaining area
+        }
+        else
+        {
+            detailPanel.setBounds (area.removeFromRight (detailPanelWidth));
+        }
         detailPanel.setVisible (true);
     }
     else
@@ -149,12 +257,12 @@ void PedalboardGrid::resized()
         detailPanel.setVisible (false);
     }
 
-    // Active pedals sidebar on the left
-    activePedalsList.setBounds (area.removeFromLeft (170));
-
     // Centre the grid in the remaining space
     if (boardCanvas)
+    {
         boardCanvas->setBounds (area);
+        boardCanvas->setVisible (area.getWidth() > 0);
+    }
 }
 
 //==============================================================================
@@ -174,17 +282,37 @@ void PedalboardGrid::selectPedal (PedalComponent* comp)
     {
         selectedComponent->toFront (false);
         detailPanel.showPedal (selectedComponent->getInstance(), engine);
+        showRightPanel = true; // Auto-open right panel when a pedal is selected
     }
     else
     {
         detailPanel.clearSelection();
     }
-
     if (onPedalSelected)
         onPedalSelected (getSelectedInstance());
 
     resized();
     repaint();
+}
+
+void PedalboardGrid::selectPedalByInstance (PedalInstance* inst)
+{
+    if (boardCanvas == nullptr || inst == nullptr) return;
+    
+    std::function<PedalComponent*(juce::Component*)> findComp = [&](juce::Component* parent) -> PedalComponent* {
+        for (auto* child : parent->getChildren())
+        {
+            if (auto* pc = dynamic_cast<PedalComponent*>(child))
+            {
+                if (&pc->getInstance() == inst) return pc;
+            }
+            if (auto* found = findComp (child)) return found;
+        }
+        return nullptr;
+    };
+    
+    auto* comp = findComp (boardCanvas.get());
+    selectPedal (comp);
 }
 
 void PedalboardGrid::deselectAll()
@@ -328,9 +456,38 @@ void PedalboardGrid::removePedal (AudioGraphEngine::NodeID nodeId)
 //==============================================================================
 void PedalboardGrid::rebuildFromEngine()
 {
+    AudioGraphEngine::NodeID selectedNode;
+    if (selectedComponent != nullptr)
+        selectedNode = selectedComponent->getInstance().nodeID;
+        
+    deselectAll();
+
     activePedalsList.refresh();
     if (boardCanvas)
+    {
         boardCanvas->rebuildBoards();
+        
+        if (selectedNode.uid != 0)
+        {
+            for (auto* c : boardCanvas->getChildren())
+            {
+                if (auto* board = dynamic_cast<BoardComponent*>(c))
+                {
+                    for (auto* cc : board->getChildren())
+                    {
+                        if (auto* pedal = dynamic_cast<PedalComponent*>(cc))
+                        {
+                            if (pedal->getInstance().nodeID == selectedNode)
+                            {
+                                selectPedal (pedal);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 //==============================================================================
@@ -436,14 +593,16 @@ void PedalboardGrid::ActivePedalsList::PedalRow::paint (juce::Graphics& g)
 void PedalboardGrid::ActivePedalsList::PedalRow::mouseDown (const juce::MouseEvent&)
 {
     dragStarted = false;
+}
 
-    // Click → select this pedal (look up live instance by NodeID)
-    if (auto* list = dynamic_cast<ActivePedalsList*> (getParentComponent()->getParentComponent()->getParentComponent()))
+void PedalboardGrid::ActivePedalsList::PedalRow::mouseUp (const juce::MouseEvent& e)
+{
+    if (! dragStarted && e.mouseWasClicked() && ! e.mods.isRightButtonDown() && ! e.mods.isCtrlDown())
     {
-        if (list->onPedalClicked)
+        if (grid.activePedalsList.onPedalClicked)
         {
             auto* inst = grid.engine.getPedalInstance (nodeID);
-            list->onPedalClicked (inst);
+            grid.activePedalsList.onPedalClicked (inst);
         }
     }
 }

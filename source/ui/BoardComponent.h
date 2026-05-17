@@ -70,7 +70,7 @@ private:
     int dragHoverGridH = 2;
     bool dragHoverValid = false;
     
-    static constexpr int cellSize = 60;
+    static constexpr int cellSize = 100;
     
     int getHeaderHeight() const;
 

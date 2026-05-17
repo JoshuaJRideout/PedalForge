@@ -62,6 +62,7 @@ public:
     //==========================================================================
     /** Select a pedal (highlights it and opens the detail panel). */
     void selectPedal (PedalComponent* comp);
+    void selectPedalByInstance (PedalInstance* inst);
     void deselectAll();
 
     /** Force the grid to refresh the detail panel for the selected pedal. */
@@ -74,7 +75,10 @@ public:
     std::function<void()> onOpenInventory;
 
     /** Callback fired when a pedal's library_loader control is clicked. */
-    std::function<void (const juce::String& category, int targetNodeID)> onOpenLibrary;
+    std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
+
+    /** Called when user clicks an overlay_launcher control on a pedal. */
+    std::function<void (PedalInstance* instance, const juce::String& pageName)> onOpenOverlay;
 
     /** Get the currently selected pedal instance (or nullptr). */
     PedalInstance* getSelectedInstance()
@@ -105,6 +109,14 @@ private:
 
     // Multi-board / Page controls
     juce::TextButton btnAddBoard { "+ Add Board" };
+    
+    juce::TextButton btnToggleLeft { "List" };
+    juce::TextButton btnToggleRight { "Panel" };
+    juce::TextButton btnMaximizeRight { "[ ]" };
+    
+    bool showLeftPanel = true;
+    bool showRightPanel = true;
+    bool rightPanelMaximized = false;
 
     static constexpr int detailPanelWidth = 240;
 
@@ -116,6 +128,10 @@ private:
         void pedalRemoved (juce::AudioProcessorGraph::NodeID nodeId) override
         {
             grid.removePedal (nodeId);
+        }
+        void pedalValuesChanged (juce::AudioProcessorGraph::NodeID) override
+        {
+            grid.repaint();
         }
     };
 
@@ -150,6 +166,7 @@ private:
             void paint (juce::Graphics& g) override;
             void mouseDown (const juce::MouseEvent& e) override;
             void mouseDrag (const juce::MouseEvent& e) override;
+            void mouseUp (const juce::MouseEvent& e) override;
 
             // Snapshot of display data (safe even if vector reallocates)
             juce::AudioProcessorGraph::NodeID nodeID;

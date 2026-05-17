@@ -15,6 +15,7 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
 
     canvas.onNodeSelected = [this] (int idx) { selectNode (idx); };
 
+    engine.refreshHardwareMidiDevices();
     syncFromEngine();
     startTimer (500); // Poll for channel changes every 500ms
 }
@@ -123,12 +124,85 @@ void RoutingGraphEditor::syncFromEngine()
             node.outputs.push_back ({ label, PortType::AudioStereo, true, i });
         }
 
-        // TODO: Add MIDI/Expression ports based on pedal capabilities
+        // MIDI and Expression ports from the pedal's declared routing ports
+        if (inst.design)
+        {
+            for (const auto& rp : inst.design->routingPorts)
+            {
+                RoutingPort port;
+                port.name = rp.label;
+                port.routingPortId = rp.id;
+
+                switch (rp.kind)
+                {
+                    case PedalDesign::RoutingPort::Kind::MidiIn:
+                        port.type = PortType::MIDI;
+                        port.isOutput = false;
+                        port.engineChannel = juce::AudioProcessorGraph::midiChannelIndex;
+                        node.inputs.push_back (port);
+                        break;
+                    case PedalDesign::RoutingPort::Kind::MidiOut:
+                        port.type = PortType::MIDI;
+                        port.isOutput = true;
+                        port.engineChannel = juce::AudioProcessorGraph::midiChannelIndex;
+                        node.outputs.push_back (port);
+                        break;
+                    case PedalDesign::RoutingPort::Kind::ExpressionIn:
+                        port.type = PortType::Expression;
+                        port.isOutput = false;
+                        node.inputs.push_back (port);
+                        break;
+                    case PedalDesign::RoutingPort::Kind::ExpressionOut:
+                        port.type = PortType::Expression;
+                        port.isOutput = true;
+                        node.outputs.push_back (port);
+                        break;
+                }
+            }
+        }
 
         nodes.push_back (std::move (node));
 
         ny += 120;
         if (ny > 500) { ny = 100; nx += 220; }
+    }
+
+    // -- Hardware MIDI device nodes ------------------------------------------
+    for (auto& dev : engine.getHardwareMidiDevices())
+    {
+        RoutingNode node;
+        node.name      = dev.deviceName + (dev.isInput ? " (MIDI In)" : " (MIDI Out)");
+        node.x         = dev.routeX;
+        node.y         = dev.routeY;
+        node.isIONode  = true;
+        node.isHwMidi  = true;
+        node.hwMidiName  = dev.deviceName;
+        node.hwMidiIsInput = dev.isInput;
+        node.engineNodeId = dev.engineNodeId;
+
+        if (dev.isInput)
+            node.outputs.push_back ({ "MIDI Out", PortType::MIDI, true, juce::AudioProcessorGraph::midiChannelIndex, "hw_midi_out" });
+        else
+            node.inputs.push_back  ({ "MIDI In",  PortType::MIDI, false, juce::AudioProcessorGraph::midiChannelIndex, "hw_midi_in"  });
+
+        nodes.push_back (std::move (node));
+    }
+
+    // -- Board Config nodes ------------------------------------------
+    for (auto& board : engine.getBoards())
+    {
+        RoutingNode node;
+        node.name      = board.name + " (Pedalboard)";
+        node.x         = board.routeX;
+        node.y         = board.routeY;
+        node.isIONode  = false;
+        node.isHwMidi  = false;
+        node.engineNodeId.uid = board.engineNodeId;
+        
+        // Boards only have a MIDI input to receive page turns / mute commands
+        node.inputs.push_back ({ "MIDI In", PortType::MIDI, false, juce::AudioProcessorGraph::midiChannelIndex, "board_midi_in" });
+        
+        nodes.push_back (std::move (node));
     }
 
     // Compute node heights
@@ -160,6 +234,29 @@ void RoutingGraphEditor::syncFromEngine()
             connections.push_back ({ srcIdx, srcPort, dstIdx, dstPort });
     }
 
+    // -- Board-level (MIDI / Expression) connections -------------------------
+    for (const auto& brc : engine.getBoardConnections())
+    {
+        int srcIdx = findNodeByEngineId (brc.srcNodeId);
+        int dstIdx = findNodeByEngineId (brc.dstNodeId);
+        if (srcIdx < 0 || dstIdx < 0) continue;
+
+        auto& srcNode = nodes[(size_t) srcIdx];
+        auto& dstNode = nodes[(size_t) dstIdx];
+
+        int srcPort = -1, dstPort = -1;
+        for (int i = 0; i < (int) srcNode.outputs.size(); ++i)
+            if (srcNode.outputs[(size_t) i].routingPortId == brc.srcPortId)
+            { srcPort = i; break; }
+
+        for (int i = 0; i < (int) dstNode.inputs.size(); ++i)
+            if (dstNode.inputs[(size_t) i].routingPortId == brc.dstPortId)
+            { dstPort = i; break; }
+
+        if (srcPort >= 0 && dstPort >= 0)
+            connections.push_back ({ srcIdx, srcPort, dstIdx, dstPort });
+    }
+
     canvas.repaint();
 }
 
@@ -171,7 +268,10 @@ void RoutingGraphEditor::timerCallback()
     int currentInChannels = inNode ? inNode->getProcessor()->getTotalNumOutputChannels() : 2;
     int currentOutChannels = outNode ? outNode->getProcessor()->getTotalNumInputChannels() : 2;
     
-    if (currentInChannels != lastKnownInputChannels || currentOutChannels != lastKnownOutputChannels)
+    bool audioChannelsChanged = (currentInChannels != lastKnownInputChannels || currentOutChannels != lastKnownOutputChannels);
+    bool midiDevicesChanged = engine.refreshHardwareMidiDevices();
+
+    if (audioChannelsChanged || midiDevicesChanged)
     {
         lastKnownInputChannels = currentInChannels;
         lastKnownOutputChannels = currentOutChannels;
@@ -464,8 +564,17 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
             auto& srcPort = srcNode.outputs[(size_t) conn.sourcePortIdx];
             auto& dstPort = dstNode.inputs[(size_t) conn.destPortIdx];
 
-            editor.engine.disconnect (srcNode.engineNodeId, srcPort.engineChannel,
-                                      dstNode.engineNodeId, dstPort.engineChannel);
+            if (srcPort.type == PortType::AudioStereo || srcPort.type == PortType::MIDI)
+            {
+                editor.engine.disconnect (srcNode.engineNodeId, srcPort.engineChannel,
+                                          dstNode.engineNodeId, dstPort.engineChannel);
+            }
+            else
+            {
+                editor.engine.removeBoardConnection (srcNode.engineNodeId, srcPort.routingPortId,
+                                                     dstNode.engineNodeId, dstPort.routingPortId);
+            }
+            
             editor.connections.erase (editor.connections.begin() + connIdx);
             repaint();
             return;
@@ -507,12 +616,8 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
     if (nodeIdx >= 0)
     {
         auto& n = editor.nodes[(size_t) nodeIdx];
-        // Don't allow dragging I/O nodes (keep them fixed at edges)
-        if (! n.isIONode)
-        {
-            draggingNodeIdx = nodeIdx;
-            nodeDragOffset = { cp.x - n.x, cp.y - n.y };
-        }
+        draggingNodeIdx = nodeIdx;
+        nodeDragOffset = { cp.x - n.x, cp.y - n.y };
         if (onNodeSelected) onNodeSelected (nodeIdx);
         return;
     }
@@ -575,13 +680,31 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
             // Types must match
             if (srcPort.type == dstPort.type)
             {
-                // Create connection in the engine
-                bool connected = editor.engine.connect (
-                    srcNode.engineNodeId, srcPort.engineChannel,
-                    dstNode.engineNodeId, dstPort.engineChannel);
-
-                if (connected)
+                if (srcPort.type == PortType::AudioStereo || srcPort.type == PortType::MIDI)
                 {
+                    // Audio and MIDI connections — routed natively by AudioProcessorGraph
+                    bool connected = editor.engine.connect (
+                        srcNode.engineNodeId, srcPort.engineChannel,
+                        dstNode.engineNodeId, dstPort.engineChannel);
+
+                    if (connected)
+                    {
+                        editor.connections.push_back ({
+                            wireStart.nodeIdx, wireStart.portIdx,
+                            port.nodeIdx, port.portIdx
+                        });
+                    }
+                }
+                else
+                {
+                    // MIDI or Expression — board-level connection (not in AudioProcessorGraph)
+                    AudioGraphEngine::BoardRoutingConnection brc;
+                    brc.srcNodeId  = srcNode.engineNodeId;
+                    brc.srcPortId  = srcPort.routingPortId;
+                    brc.dstNodeId  = dstNode.engineNodeId;
+                    brc.dstPortId  = dstPort.routingPortId;
+                    editor.engine.addBoardConnection (brc);
+
                     editor.connections.push_back ({
                         wireStart.nodeIdx, wireStart.portIdx,
                         port.nodeIdx, port.portIdx
@@ -607,6 +730,31 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
         {
             editor.engine.audioOutRouteX = n.x;
             editor.engine.audioOutRouteY = n.y;
+        }
+        else if (n.isHwMidi)
+        {
+            for (auto& dev : editor.engine.getHardwareMidiDevices())
+            {
+                if (dev.deviceName == n.hwMidiName && dev.isInput == n.hwMidiIsInput)
+                {
+                    dev.routeX = n.x;
+                    dev.routeY = n.y;
+                    break;
+                }
+            }
+        }
+        else if (auto* board = editor.engine.getBoard(n.name.substring(0, n.name.indexOf(" (Pedalboard)"))))
+        {
+            // The name is "Board Name (Pedalboard)", but engineNodeId uniquely identifies it
+            for (auto& b : editor.engine.getBoards())
+            {
+                if (b.engineNodeId == n.engineNodeId.uid)
+                {
+                    b.routeX = n.x;
+                    b.routeY = n.y;
+                    break;
+                }
+            }
         }
         else if (auto* inst = editor.engine.getPedalInstance (n.engineNodeId))
         {

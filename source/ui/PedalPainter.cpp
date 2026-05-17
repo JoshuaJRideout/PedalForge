@@ -133,6 +133,12 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             if (textIt != controlTexts.end() && textIt->second.isNotEmpty()) txt = textIt->second;
             juce::StringArray lines;
             lines.addLines (txt);
+            
+            int expectedLines = juce::jmax(1, ctrl.numLines);
+            while (lines.size() < expectedLines)
+                lines.add (""); // pad out lines
+                
+            styles.fontSize = ctrl.fontSize > 0 ? (ctrl.fontSize * sc) : 0.0f;
             HardwareDrawing::drawTextScreen (g, ctrlBounds, lines, -1, &styles);
         }
         else if (ctrl.type == "pixel_display")
@@ -151,7 +157,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             g.setColour (juce::Colour(0x55FFFFFF).withAlpha(alpha));
             g.drawRoundedRectangle (ctrlBounds, 4.0f, 1.0f);
             
-            float fontSize = juce::jmax (6.0f, 10.0f * sc);
+            float fontSize = 10.0f * sc;
             g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
             g.setFont (juce::FontOptions (fontSize).withStyle("Bold"));
             g.drawText (ctrl.label.isNotEmpty() ? ctrl.label : "Load...", ctrlBounds, juce::Justification::centred);
@@ -165,21 +171,36 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.8f * alpha));
             g.drawRoundedRectangle (ctrlBounds, 4.0f, 1.0f);
 
-            float fontSize = juce::jmax (6.0f, 10.0f * sc);
+            float fontSize = 10.0f * sc;
             g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
             g.setFont (juce::FontOptions (fontSize).withStyle("Bold"));
             g.drawText (ctrl.label.isNotEmpty() ? ctrl.label : "Library", ctrlBounds, juce::Justification::centred);
 
             continue;
         }
+        else if (ctrl.type == "overlay_launcher")
+        {
+            g.setColour (juce::Colour(0xFF555555).withAlpha(alpha));
+            g.fillRoundedRectangle (ctrlBounds, 2.0f);
+            g.setColour (juce::Colour(0x88FFFFFF).withAlpha(alpha));
+            g.drawRoundedRectangle (ctrlBounds, 2.0f, 1.0f);
+            
+            float fontSize = 10.0f * sc;
+            g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
+            g.setFont (juce::FontOptions (fontSize).withStyle("Bold"));
+            g.drawText (ctrl.label.isNotEmpty() ? ctrl.label : "Press", ctrlBounds, juce::Justification::centred);
+            
+            continue;
+        }
 
         // Default label underneath control (skip for standalone text labels)
-        if (ctrl.label.isNotEmpty() && sc > 0.3f && ctrl.type != "label")
+        if (ctrl.label.isNotEmpty() && ctrl.type != "label")
         {
-            float fontSize = juce::jmax (6.0f, 9.0f * sc);
+            float fontSize = 9.0f * sc;
             g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.8f * alpha));
             g.setFont (juce::FontOptions (fontSize));
-            g.drawText (ctrl.label, cx, cy + ch + 1, cw, fontSize + 2,
+            float textMargin = cw * 0.5f;
+            g.drawText (ctrl.label, cx - textMargin, cy + ch + 1, cw + textMargin * 2, fontSize + 2,
                         juce::Justification::centredTop);
         }
     }

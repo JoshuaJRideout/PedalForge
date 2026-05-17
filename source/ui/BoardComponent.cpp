@@ -18,6 +18,7 @@ BoardComponent::BoardComponent (BoardConfig& cfg, AudioGraphEngine& eng, MidiLea
     titleLabel.setFont (juce::FontOptions (14.0f).withStyle ("Bold"));
     titleLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textPrimary);
     titleLabel.setJustificationType (juce::Justification::centred);
+    titleLabel.setInterceptsMouseClicks(false, false);
     
     addAndMakeVisible (btnMenu);
     btnMenu.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
@@ -40,6 +41,48 @@ BoardComponent::BoardComponent (BoardConfig& cfg, AudioGraphEngine& eng, MidiLea
                 rebuildPedals();
             });
         }
+        pageMenu.addSeparator();
+        pageMenu.addItem ("Add Page", [this] {
+            config.numPages++;
+            config.activePage = config.numPages - 1;
+            rebuildPedals();
+        });
+        
+        if (config.numPages > 1)
+        {
+            pageMenu.addItem ("Remove Current Page", [this] {
+                int pageToRemove = config.activePage;
+                
+                // Collect pedals to remove
+                std::vector<AudioGraphEngine::NodeID> toRemove;
+                for (const auto& inst : engine.getPedalInstances())
+                {
+                    if (inst.boardId == config.id && inst.pageIndex == pageToRemove)
+                        toRemove.push_back (inst.nodeID);
+                }
+                
+                // Remove the pedals from the engine
+                for (auto id : toRemove)
+                    engine.removePedal (id);
+                    
+                // Shift subsequent pages down
+                for (const auto& inst : engine.getPedalInstances())
+                {
+                    if (inst.boardId == config.id && inst.pageIndex > pageToRemove)
+                    {
+                        if (auto* mutableInst = engine.getPedalInstance (inst.nodeID))
+                            mutableInst->pageIndex--;
+                    }
+                }
+                
+                config.numPages--;
+                if (config.activePage >= config.numPages)
+                    config.activePage = config.numPages - 1;
+                    
+                rebuildPedals();
+            });
+        }
+        
         menu.addSubMenu ("Page", pageMenu);
         menu.addSeparator();
         
@@ -198,6 +241,11 @@ void BoardComponent::mouseDown (const juce::MouseEvent& e)
         startCols = config.cols;
         startRows = config.rows;
     }
+    else
+    {
+        if (auto* parent = getParentComponent())
+            parent->mouseDown (e.getEventRelativeTo (parent));
+    }
 }
 
 void BoardComponent::mouseDrag (const juce::MouseEvent& e)
@@ -205,8 +253,9 @@ void BoardComponent::mouseDrag (const juce::MouseEvent& e)
     if (isDraggingBoard)
     {
         auto pos = e.getEventRelativeTo (getParentComponent()).getPosition();
-        int dx = pos.x - dragStartPos.x;
-        int dy = pos.y - dragStartPos.y;
+        float scale = getTransform().mat00 > 0 ? getTransform().mat00 : 1.0f;
+        int dx = std::round ((pos.x - dragStartPos.x) / scale);
+        int dy = std::round ((pos.y - dragStartPos.y) / scale);
         
         // Snap to parent canvas grid (e.g. 20px)
         int nx = std::round((boardStartPos.x + dx) / 20.0f) * 20;
@@ -239,10 +288,20 @@ void BoardComponent::mouseDrag (const juce::MouseEvent& e)
             getParentComponent()->repaint(); // Update connections
         }
     }
+    else
+    {
+        if (auto* parent = getParentComponent())
+            parent->mouseDrag (e.getEventRelativeTo (parent));
+    }
 }
 
-void BoardComponent::mouseUp (const juce::MouseEvent&)
+void BoardComponent::mouseUp (const juce::MouseEvent& e)
 {
+    if (! isDraggingBoard && ! isResizingBoard)
+    {
+        if (auto* parent = getParentComponent())
+            parent->mouseUp (e.getEventRelativeTo (parent));
+    }
     isDraggingBoard = false;
     isResizingBoard = false;
 }
@@ -293,10 +352,16 @@ void BoardComponent::rebuildPedals()
         // Wire library_loader callback through the grid
         if (parentGrid != nullptr)
         {
-            comp->onOpenLibrary = [this] (const juce::String& category, int targetNodeID)
+            comp->onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
             {
                 if (parentGrid && parentGrid->onOpenLibrary)
-                    parentGrid->onOpenLibrary (category, targetNodeID);
+                    parentGrid->onOpenLibrary (category, cb);
+            };
+            
+            comp->onOpenOverlay = [this, compPtr = comp.get()] (const juce::String& pageName)
+            {
+                if (parentGrid && parentGrid->onOpenOverlay)
+                    parentGrid->onOpenOverlay (&compPtr->getInstance(), pageName);
             };
         }
 

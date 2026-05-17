@@ -9,6 +9,8 @@
 #include "ui/NodeGraphEditor.h"
 #include "ui/RoutingGraphEditor.h"
 #include "ui/LibraryComponent.h"
+#include "ui/LibraryOverlay.h"
+#include "ui/CanvasOverlay.h"
 #include "ui/TuringRenderer.h"
 #include "ui/MidiSettingsPanel.h"
 
@@ -54,12 +56,18 @@ private:
 
     // Q-menu style inventory overlay
     InventoryOverlay inventory;
+    
+    // File picker overlay
+    LibraryOverlay libraryOverlay;
+
+    // Advanced modular pedal interface overlay
+    CanvasOverlay canvasOverlay;
 
     // Cross-tab state: currently selected pedal from the pedalboard
     PedalInstance* activePedal = nullptr;
 
-    // Library selection target: which DSP node ID inside the pedal should receive the file
-    int libraryTargetNodeID = -1;
+    // Library overlay: we store the current callback to execute when a file is chosen
+    std::function<void(const juce::File&)> activeFileCallback;
     
     std::unique_ptr<TuringRenderer> turingRenderer;
 

@@ -184,7 +184,6 @@ void InventoryOverlay::ItemGrid::GridCell::mouseEnter (const juce::MouseEvent&)
 void InventoryOverlay::ItemGrid::GridCell::mouseDown (const juce::MouseEvent& e)
 {
     dragStarted = false;
-    if (onClick) onClick (&item);
 
     // Right-click context menu for custom items
     if ((e.mods.isRightButtonDown() || e.mods.isCtrlDown()) && !item.isFactory)
@@ -238,6 +237,14 @@ void InventoryOverlay::ItemGrid::GridCell::mouseDrag (const juce::MouseEvent& e)
 
             container->startDragging (desc, this, emptyImage, false);
         }
+    }
+}
+
+void InventoryOverlay::ItemGrid::GridCell::mouseUp (const juce::MouseEvent& e)
+{
+    if (! dragStarted && e.mouseWasClicked() && ! e.mods.isRightButtonDown() && ! e.mods.isCtrlDown())
+    {
+        if (onClick) onClick (&item);
     }
 }
 

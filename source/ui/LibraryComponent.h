@@ -2,6 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../library/AssetLibrary.h"
 #include <functional>
+#include <set>
 
 //==============================================================================
 /**
@@ -9,8 +10,7 @@
  * Left sidebar: categories. Right: grid of assets.
  * Supports import and selection callbacks.
  */
-class LibraryComponent : public juce::Component,
-                         public juce::ListBoxModel
+class LibraryComponent : public juce::Component
 {
 public:
     LibraryComponent();
@@ -19,16 +19,25 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
-    // ListBoxModel
-    int getNumRows() override;
-    void paintListBoxItem (int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected) override;
-    void selectedRowsChanged (int lastRowSelected) override;
+    void setSidebarVisible (bool shouldBeVisible)
+    {
+        sidebarVisible = shouldBeVisible;
+        categoryTree.setVisible (sidebarVisible);
+        resized();
+    }
 
     /** Refresh the asset grid for the current category. */
     void refreshAssets();
 
     /** Select a specific category by name (e.g. "NAM"). */
     void selectCategory (const juce::String& category);
+
+    void setCategory(const juce::String& display, const juce::String& id)
+    {
+        currentCategoryDisplay = display;
+        currentCategoryID = id;
+        refreshAssets();
+    }
 
     /** Called when the user selects an asset. Provides the full file path. */
     std::function<void (const juce::File&)> onAssetSelected;
@@ -37,34 +46,14 @@ public:
 
 private:
     AssetLibrary library;
+    bool sidebarVisible = true;
 
-    juce::ListBox categoryList;
-    juce::StringArray categories { "Pedals", "NAM Models", "Impulse Responses", "Presets" };
-
-    // Maps display names to asset library category IDs
-    juce::String getCategoryID (const juce::String& displayName) const
-    {
-        if (displayName == "NAM Models")         return "NAM";
-        if (displayName == "Impulse Responses")
-        {
-            switch (irSubcategoryMenu.getSelectedId())
-            {
-                case 1: return "IR_CAB";
-                case 2: return "IR_REV";
-                case 3: return "IR_MIC";
-                case 4: return "IR_INST";
-                default: return "IR_CAB";
-            }
-        }
-        if (displayName == "Presets")            return "Presets";
-        return "Pedals";
-    }
+    juce::TreeView categoryTree;
 
     juce::String currentCategoryDisplay = "Pedals";
     juce::String currentCategoryID      = "Pedals";
 
     juce::TextEditor searchBox;
-    juce::ComboBox irSubcategoryMenu;
     juce::TextButton importBtn  { "Import" };
 
     //==========================================================================
@@ -98,7 +87,7 @@ private:
             setSize (viewportWidth, totalH);
         }
 
-        int selectedIndex = -1;
+        std::set<int> selectedIndices;
 
     private:
         LibraryComponent& parent;

@@ -46,6 +46,9 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     // Inventory overlay (Q-menu style, initially hidden)
     addChildComponent (inventory);
     addKeyListener (&inventory);
+    
+    // Library overlay
+    addChildComponent (libraryOverlay);
 
     // Wire the Effects Forge graph to the Pedal Forge for parameter mapping
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
@@ -80,31 +83,43 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
         inventory.toggle();
     };
 
-    // Library: when an asset is selected, load it into the active pedal
-    libraryView.onAssetSelected = [this] (const juce::File& file)
+    // File picker overlay handler
+    libraryOverlay.onAssetSelected = [this] (const juce::File& file)
     {
-        if (activePedal != nullptr && libraryTargetNodeID >= 0)
+        if (activeFileCallback)
         {
-            if (auto* node = processorRef.getGraphEngine().getGraph().getNodeForId (activePedal->nodeID))
-            {
-                if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
-                    graphProc->setNodeFilePath (libraryTargetNodeID, file.getFullPathName());
-            }
+            activeFileCallback(file);
+            activeFileCallback = nullptr;
         }
     };
 
+    addChildComponent (canvasOverlay);
+    
     // Wire PedalboardGrid's open-library callback
-    grid.onOpenLibrary = [this] (const juce::String& category, int targetNodeID)
+    grid.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
     {
-        libraryTargetNodeID = targetNodeID;
-
-        // Switch to Library tab
-        tabLibrary.setToggleState (true, juce::sendNotification);
-
-        // Select the NAM category
-        libraryView.selectCategory (category);
-        libraryView.refreshAssets();
+        activeFileCallback = cb;
+        libraryOverlay.showForCategory(category);
     };
+
+    grid.onOpenOverlay = [this] (PedalInstance* instance, const juce::String& pageName)
+    {
+        canvasOverlay.showForPage (instance, &processorRef.getGraphEngine(), &processorRef.midiLearn, pageName);
+    };
+
+    if (playTab)
+    {
+        playTab->setOnOpenLibrary ([this] (const juce::String& category, std::function<void(const juce::File&)> cb)
+        {
+            activeFileCallback = cb;
+            libraryOverlay.showForCategory(category);
+        });
+
+        playTab->setOnOpenOverlay ([this] (PedalInstance* instance, const juce::String& pageName)
+        {
+            canvasOverlay.showForPage (instance, &processorRef.getPlayGraphEngine(), &processorRef.playMidiLearn, pageName);
+        });
+    }
 
     setSize (1200, 800);
     setResizable (true, true);
@@ -154,17 +169,19 @@ void PedalForgeEditor::resized()
     tabBoard.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
     tabPlay.setBounds    (toolbar.removeFromRight (70).reduced (4, 6));
 
-    // All full-area views share the same bounds
-    if (playTab) playTab->setBounds (bounds);
-    grid.setBounds (bounds);
-    if (routingEditor) routingEditor->setBounds (bounds);
-    pedalDesigner.setBounds (bounds);
-    nodeGraphEditor.setBounds (bounds);
-    libraryView.setBounds (bounds);
-    midiSettingsPanel.setBounds (bounds);
-
-    // Inventory overlay spans the full content area below toolbar
-    inventory.setBounds (bounds);
+    auto contentBounds = bounds;
+    
+    if (playTab) playTab->setBounds (contentBounds);
+    grid.setBounds (contentBounds);
+    if (routingEditor) routingEditor->setBounds (contentBounds);
+    pedalDesigner.setBounds (contentBounds);
+    nodeGraphEditor.setBounds (contentBounds);
+    libraryView.setBounds (contentBounds);
+    midiSettingsPanel.setBounds (contentBounds);
+    
+    inventory.setBounds (getLocalBounds());
+    libraryOverlay.setBounds (getLocalBounds());
+    canvasOverlay.setBounds (getLocalBounds());
 }
 
 //==============================================================================

@@ -25,6 +25,155 @@ namespace FactoryDesigns
         d.controls.push_back(led);
     }
 
+    /** Adds MIDI In, two Expression Ins, and MIDI Out ports to any pedal design.
+     *  This makes every factory pedal behave like real hardware — it can receive
+     *  MIDI CC/PC/Note and expression pedal signals from the Routing Tab, and
+     *  can also send MIDI out (e.g. to hardware synths or other pedals). */
+    inline void addStandardPorts (PedalDesign& d)
+    {
+        using K = PedalDesign::RoutingPort::Kind;
+        d.routingPorts.push_back ({ K::MidiIn,       "midi_in",    "MIDI In" });
+        d.routingPorts.push_back ({ K::ExpressionIn,  "expr_in_1",  "Expression In 1" });
+        d.routingPorts.push_back ({ K::ExpressionIn,  "expr_in_2",  "Expression In 2" });
+        d.routingPorts.push_back ({ K::MidiOut,       "midi_out",   "MIDI Out" });
+    }
+
+    inline std::shared_ptr<PedalDesign> createStepSequencer()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Step Sequencer";
+        d->category = "MIDI & CV";
+        d->chassisW = 280.0f;
+        d->chassisH = 340.0f;
+        d->chassisColour = juce::Colour(0xFF1A0533); // Deep Indigo
+        
+        // Custom Grid Sequencer DSP Node (Type: grid_sequencer)
+        
+        // We'll map DSP controls directly to the chassis
+        PedalDesign::Control screen;
+        screen.type = "text_screen";
+        screen.width = 250; screen.height = 60;
+        screen.x = 15.0f; screen.y = 15.0f;
+        screen.controlID = "screen_1";
+        d->controls.push_back(screen);
+
+        float knobY1 = 100.0f;
+        float knobY2 = 170.0f;
+        
+        PedalDesign::Control kSwing;
+        kSwing.type = "knob"; kSwing.width = 40; kSwing.height = 40;
+        kSwing.x = 30.0f; kSwing.y = knobY1;
+        kSwing.label = "Swing"; kSwing.controlID = "k_swing";
+        d->controls.push_back(kSwing);
+        
+        PedalDesign::Control kDiv;
+        kDiv.type = "knob"; kDiv.width = 40; kDiv.height = 40;
+        kDiv.x = 120.0f; kDiv.y = knobY1;
+        kDiv.label = "Div"; kDiv.controlID = "k_div";
+        d->controls.push_back(kDiv);
+        
+        PedalDesign::Control kGlitch;
+        kGlitch.type = "knob"; kGlitch.width = 40; kGlitch.height = 40;
+        kGlitch.x = 210.0f; kGlitch.y = knobY1;
+        kGlitch.label = "Glitch"; kGlitch.controlID = "k_glitch";
+        d->controls.push_back(kGlitch);
+        
+        PedalDesign::Control kVel;
+        kVel.type = "knob"; kVel.width = 40; kVel.height = 40;
+        kVel.x = 75.0f; kVel.y = knobY2;
+        kVel.label = "Vel"; kVel.controlID = "k_vel";
+        d->controls.push_back(kVel);
+
+        PedalDesign::Control kSteps;
+        kSteps.type = "knob"; kSteps.width = 40; kSteps.height = 40;
+        kSteps.x = 165.0f; kSteps.y = knobY2;
+        kSteps.label = "Steps"; kSteps.controlID = "k_steps";
+        d->controls.push_back(kSteps);
+
+        float swY = 240.0f;
+        PedalDesign::Control swTap;
+        swTap.type = "footswitch"; swTap.width = 40; swTap.height = 40;
+        swTap.x = 15.0f; swTap.y = swY;
+        swTap.label = "Tap"; swTap.controlID = "sw_tap";
+        d->controls.push_back(swTap);
+
+        PedalDesign::Control swPlay;
+        swPlay.type = "footswitch"; swPlay.width = 40; swPlay.height = 40;
+        swPlay.x = 80.0f; swPlay.y = swY;
+        swPlay.label = "Play"; swPlay.controlID = "sw_play";
+        d->controls.push_back(swPlay);
+
+        PedalDesign::Control swClr;
+        swClr.type = "footswitch"; swClr.width = 40; swClr.height = 40;
+        swClr.x = 145.0f; swClr.y = swY;
+        swClr.label = "Clr"; swClr.controlID = "sw_clr";
+        d->controls.push_back(swClr);
+
+        PedalDesign::Control swTrack;
+        swTrack.type = "footswitch"; swTrack.width = 40; swTrack.height = 40;
+        swTrack.x = 210.0f; swTrack.y = swY;
+        swTrack.label = "Track"; swTrack.controlID = "sw_track";
+        d->controls.push_back(swTrack);
+        
+        PedalDesign::Control btnOverlay;
+        btnOverlay.type = "overlay_launcher"; btnOverlay.width = 160; btnOverlay.height = 25;
+        btnOverlay.x = 60.0f; btnOverlay.y = 300.0f;
+        btnOverlay.label = "OPEN GRID"; btnOverlay.controlID = "btn_grid";
+        btnOverlay.overlayPage = "grid_editor";
+        d->controls.push_back(btnOverlay);
+        
+        // Define Grid Editor Overlay Page
+        PedalDesign::CanvasPage gridPage;
+        gridPage.pageName = "grid_editor";
+        gridPage.width = 1000.0f;
+        gridPage.height = 600.0f;
+        gridPage.backgroundColour = juce::Colour(0xFF110B1C); // Very dark indigo
+        
+        // Add 8 tracks * 32 steps grid
+        float startX = 120.0f;
+        float startY = 80.0f;
+        float stepSpacingX = 25.0f;
+        float stepSpacingY = 50.0f;
+        
+        for (int tr = 0; tr < 8; ++tr)
+        {
+            // Track label
+            PedalDesign::Control lbl;
+            lbl.type = "label";
+            lbl.x = 20.0f; lbl.y = startY + tr * stepSpacingY;
+            lbl.width = 80.0f; lbl.height = 20.0f;
+            lbl.label = "Track " + juce::String(tr + 1);
+            lbl.controlID = "lbl_tr" + juce::String(tr);
+            gridPage.controls.push_back(lbl);
+            
+            for (int s = 0; s < 32; ++s)
+            {
+                PedalDesign::Control stepBtn;
+                stepBtn.type = "led_toggle";
+                stepBtn.x = startX + s * stepSpacingX;
+                stepBtn.y = startY + tr * stepSpacingY;
+                stepBtn.width = 16.0f; stepBtn.height = 16.0f;
+                stepBtn.controlID = "tr" + juce::String(tr) + "_s" + juce::String(s);
+                
+                // Color code by beats (4 steps = 1 beat)
+                if ((s / 4) % 2 == 0)
+                    stepBtn.customColour = juce::Colour(0xFF8B5CF6); // Purple
+                else
+                    stepBtn.customColour = juce::Colour(0xFF6366F1); // Indigo
+                    
+                gridPage.controls.push_back(stepBtn);
+                
+                // Add DSP Mapping
+                d->mappings.push_back({ stepBtn.controlID, "2_" + stepBtn.controlID });
+            }
+        }
+        
+        d->canvasPages.push_back(gridPage);
+
+        addStandardPorts (*d);
+        return d;
+    }
+
     inline std::shared_ptr<PedalDesign> createCleanBoost()
     {
         auto d = std::make_shared<PedalDesign>();
@@ -47,6 +196,7 @@ namespace FactoryDesigns
 
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_gain"}); // 2 is GainNode
+        addStandardPorts (*d);
         return d;
     }
 
@@ -81,6 +231,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
         d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        addStandardPorts (*d);
         return d;
     }
 
@@ -115,6 +266,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
         d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        addStandardPorts (*d);
         return d;
     }
 
@@ -147,6 +299,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "3_gain"}); // FuzzNode gain
         d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
         d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        addStandardPorts (*d);
         return d;
     }
 
@@ -180,6 +333,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "4_depth"}); // ModDelay depth
         d->mappings.push_back({"knob_3", "4_time"}); // ModDelay time
         d->mappings.push_back({"knob_4", "5_mix"}); // MixNode mix
+        addStandardPorts (*d);
         return d;
     }
 
@@ -211,6 +365,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "4_depth"}); // PhaserNode depth
         d->mappings.push_back({"knob_3", "5_mix"}); // MixNode mix
+        addStandardPorts (*d);
         return d;
     }
 
@@ -244,6 +399,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "4_depth"}); // FlangerNode depth
         d->mappings.push_back({"knob_3", "4_feedback"}); // FlangerNode feedback
         d->mappings.push_back({"knob_4", "5_mix"}); // MixNode mix
+        addStandardPorts (*d);
         return d;
     }
 
@@ -273,6 +429,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_rate"}); // LFONode rate
         d->mappings.push_back({"knob_2", "2_depth"}); // LFONode depth
+        addStandardPorts (*d);
         return d;
     }
 
@@ -304,6 +461,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "3_time"}); // DelayNode time
         d->mappings.push_back({"knob_2", "3_feedback"}); // DelayNode feedback
         d->mappings.push_back({"knob_3", "4_mix"}); // MixNode mix
+        addStandardPorts (*d);
         return d;
     }
 
@@ -333,6 +491,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_size"}); // Reverb size
         d->mappings.push_back({"knob_2", "2_mix"}); // Reverb mix
+        addStandardPorts (*d);
         return d;
     }
 
@@ -362,6 +521,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_threshold"}); 
         d->mappings.push_back({"knob_2", "2_ratio"}); 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -386,6 +546,7 @@ namespace FactoryDesigns
 
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_threshold"}); 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -422,6 +583,7 @@ namespace FactoryDesigns
         }
 
         d->mappings.push_back({"bypass_switch", "bypass"});
+        addStandardPorts (*d);
         return d;
     }
 
@@ -453,6 +615,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "2_bass"}); 
         d->mappings.push_back({"knob_2", "2_mid"}); 
         d->mappings.push_back({"knob_3", "2_treble"}); 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -482,6 +645,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_cutoff"}); 
         d->mappings.push_back({"knob_2", "2_resonance"}); 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -522,15 +686,26 @@ namespace FactoryDesigns
         libBtn.x = 85.0f; libBtn.y = 110.0f;
         libBtn.label = "Library";
         libBtn.controlID = "nam_library";
+        libBtn.libraryCategory = "NAM";
+
+        PedalDesign::Control display;
+        display.type = "text_screen";
+        display.label = "NAM Amp\nNo Model Loaded";
+        display.numLines = 2;
+        display.fontSize = 8.0f;
+        display.controlID = "nam_display";
+        display.x = 20.0f; display.y = 80.0f; display.width = 120.0f; display.height = 25.0f;
 
         d->controls.push_back(inKnob);
         d->controls.push_back(outKnob);
+        d->controls.push_back(display);
         d->controls.push_back(fileBtn);
         d->controls.push_back(libBtn);
 
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"in_knob", "2_gain"}); // 2 is NAMNode
         d->mappings.push_back({"out_knob", "2_out_level"});
+        d->mappings.push_back({"nam_display:1", "2_filepath"});
         d->mappings.push_back({"nam_loader", "2_filepath"});
         d->mappings.push_back({"nam_library", "2_filepath"});
 
@@ -577,6 +752,7 @@ namespace FactoryDesigns
         graph->setProperty("connections", conns);
         d->effectsGraph = juce::var(graph.release());
 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -602,15 +778,24 @@ namespace FactoryDesigns
         libBtn.type = "library_loader";
         libBtn.label = "Library";
         libBtn.controlID = "ir_library";
+        libBtn.libraryCategory = "IR_CAB";
         libBtn.x = 20; libBtn.y = 160; libBtn.width = 100; libBtn.height = 30;
+
+        PedalDesign::Control display;
+        display.type = "text_screen";
+        display.label = "No Cab Loaded";
+        display.controlID = "ir_display";
+        display.x = 20; display.y = 80; display.width = 100; display.height = 30;
 
         d->controls.push_back(mix);
         d->controls.push_back(gain);
+        d->controls.push_back(display);
         d->controls.push_back(fileBtn);
         d->controls.push_back(libBtn);
 
         d->mappings.push_back({"mix", "2_mix"});
         d->mappings.push_back({"gain", "2_gain"});
+        d->mappings.push_back({"ir_display", "2_filepath"});
         d->mappings.push_back({"ir_loader", "2_filepath"});
         d->mappings.push_back({"ir_library", "2_filepath"});
 
@@ -636,6 +821,7 @@ namespace FactoryDesigns
         graph->setProperty("connections", conns);
         d->effectsGraph = juce::var(graph.release());
 
+        addStandardPorts (*d);
         return d;
     }
 
@@ -651,6 +837,12 @@ namespace FactoryDesigns
         PedalDesign::Control mix; mix.type = "knob"; mix.label = "Mix"; mix.controlID = "mix"; mix.x = 20; mix.y = 20;
         PedalDesign::Control gain; gain.type = "knob"; gain.label = "Gain"; gain.controlID = "gain"; gain.x = 80; gain.y = 20;
 
+        PedalDesign::Control display;
+        display.type = "text_screen";
+        display.label = "No IR Loaded";
+        display.controlID = "ir_display";
+        display.x = 20; display.y = 80; display.width = 100; display.height = 30;
+
         PedalDesign::Control fileBtn;
         fileBtn.type = "file_loader";
         fileBtn.label = "Browse...";
@@ -661,15 +853,18 @@ namespace FactoryDesigns
         libBtn.type = "library_loader";
         libBtn.label = "Library";
         libBtn.controlID = "ir_library";
+        libBtn.libraryCategory = "IR_REV";
         libBtn.x = 20; libBtn.y = 160; libBtn.width = 100; libBtn.height = 30;
 
         d->controls.push_back(mix);
         d->controls.push_back(gain);
+        d->controls.push_back(display);
         d->controls.push_back(fileBtn);
         d->controls.push_back(libBtn);
 
         d->mappings.push_back({"mix", "2_mix"});
         d->mappings.push_back({"gain", "2_gain"});
+        d->mappings.push_back({"ir_display", "2_filepath"});
         d->mappings.push_back({"ir_loader", "2_filepath"});
         d->mappings.push_back({"ir_library", "2_filepath"});
 
@@ -695,6 +890,7 @@ namespace FactoryDesigns
         graph->setProperty("connections", conns);
         d->effectsGraph = juce::var(graph.release());
 
+        addStandardPorts (*d);
         return d;
     }
 }

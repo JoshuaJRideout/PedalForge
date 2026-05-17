@@ -37,6 +37,12 @@ struct PedalDesign
         juce::String controlID;   // unique ID within this design
         float defaultValue = 0.5f;
 
+        // For library_loader
+        juce::String libraryCategory;
+
+        // For overlay_launcher
+        juce::String overlayPage;
+
         // Knob visual/interaction properties
         float rotationRange = 270.0f;   // visual arc in degrees (e.g. 270 = 7-o'clock to 5-o'clock)
         float sensitivity = 200.0f;     // pixels of vertical drag for a full 0→1 sweep
@@ -47,9 +53,11 @@ struct PedalDesign
         juce::Colour customColour { juce::Colours::red };
         bool stretchImage = true;
         
-        // Font properties (mostly used by 'label')
+        // Font properties (mostly used by 'label' and 'text_screen')
         juce::String fontFamily = "Sans"; // "Sans", "Serif", "Monospace", or specific font name
         int fontStyle = 1;                // 0=Plain, 1=Bold, 2=Italic, 3=BoldItalic
+        float fontSize = 0.0f;            // 0 = auto scale
+        int numLines = 1;                 // for multi-line displays
     };
 
     float chassisW = 200.0f;
@@ -57,6 +65,30 @@ struct PedalDesign
     juce::Colour chassisColour { 0xFF8A8A94 };  // Silver default
     juce::String chassisImage;                  // Custom background image
     std::vector<Control> controls;
+
+    //==========================================================================
+    // Canvas Overlays — Secondary full-screen or large pop-up UI panels
+    struct CanvasPage
+    {
+        juce::String pageName;
+        float width = 800.0f;
+        float height = 600.0f;
+        juce::Colour backgroundColour { 0xFF222222 };
+        std::vector<Control> controls;
+    };
+    std::vector<CanvasPage> canvasPages;
+
+    //==========================================================================
+    // Routing Ports — MIDI and Expression ports visible in the Routing Tab.
+    // These are cross-pedal connections that live outside the AudioProcessorGraph.
+    struct RoutingPort
+    {
+        enum class Kind { MidiIn, MidiOut, ExpressionIn, ExpressionOut };
+        Kind kind = Kind::MidiIn;
+        juce::String id;     // unique within this design, e.g. "midi_in", "expr_in_1"
+        juce::String label;  // displayed in routing tab, e.g. "MIDI In", "Expr In 1"
+    };
+    std::vector<RoutingPort> routingPorts;
 
     //==========================================================================
     // Effects Forge — DSP Graph (stored as raw JSON var)
@@ -135,6 +167,18 @@ struct PedalDesign
         }
         root->setProperty ("mappings", mapArr);
 
+        // Routing ports
+        juce::Array<juce::var> rpArr;
+        for (const auto& rp : routingPorts)
+        {
+            auto* rpo = new juce::DynamicObject();
+            rpo->setProperty ("kind",  (int) rp.kind);
+            rpo->setProperty ("id",    rp.id);
+            rpo->setProperty ("label", rp.label);
+            rpArr.add (juce::var (rpo));
+        }
+        root->setProperty ("routingPorts", rpArr);
+
         return juce::var (root);
     }
 
@@ -198,6 +242,22 @@ struct PedalDesign
                         m.controlID = mo->getProperty ("controlID").toString();
                         m.nodeParam = mo->getProperty ("nodeParam").toString();
                         design.mappings.push_back (m);
+                    }
+                }
+            }
+
+            // Routing ports
+            if (auto* arr = root->getProperty ("routingPorts").getArray())
+            {
+                for (const auto& rv : *arr)
+                {
+                    if (auto* ro = rv.getDynamicObject())
+                    {
+                        RoutingPort rp;
+                        rp.kind  = (RoutingPort::Kind)(int) ro->getProperty ("kind");
+                        rp.id    = ro->getProperty ("id").toString();
+                        rp.label = ro->getProperty ("label").toString();
+                        design.routingPorts.push_back (rp);
                     }
                 }
             }

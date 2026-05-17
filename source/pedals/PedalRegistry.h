@@ -24,7 +24,13 @@ struct PedalInfo
 
 inline std::vector<PedalInfo> getFactoryPedals()
 {
-    return {
+    std::vector<PedalInfo> pedals = {
+        // ─── MIDI & CV ─────────────────────────────────────────────────────
+        { "Step Sequencer", "MIDI & CV", 2, 2, 6,
+          juce::Colour (0xFF1A0533),    // deep indigo
+          [] { return GraphPedalFactory::createStepSequencer(); },
+          [] { return FactoryDesigns::createStepSequencer(); } },
+
         // ─── DRIVE ─────────────────────────────────────────────────────────
         { "Clean Boost",  "Drive",      1, 2, 1,
           juce::Colour (0xFF4ADE80),    // green
@@ -119,4 +125,5 @@ inline std::vector<PedalInfo> getFactoryPedals()
           [] { return GraphPedalFactory::createIRReverb(); },
           [] { return FactoryDesigns::createIRReverb(); } }
     };
+    return pedals;
 }

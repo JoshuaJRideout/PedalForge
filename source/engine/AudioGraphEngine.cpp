@@ -1,4 +1,6 @@
 #include "AudioGraphEngine.h"
+#include "MidiRoutingNodes.h"
+#include <juce_audio_devices/juce_audio_devices.h>
 
 //==============================================================================
 AudioGraphEngine::AudioGraphEngine()
@@ -11,7 +13,11 @@ AudioGraphEngine::AudioGraphEngine()
     BoardConfig mainBoard;
     mainBoard.id = "main";
     mainBoard.name = "Main Board";
+    mainBoard.engineNodeId = 0x424F0000 + (uint32_t)(mainBoard.id.hashCode() % 0xFFFF);
     boards.push_back (mainBoard);
+    
+    // Add board node to the graph
+    graph.addNode (std::make_unique<BoardMidiReceiverNode>(*this, mainBoard.id), NodeID { mainBoard.engineNodeId });
 }
 
 AudioGraphEngine::~AudioGraphEngine()
@@ -28,16 +34,25 @@ BoardConfig* AudioGraphEngine::getBoard (const juce::String& boardId)
     return nullptr;
 }
 
-void AudioGraphEngine::addBoard (const BoardConfig& board)
+void AudioGraphEngine::addBoard (const BoardConfig& boardIn)
 {
+    BoardConfig board = boardIn;
+    if (board.engineNodeId == 0)
+        board.engineNodeId = 0x424F0000 + (uint32_t)(board.id.hashCode() % 0xFFFF);
     boards.push_back (board);
+    
+    graph.addNode (std::make_unique<BoardMidiReceiverNode>(*this, board.id), NodeID { board.engineNodeId });
 }
 
 void AudioGraphEngine::removeBoard (const juce::String& boardId)
 {
-    boards.erase (std::remove_if (boards.begin(), boards.end(),
-                  [&] (const BoardConfig& b) { return b.id == boardId; }),
-                  boards.end());
+    auto it = std::find_if (boards.begin(), boards.end(),
+                            [&] (const BoardConfig& b) { return b.id == boardId; });
+    if (it != boards.end())
+    {
+        graph.removeNode (NodeID { it->engineNodeId });
+        boards.erase (it);
+    }
 }
 
 //==============================================================================
@@ -61,6 +76,37 @@ void AudioGraphEngine::prepare (double sampleRate, int samplesPerBlock,
     graph.prepareToPlay (sampleRate, samplesPerBlock);
 
     setupIONodes();
+}
+
+void BoardMidiReceiverNode::processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midiMessages)
+{
+    if (auto* config = engine.getBoard (boardId))
+    {
+        for (const auto meta : midiMessages)
+        {
+            auto msg = meta.getMessage();
+            if (msg.isController())
+            {
+                int cc = msg.getControllerNumber();
+                int val = msg.getControllerValue();
+                
+                if (val > 64) // button pressed
+                {
+                    if (config->prevPageCC != -1 && cc == config->prevPageCC)
+                    {
+                        if (config->activePage > 0)
+                            config->activePage--;
+                    }
+                    else if (config->nextPageCC != -1 && cc == config->nextPageCC)
+                    {
+                        if (config->activePage < config->numPages - 1)
+                            config->activePage++;
+                    }
+                }
+            }
+        }
+    }
+    midiMessages.clear(); // Consume messages so they don't propagate further
 }
 
 void AudioGraphEngine::releaseResources()
@@ -213,10 +259,7 @@ void AudioGraphEngine::removePedal (NodeID nodeId)
     disconnectAll (nodeId);
     graph.removeNode (nodeId);
 
-    instances.erase (
-        std::remove_if (instances.begin(), instances.end(),
-                        [nodeId] (const PedalInstance& p) { return p.nodeID == nodeId; }),
-        instances.end());
+    instances.remove_if ([nodeId] (const PedalInstance& p) { return p.nodeID == nodeId; });
 }
 
 AudioGraphEngine::NodeID AudioGraphEngine::addPedalOffBoard (
@@ -382,6 +425,196 @@ bool AudioGraphEngine::hasConnections (NodeID nodeId) const
         if (conn.source.nodeID == nodeId || conn.destination.nodeID == nodeId)
             return true;
     return false;
+}
+
+//==============================================================================
+// Board-Level Routing (MIDI / Expression connections between pedals)
+//==============================================================================
+void AudioGraphEngine::addBoardConnection (const BoardRoutingConnection& conn)
+{
+    // Prevent duplicate connections
+    for (const auto& existing : boardConnections)
+    {
+        if (existing.srcNodeId == conn.srcNodeId && existing.srcPortId == conn.srcPortId &&
+            existing.dstNodeId == conn.dstNodeId && existing.dstPortId == conn.dstPortId)
+            return;
+    }
+    boardConnections.push_back (conn);
+    if (onBoardConnectionsChanged) onBoardConnectionsChanged();
+}
+
+void AudioGraphEngine::removeBoardConnection (NodeID srcNodeId, const juce::String& srcPortId,
+                                               NodeID dstNodeId, const juce::String& dstPortId)
+{
+    boardConnections.erase (
+        std::remove_if (boardConnections.begin(), boardConnections.end(),
+            [&] (const BoardRoutingConnection& c) {
+                return c.srcNodeId == srcNodeId && c.srcPortId == srcPortId &&
+                       c.dstNodeId == dstNodeId && c.dstPortId == dstPortId;
+            }),
+        boardConnections.end());
+    if (onBoardConnectionsChanged) onBoardConnectionsChanged();
+}
+
+//==============================================================================
+// Hardware MIDI Device Enumeration
+//==============================================================================
+bool AudioGraphEngine::refreshHardwareMidiDevices()
+{
+    // Re-enumerate system MIDI devices, preserving enabled state for known devices
+    auto inputs  = juce::MidiInput::getAvailableDevices();
+    auto outputs = juce::MidiOutput::getAvailableDevices();
+
+    // Build new list, carry over enabled/position state for devices we already know
+    std::vector<HardwareMidiDevice> newList;
+
+    float nextInputY = 100.0f;
+    float nextOutputY = 100.0f;
+    
+    // Find highest existing Y coordinates to stack new devices below them
+    for (const auto& existing : hwMidiDevices)
+    {
+        if (existing.isInput)
+            nextInputY = std::max (nextInputY, existing.routeY + 120.0f);
+        else
+            nextOutputY = std::max (nextOutputY, existing.routeY + 120.0f);
+    }
+
+    for (const auto& dev : inputs)
+    {
+        HardwareMidiDevice hmd;
+        hmd.deviceName = dev.name;
+        hmd.isInput    = true;
+        // Generate a stable NodeID (0x4D490000 base + hash)
+        hmd.engineNodeId.uid = 0x4D490000 + (uint32_t)(dev.name.hashCode() % 0xFFFF);
+
+        // Preserve existing state if we had this device before
+        bool found = false;
+        for (const auto& existing : hwMidiDevices)
+        {
+            if (existing.deviceName == dev.name && existing.isInput)
+            { 
+                hmd.routeX = existing.routeX; 
+                hmd.routeY = existing.routeY; 
+                found = true;
+                break; 
+            }
+        }
+        
+        if (!found)
+        {
+            hmd.routeX = 80.0f;
+            hmd.routeY = nextInputY;
+            nextInputY += 120.0f;
+        }
+
+        newList.push_back (hmd);
+    }
+    for (const auto& dev : outputs)
+    {
+        HardwareMidiDevice hmd;
+        hmd.deviceName = dev.name;
+        hmd.isInput    = false;
+        // Outputs get a slightly different base to avoid collision if input/output share a name
+        hmd.engineNodeId.uid = 0x4D4A0000 + (uint32_t)(dev.name.hashCode() % 0xFFFF);
+
+        bool found = false;
+        for (const auto& existing : hwMidiDevices)
+        {
+            if (existing.deviceName == dev.name && !existing.isInput)
+            { 
+                hmd.routeX = existing.routeX; 
+                hmd.routeY = existing.routeY; 
+                found = true;
+                break; 
+            }
+        }
+        
+        if (!found)
+        {
+            hmd.routeX = 900.0f;
+            hmd.routeY = nextOutputY;
+            nextOutputY += 120.0f;
+        }
+
+        newList.push_back (hmd);
+    }
+
+    bool changed = (newList.size() != hwMidiDevices.size());
+    if (!changed)
+    {
+        for (size_t i = 0; i < newList.size(); ++i)
+        {
+            if (newList[i].deviceName != hwMidiDevices[i].deviceName || 
+                newList[i].isInput != hwMidiDevices[i].isInput)
+            {
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (changed)
+    {
+        // Remove old nodes from graph that are no longer present
+        for (const auto& existing : hwMidiDevices)
+        {
+            auto it = std::find_if (newList.begin(), newList.end(), [&](const HardwareMidiDevice& dev) {
+                return dev.engineNodeId.uid == existing.engineNodeId.uid;
+            });
+            if (it == newList.end())
+                graph.removeNode (existing.engineNodeId);
+        }
+        
+        // Add new nodes to graph that were not present before
+        for (const auto& dev : newList)
+        {
+            auto it = std::find_if (hwMidiDevices.begin(), hwMidiDevices.end(), [&](const HardwareMidiDevice& existing) {
+                return dev.engineNodeId.uid == existing.engineNodeId.uid;
+            });
+            if (it == hwMidiDevices.end())
+            {
+                if (dev.isInput)
+                    graph.addNode (std::make_unique<HardwareMidiInputNode>(dev.deviceName), dev.engineNodeId);
+                else
+                    graph.addNode (std::make_unique<HardwareMidiOutputNode>(dev.deviceName), dev.engineNodeId);
+            }
+        }
+    }
+
+    hwMidiDevices = std::move (newList);
+    return changed;
+}
+
+void AudioGraphEngine::injectHardwareMidi (const juce::String& deviceName, const juce::MidiMessage& msg)
+{
+    // Find the node by name
+    for (auto* node : graph.getNodes())
+    {
+        if (auto* hwNode = dynamic_cast<HardwareMidiInputNode*>(node->getProcessor()))
+        {
+            if (hwNode->getName() == deviceName)
+            {
+                hwNode->pushMidiMessage(msg);
+                return;
+            }
+        }
+    }
+}
+
+void AudioGraphEngine::extractHardwareMidi (const juce::String& deviceName, juce::MidiBuffer& dest)
+{
+    for (auto* node : graph.getNodes())
+    {
+        if (auto* hwNode = dynamic_cast<HardwareMidiOutputNode*>(node->getProcessor()))
+        {
+            if (hwNode->getName() == deviceName)
+            {
+                hwNode->popCapturedMidi(dest);
+                return;
+            }
+        }
+    }
 }
 
 //==============================================================================
