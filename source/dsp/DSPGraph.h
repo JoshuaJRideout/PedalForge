@@ -3,6 +3,7 @@
 #include "DSPNode.h"
 #include "DSPNodeLibrary.h"
 #include "NAMNode.h"
+#include "PluginHostNode.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <map>
 #include <memory>
@@ -44,6 +45,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "sampler")      return std::make_unique<SamplerNode>();
     if (type == "ram")          return std::make_unique<RamNode>();
     if (type == "nam")          return std::make_unique<NAMNode>("nam", "NAM Amp");
+    if (type == "plugin_host")  return std::make_unique<PluginHostNode>();
 
     if (type == "gain")         return std::make_unique<GainNode>();
     if (type == "mix")          return std::make_unique<MixNode>();
@@ -337,14 +339,26 @@ public:
 
         // Allocate buffers
         int maxPorts = 0;
+        int maxNodeInputPorts = 0;
+        int maxNodeOutputPorts = 0;
         for (auto& [id, node] : nodes)
+        {
             maxPorts += (int)node->getOutputPorts().size();
+            maxNodeInputPorts  = juce::jmax (maxNodeInputPorts,  (int)node->getInputPorts().size());
+            maxNodeOutputPorts = juce::jmax (maxNodeOutputPorts, (int)node->getOutputPorts().size());
+        }
         maxPorts = juce::jmax (maxPorts, 16);
 
         bufferPool.clear();
         bufferPool.resize (maxPorts);
         for (auto& b : bufferPool)
             b.resize (maxBlockSize, 0.0f);
+
+        // Pre-allocate scratch space for processBlock to avoid audio-thread allocations
+        scratchInPtrs.resize (maxNodeInputPorts, nullptr);
+        scratchOutPtrs.resize (maxNodeOutputPorts, nullptr);
+        scratchSilence.resize (maxBlockSize, 0.0f);
+        scratchDevNull.resize (maxBlockSize, 0.0f);
 
         topologicalSort();
     }
@@ -360,20 +374,6 @@ public:
         // Clear all internal buffers
         for (auto& b : bufferPool)
             std::fill (b.begin(), b.begin() + numSamples, 0.0f);
-
-        // Assign a buffer index to each node's output port
-        std::map<std::pair<int,int>, int> portBufferMap;
-        int bufIdx = 0;
-        for (int nodeID : processingOrder)
-        {
-            auto* node = getNode (nodeID);
-            if (!node) continue;
-            for (int p = 0; p < (int)node->getOutputPorts().size(); ++p)
-            {
-                portBufferMap[{nodeID, p}] = bufIdx % (int)bufferPool.size();
-                bufIdx++;
-            }
-        }
 
         // Process nodes in topological order
         for (int nodeID : processingOrder)
@@ -400,9 +400,10 @@ public:
                 continue;
             }
 
-            // Gather input buffers
+            // Gather input buffers — use pre-allocated scratch arrays
             int numInputs = (int)node->getInputPorts().size();
-            std::vector<const float*> inPtrs (numInputs, nullptr);
+            for (int i = 0; i < numInputs; ++i)
+                scratchInPtrs[i] = nullptr;
 
             for (const auto& conn : connections)
             {
@@ -410,46 +411,47 @@ public:
                 {
                     auto srcKey = std::make_pair (conn.sourceNodeID, conn.sourcePort);
                     if (portBufferMap.count (srcKey) && conn.destPort < numInputs)
-                        inPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+                        scratchInPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
                 }
             }
 
-            // Use silence for unconnected inputs
-            std::vector<float> silence (numSamples, 0.0f);
-            for (auto& p : inPtrs)
-                if (p == nullptr) p = silence.data();
+            // Use pre-allocated silence for unconnected inputs
+            std::fill (scratchSilence.begin(), scratchSilence.begin() + numSamples, 0.0f);
+            for (int i = 0; i < numInputs; ++i)
+                if (scratchInPtrs[i] == nullptr) scratchInPtrs[i] = scratchSilence.data();
 
-            // Gather output buffer pointers
+            // Gather output buffer pointers — use pre-allocated scratch arrays
             int numOutputs = (int)node->getOutputPorts().size();
-            std::vector<float*> outPtrs (numOutputs, nullptr);
+            for (int i = 0; i < numOutputs; ++i)
+                scratchOutPtrs[i] = nullptr;
             for (int p = 0; p < numOutputs; ++p)
             {
                 auto key = std::make_pair (nodeID, p);
                 if (portBufferMap.count (key))
-                    outPtrs[p] = bufferPool[portBufferMap[key]].data();
+                    scratchOutPtrs[p] = bufferPool[portBufferMap[key]].data();
             }
 
-            // Fallback output buffer
-            std::vector<float> devNull (numSamples, 0.0f);
-            for (auto& p : outPtrs)
-                if (p == nullptr) p = devNull.data();
+            // Fallback output buffer — use pre-allocated devNull
+            std::fill (scratchDevNull.begin(), scratchDevNull.begin() + numSamples, 0.0f);
+            for (int i = 0; i < numOutputs; ++i)
+                if (scratchOutPtrs[i] == nullptr) scratchOutPtrs[i] = scratchDevNull.data();
 
             // Set MIDI buffer on node for MIDI-aware nodes
             node->setMidiBuffer (currentMidiBuffer);
 
             // Apply block-rate CV modulation
-            node->applyControlInputs (inPtrs.data(), numInputs, 0);
+            node->applyControlInputs (scratchInPtrs.data(), numInputs, 0);
 
             // Process!
-            node->process (inPtrs.data(), numInputs, outPtrs.data(), numOutputs, numSamples);
+            node->process (scratchInPtrs.data(), numInputs, scratchOutPtrs.data(), numOutputs, numSamples);
 
             // Special case: AudioOutputNode — write to selected channel
-            if (node->getType() == "audio_output" && !inPtrs.empty())
+            if (node->getType() == "audio_output" && numInputs > 0 && scratchInPtrs[0] != nullptr)
             {
                 auto* outNode = dynamic_cast<AudioOutputNode*>(node);
                 int ch = outNode ? (outNode->getSelectedChannel() - 1) : 0;
                 if (ch < buffer.getNumChannels())
-                    std::copy (inPtrs[0], inPtrs[0] + numSamples,
+                    std::copy (scratchInPtrs[0], scratchInPtrs[0] + numSamples,
                                buffer.getWritePointer(ch));
             }
         }
@@ -556,6 +558,11 @@ private:
     std::vector<NodeConnection> connections;
     std::vector<int> processingOrder;
     std::vector<std::vector<float>> bufferPool;
+    std::map<std::pair<int,int>, int> portBufferMap;  // Built once in topologicalSort
+    std::vector<const float*> scratchInPtrs;   // Pre-allocated for processBlock
+    std::vector<float*> scratchOutPtrs;         // Pre-allocated for processBlock
+    std::vector<float> scratchSilence;          // Pre-allocated silence buffer
+    std::vector<float> scratchDevNull;          // Pre-allocated devnull buffer
     int nextID = 1;
     bool sortDirty = true;
     double sr = 44100.0;
@@ -594,6 +601,20 @@ private:
                 inDegree[next]--;
                 if (inDegree[next] == 0)
                     queue.push_back (next);
+            }
+        }
+
+        // Build portBufferMap (only when topology changes, not every audio callback)
+        portBufferMap.clear();
+        int bufIdx = 0;
+        for (int nodeID : processingOrder)
+        {
+            auto* node = getNode (nodeID);
+            if (!node) continue;
+            for (int p = 0; p < (int)node->getOutputPorts().size(); ++p)
+            {
+                portBufferMap[{nodeID, p}] = bufIdx % juce::jmax(1, (int)bufferPool.size());
+                bufIdx++;
             }
         }
 

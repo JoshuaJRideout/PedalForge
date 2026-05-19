@@ -1,6 +1,7 @@
 #include "PedalDetailPanel.h"
 #include "PedalPainter.h"
 #include "LookAndFeel.h"
+#include "PluginBrowserWindow.h"
 #include "../dsp/GraphPedalProcessor.h"
 
 //==============================================================================
@@ -8,11 +9,19 @@ PedalDetailPanel::PedalDetailPanel()
 {
     bypassButton.addListener (this);
     removeButton.addListener (this);
+    saveDefaultButton.addListener (this);
     closeButton.addListener (this);
 
     addAndMakeVisible (bypassButton);
     addAndMakeVisible (removeButton);
+    addAndMakeVisible (saveDefaultButton);
     addAndMakeVisible (closeButton);
+    
+    removeButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF4A1F1F));
+    removeButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    
+    saveDefaultButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF333333));
+    saveDefaultButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
 }
 
 PedalDetailPanel::~PedalDetailPanel()
@@ -92,9 +101,11 @@ void PedalDetailPanel::resized()
     // Close button (top right)
     closeButton.setBounds (bounds.getRight() - 32, 8, 24, 24);
 
-    // Bypass + Remove buttons at bottom
-    auto bottom = bounds.removeFromBottom (80).reduced (12, 8);
+    // Bypass + Edit + Remove buttons at bottom
+    auto bottom = bounds.removeFromBottom (114).reduced (12, 8);
     bypassButton.setBounds (bottom.removeFromTop (32));
+    bottom.removeFromTop (6);
+    saveDefaultButton.setBounds (bottom.removeFromTop (28));
     bottom.removeFromTop (6);
     removeButton.setBounds (bottom.removeFromTop (28));
 
@@ -284,7 +295,8 @@ void PedalDetailPanel::rebuildKnobs()
         for (const auto& ctrl : selectedInstance->design->controls)
         {
             if (ctrl.type == "file_loader" || ctrl.type == "file_browser"
-                || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher")
+                || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher"
+                || ctrl.type == "plugin_browser")
             {
                 // Find what node this is mapped to (if applicable)
                 juce::String nodeParamStr;
@@ -306,8 +318,8 @@ void PedalDetailPanel::rebuildKnobs()
                     FileLoaderEntry fe;
                     fe.controlID = ctrl.controlID;
                     fe.targetNodeID = targetNodeID;
-                    // Empty label — PedalPainter handles the visual rendering
                     fe.button = std::make_unique<juce::TextButton>("");
+                    
                     fe.button->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
                     fe.button->setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
                     fe.button->setAlpha(0.01f);
@@ -341,13 +353,32 @@ void PedalDetailPanel::rebuildKnobs()
                                 onOpenOverlay (inst, overlayPage);
                         };
                     }
+                    else if (ctrl.type == "plugin_browser")
+                    {
+                        auto safeInst = selectedInstance;
+                        auto safeEngineRef = engineRef;
+                        auto safeNodeID = selectedInstance->nodeID;
+                        fe.button->onClick = [this, safeEngineRef, safeNodeID, targetNodeID, ctrl, safeInst]() {
+                            new PluginBrowserWindow([this, safeEngineRef, safeNodeID, targetNodeID, ctrl, safeInst](const juce::PluginDescription& desc) {
+                                if (targetNodeID >= 0) {
+                                    if (auto* node = safeEngineRef->getGraph().getNodeForId(safeNodeID)) {
+                                        if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
+                                            graphProc->setNodeFilePath(targetNodeID, desc.fileOrIdentifier);
+                                            safeInst->controlTexts[ctrl.controlID] = desc.name;
+                                            repaint();
+                                        }
+                                    }
+                                }
+                            });
+                        };
+                    }
                     else
                     {
                         // Standard file loader — open OS file picker
                         auto safeEngineRef = engineRef;
                         auto safeNodeID = selectedInstance->nodeID;
                         fe.button->onClick = [this, safeEngineRef, safeNodeID, targetNodeID]() {
-                            fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac");
+                            fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac;*.vst3;*.component");
                             auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
                             fileChooser->launchAsync (chooserFlags, [this, safeEngineRef, safeNodeID, targetNodeID](const juce::FileChooser& fc) {
                                 if (fc.getResult().existsAsFile()) {
@@ -439,5 +470,25 @@ void PedalDetailPanel::buttonClicked (juce::Button* button)
     else if (button == &closeButton)
     {
         clearSelection();
+    }
+    else if (button == &saveDefaultButton)
+    {
+        if (!selectedInstance || !selectedInstance->design) return;
+
+        // Save to library
+        juce::File overrideFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+            .getChildFile("PedalForge")
+            .getChildFile("Library")
+            .getChildFile("Pedals")
+            .getChildFile(selectedInstance->name + ".json");
+        
+        overrideFile.getParentDirectory().createDirectory();
+        selectedInstance->design->saveToFile(overrideFile);
+        
+        saveDefaultButton.setButtonText("Saved!");
+        juce::Timer::callAfterDelay(1500, [sp = juce::Component::SafePointer<PedalDetailPanel>(this)] {
+            if (sp != nullptr)
+                sp->saveDefaultButton.setButtonText("Save as Default");
+        });
     }
 }

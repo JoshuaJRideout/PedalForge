@@ -245,6 +245,34 @@ namespace GraphPedalFactory
         return proc;
     }
 
+    inline std::unique_ptr<GraphPedalProcessor> createPluginHost()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("VST/AU Host");
+        auto& g = proc->getDSPGraph();
+        
+        int inL = g.addNode (std::make_unique<AudioInputNode>());
+        g.getNode(inL)->getParam("channel")->set(1.0f);
+        
+        int inR = g.addNode (std::make_unique<AudioInputNode>());
+        g.getNode(inR)->getParam("channel")->set(2.0f);
+        
+        int host = g.addNode (std::make_unique<PluginHostNode>());
+        
+        int outL = g.addNode (std::make_unique<AudioOutputNode>());
+        g.getNode(outL)->getParam("channel")->set(1.0f);
+        
+        int outR = g.addNode (std::make_unique<AudioOutputNode>());
+        g.getNode(outR)->getParam("channel")->set(2.0f);
+        
+        g.connect (inL, 0, host, 0);
+        g.connect (inR, 0, host, 1);
+        g.connect (host, 0, outL, 0);
+        g.connect (host, 1, outR, 0);
+        
+        proc->rebuildParameters();
+        return proc;
+    }
+
     // ─── DRIVE ───────────────────────────────────────────────────────────────────
 
     /** 1. Clean Boost: Input → Gain → Output */

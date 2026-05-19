@@ -3,6 +3,7 @@
 #include "BoardComponent.h"
 #include "PedalPainter.h"
 #include "LookAndFeel.h"
+#include "PluginBrowserWindow.h"
 #include "../dsp/PedalDesign.h"
 #include "../dsp/GraphPedalProcessor.h"
 
@@ -176,10 +177,35 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                         dragging = false;
                         return;
                     }
+                    else if (ctrl.type == "plugin_browser")
+                    {
+                        juce::String mappedParamID;
+                        for (const auto& m : instance.design->mappings)
+                            if (m.controlID == ctrl.controlID) { mappedParamID = m.nodeParam; break; }
+                            
+                        int targetNodeID = -1;
+                        if (mappedParamID.isNotEmpty())
+                            targetNodeID = mappedParamID.upToFirstOccurrenceOf("_", false, false).getIntValue();
+                            
+                        new PluginBrowserWindow([this, targetNodeID, ctrl](const juce::PluginDescription& desc) {
+                            if (targetNodeID >= 0) {
+                                if (auto* node = engine.getGraph().getNodeForId(instance.nodeID)) {
+                                    if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
+                                        graphProc->setNodeFilePath(targetNodeID, desc.fileOrIdentifier);
+                                        instance.controlTexts[ctrl.controlID] = desc.name;
+                                        repaint();
+                                    }
+                                }
+                            }
+                        });
+                        
+                        dragging = false;
+                        return;
+                    }
                     else if (ctrl.type == "file_loader" || ctrl.type == "file_browser")
                     {
                         // Launch the file chooser
-                        fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac");
+                        fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac;*.vst3;*.component");
                         auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
                         
                         juce::String mappedParamID;

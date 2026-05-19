@@ -58,6 +58,7 @@ struct PedalDesign
         int fontStyle = 1;                // 0=Plain, 1=Bold, 2=Italic, 3=BoldItalic
         float fontSize = 0.0f;            // 0 = auto scale
         int numLines = 1;                 // for multi-line displays
+        bool isLocked = false;            // if true, ignores canvas interaction
     };
 
     float chassisW = 200.0f;
@@ -148,6 +149,7 @@ struct PedalDesign
                 co->setProperty ("rotationRange", c.rotationRange);
             if (std::abs (c.sensitivity - 200.0f) > 0.01f)
                 co->setProperty ("sensitivity", c.sensitivity);
+            co->setProperty ("isLocked", c.isLocked);
 
             ctrlArr.add (juce::var (co));
         }
@@ -223,6 +225,7 @@ struct PedalDesign
                         if (co->hasProperty("fontStyle"))    c.fontStyle    = (int) co->getProperty ("fontStyle");
                         if (co->hasProperty("rotationRange")) c.rotationRange = (float)(double) co->getProperty ("rotationRange");
                         if (co->hasProperty("sensitivity"))   c.sensitivity   = (float)(double) co->getProperty ("sensitivity");
+                        if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
                         design.controls.push_back (c);
                     }
                 }

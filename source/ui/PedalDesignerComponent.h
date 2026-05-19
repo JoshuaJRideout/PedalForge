@@ -37,14 +37,23 @@ private:
 
     class ChassisCanvas;
     class PropertiesPanel;
+    class LayersPanel;
 
     std::unique_ptr<ChassisCanvas> canvas;
     std::unique_ptr<PropertiesPanel> properties;
+    std::unique_ptr<LayersPanel> layersPanel;
+    std::unique_ptr<juce::TabbedComponent> rightTabs;
     DSPGraph* effectsGraph = nullptr;
 
-    // Toolbar colour picker
+    // Toolbar controls
     juce::TextButton colourSwatchBtn { "" };
+    juce::ComboBox gridCombo;
+    juce::TextButton btnZoomIn { "+" }, btnZoomOut { "-" }, btnFitView { "Fit" };
+    juce::TextButton btnAlignLeft { "AL" }, btnAlignCenterH { "AC" }, btnAlignRight { "AR" };
+    juce::TextButton btnDistributeH { "DH" }, btnDistributeV { "DV" };
     void showColourPicker();
+    void alignSelected (int mode);
+    void distributeSelected (bool horizontal);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalDesignerComponent)
 };

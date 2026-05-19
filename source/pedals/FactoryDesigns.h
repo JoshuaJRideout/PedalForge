@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../dsp/PedalDesign.h"
+#include "../dsp/DSPGraph.h"
 #include <memory>
 
 namespace FactoryDesigns
@@ -171,6 +172,85 @@ namespace FactoryDesigns
         d->canvasPages.push_back(gridPage);
 
         addStandardPorts (*d);
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createPluginHost()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "VST/AU Host";
+        d->category = "Utility";
+        d->chassisW = 200.0f;
+        d->chassisH = 260.0f;
+        d->chassisColour = juce::Colour(0xFF333333); // Dark Gray
+
+        // DSP Graph
+        DSPGraph graph;
+        
+        int inL = graph.addNode(createNodeByType("audio_input"));
+        graph.getNode(inL)->getParam("channel")->set(1.0f);
+        
+        int inR = graph.addNode(createNodeByType("audio_input"));
+        graph.getNode(inR)->getParam("channel")->set(2.0f);
+        
+        int host = graph.addNode(createNodeByType("plugin_host"));
+        
+        int outL = graph.addNode(createNodeByType("audio_output"));
+        graph.getNode(outL)->getParam("channel")->set(1.0f);
+        
+        int outR = graph.addNode(createNodeByType("audio_output"));
+        graph.getNode(outR)->getParam("channel")->set(2.0f);
+        
+        graph.connect(inL, 0, host, 0);
+        graph.connect(inR, 0, host, 1);
+        graph.connect(host, 0, outL, 0);
+        graph.connect(host, 1, outR, 0);
+        
+        d->effectsGraph = graph.toJSON();
+
+        // Canvas Page for Plugin Editor
+        PedalDesign::CanvasPage editorPage;
+        editorPage.pageName = "PluginEditorPage";
+        editorPage.width = 800.0f;
+        editorPage.height = 600.0f;
+        editorPage.backgroundColour = juce::Colours::transparentBlack;
+        
+        PedalDesign::Control pluginView;
+        pluginView.type = "plugin_editor";
+        pluginView.controlID = "plugin_view_control";
+        pluginView.x = 0;
+        pluginView.y = 0;
+        pluginView.width = 800;
+        pluginView.height = 600;
+        
+        editorPage.controls.push_back(pluginView);
+        d->canvasPages.push_back(editorPage);
+
+        // Pedal Chassis Controls
+        PedalDesign::Control loadBtn;
+        loadBtn.type = "plugin_browser";
+        loadBtn.width = 160; loadBtn.height = 40;
+        loadBtn.x = 20.0f; loadBtn.y = 20.0f;
+        loadBtn.label = "Load VST/AU";
+        loadBtn.controlID = "file_btn";
+        d->controls.push_back(loadBtn);
+        
+        d->mappings.push_back({"file_btn", juce::String(host) + "_filepath"});
+        d->mappings.push_back({"plugin_view_control", juce::String(host) + "_editor"});
+
+        PedalDesign::Control openBtn;
+        openBtn.type = "overlay_launcher";
+        openBtn.width = 160; openBtn.height = 40;
+        openBtn.x = 20.0f; openBtn.y = 80.0f;
+        openBtn.label = "Open Editor";
+        openBtn.controlID = "open_btn";
+        openBtn.overlayPage = "PluginEditorPage";
+        d->controls.push_back(openBtn);
+
+        addBypassAndLED(*d);
+        addStandardPorts(*d);
+        d->isFactory = true;
+
         return d;
     }
 

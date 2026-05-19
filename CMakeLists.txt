@@ -109,6 +109,7 @@ target_sources(PedalForge PRIVATE
     source/dsp/GraphPedalProcessor.h
     source/dsp/FaustDSPNode.h
     source/dsp/PedalDesign.h
+    source/dsp/PluginHostNode.h
 
     # Presets
     source/preset/PresetManager.h
@@ -164,6 +165,8 @@ target_compile_definitions(PedalForge PUBLIC
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_MODAL_LOOPS_PERMITTED=1
     NAM_SAMPLE_FLOAT=1
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=1
 )
 
 # ─── Link libraries ───────────────────────────────────────────────

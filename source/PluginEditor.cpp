@@ -38,6 +38,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addChildComponent (nodeGraphEditor);
     addChildComponent (libraryView);
     addChildComponent (midiSettingsPanel);
+    midiSettingsPanel.setMidiLearnManagers (&proc.midiLearn, &proc.playMidiLearn);
 
     // Routing editor (needs engine reference)
     routingEditor = new RoutingGraphEditor (proc.getGraphEngine());

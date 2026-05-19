@@ -150,7 +150,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             if (textIt != controlTexts.end() && textIt->second.isNotEmpty()) txt = textIt->second;
             HardwareDrawing::drawTextLabel (g, ctrlBounds, txt, &styles);
         }
-        else if (ctrl.type == "file_loader" || ctrl.type == "file_browser")
+        else if (ctrl.type == "file_loader" || ctrl.type == "file_browser" || ctrl.type == "plugin_browser")
         {
             g.setColour (juce::Colour(0xFF333333).withAlpha(alpha));
             g.fillRoundedRectangle (ctrlBounds, 4.0f);

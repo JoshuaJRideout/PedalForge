@@ -5,6 +5,7 @@
 #include "../midi/MidiLearn.h"
 #include "HardwareDrawing.h"
 #include "PedalPainter.h"
+#include "../dsp/PluginHostNode.h"
 
 class CanvasOverlay : public juce::Component, public juce::Timer
 {
@@ -21,6 +22,13 @@ public:
 
     void showForPage(PedalInstance* inst, AudioGraphEngine* eng, MidiLearnManager* mlm, const juce::String& pageName)
     {
+        // Clean up old editor if any
+        if (activePluginEditor)
+        {
+            removeChildComponent(activePluginEditor.get());
+            activePluginEditor.reset();
+        }
+
         targetInstance = inst;
         engine = eng;
         midiLearn = mlm;
@@ -45,8 +53,56 @@ public:
                 targetInstance->controlValues[ctrl.controlID] = ctrl.defaultValue;
             if (targetInstance->controlTexts.find(ctrl.controlID) == targetInstance->controlTexts.end())
                 targetInstance->controlTexts[ctrl.controlID] = ctrl.label;
+
+            // Handle plugin_editor components
+            if (ctrl.type == "plugin_editor")
+            {
+                // We need to find the PluginHostNode to get its editor
+                auto* node = engine->getGraph().getNodeForId(targetInstance->nodeID);
+                if (node)
+                {
+                    if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor()))
+                    {
+                        // Look for a PluginHostNode in the internal DSPGraph
+                        // Control mapping might point to a specific node, but we can also just search for the first PluginHostNode
+                        juce::String mappedNodeIDStr;
+                        for (const auto& m : targetInstance->design->mappings)
+                        {
+                            if (m.controlID == ctrl.controlID)
+                            {
+                                mappedNodeIDStr = m.nodeParam.upToFirstOccurrenceOf("_", false, false);
+                                break;
+                            }
+                        }
+
+                        if (mappedNodeIDStr.isNotEmpty())
+                        {
+                            int mappedNodeID = mappedNodeIDStr.getIntValue();
+                            if (auto* targetDSPNode = graphProc->getDSPGraph().getNode(mappedNodeID))
+                            {
+                                if (auto* hostNode = dynamic_cast<PluginHostNode*>(targetDSPNode))
+                                {
+                                    if (auto* pluginInst = hostNode->getPluginInstance())
+                                    {
+                                        if (pluginInst->hasEditor())
+                                        {
+                                            activePluginEditor.reset(pluginInst->createEditorIfNeeded());
+                                            if (activePluginEditor)
+                                            {
+                                                addAndMakeVisible(activePluginEditor.get());
+                                                // resized() will position it
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
+        resized(); // Force layout update for activePluginEditor
         setVisible(true);
         grabKeyboardFocus();
         startTimerHz(30);
@@ -54,6 +110,11 @@ public:
 
     void hide()
     {
+        if (activePluginEditor)
+        {
+            removeChildComponent(activePluginEditor.get());
+            activePluginEditor.reset();
+        }
         setVisible(false);
         stopTimer();
         targetInstance = nullptr;
@@ -204,10 +265,13 @@ public:
         float offY = r.getY() + (r.getHeight() - drawH) * 0.5f;
 
         // Draw Canvas Background
-        g.setColour(targetPage->backgroundColour);
-        g.fillRoundedRectangle(offX, offY, drawW, drawH, 8.0f);
-        g.setColour(juce::Colours::white.withAlpha(0.1f));
-        g.drawRoundedRectangle(offX, offY, drawW, drawH, 8.0f, 2.0f);
+        if (!targetPage->backgroundColour.isTransparent())
+        {
+            g.setColour(targetPage->backgroundColour);
+            g.fillRoundedRectangle(offX, offY, drawW, drawH, 8.0f);
+            g.setColour(juce::Colours::white.withAlpha(0.1f));
+            g.drawRoundedRectangle(offX, offY, drawW, drawH, 8.0f, 2.0f);
+        }
 
         // Draw controls
         for (const auto& ctrl : targetPage->controls)
@@ -238,7 +302,7 @@ public:
                 else
                     HardwareDrawing::drawSwitch(g, ctrlBounds, val > 0.5f, &styles);
             }
-            else if (ctrl.type == "button" || ctrl.type == "file_loader" || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher")
+            else if (ctrl.type == "button" || ctrl.type == "file_loader" || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher" || ctrl.type == "plugin_browser")
             {
                 juce::String txt = ctrl.label;
                 auto textIt = targetInstance->controlTexts.find(ctrl.controlID);
@@ -406,6 +470,55 @@ public:
         return false;
     }
 
+    void resized() override
+    {
+        if (!targetInstance || !targetPage) return;
+
+        auto r = getLocalBounds().reduced(getWidth() / 10, getHeight() / 10);
+        float scaleX = r.getWidth() / targetPage->width;
+        float scaleY = r.getHeight() / targetPage->height;
+        float sc = juce::jmin(scaleX, scaleY);
+        float drawW = targetPage->width * sc;
+        float drawH = targetPage->height * sc;
+        float offX = r.getX() + (r.getWidth() - drawW) * 0.5f;
+        float offY = r.getY() + (r.getHeight() - drawH) * 0.5f;
+
+        if (activePluginEditor)
+        {
+            for (const auto& ctrl : targetPage->controls)
+            {
+                if (ctrl.type == "plugin_editor")
+                {
+                    juce::Rectangle<int> bounds;
+                    if (activePluginEditor->isResizable())
+                    {
+                        bounds = juce::Rectangle<int>(
+                            (int)(offX + ctrl.x * sc), 
+                            (int)(offY + ctrl.y * sc), 
+                            (int)(ctrl.width * sc), 
+                            (int)(ctrl.height * sc)
+                        );
+                    }
+                    else
+                    {
+                        int cx = (int)(offX + ctrl.x * sc + (ctrl.width * sc - activePluginEditor->getWidth()) * 0.5f);
+                        int cy = (int)(offY + ctrl.y * sc + (ctrl.height * sc - activePluginEditor->getHeight()) * 0.5f);
+                        bounds = juce::Rectangle<int>(
+                            cx, cy, 
+                            activePluginEditor->getWidth(), 
+                            activePluginEditor->getHeight()
+                        );
+                    }
+
+                    if (activePluginEditor->getBounds() != bounds)
+                        activePluginEditor->setBounds(bounds);
+                    
+                    break;
+                }
+            }
+        }
+    }
+
 private:
     AudioGraphEngine* engine = nullptr;
     MidiLearnManager* midiLearn = nullptr;
@@ -415,4 +528,6 @@ private:
 
     juce::String draggedKnobID;
     float draggedKnobStartValue = 0.0f;
+    
+    std::unique_ptr<juce::AudioProcessorEditor> activePluginEditor;
 };

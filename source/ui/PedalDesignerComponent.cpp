@@ -25,6 +25,8 @@ struct PlacedHardware
     // Knob visual/interaction properties
     float rotationRange = 270.0f; // visual arc in degrees
     float sensitivity = 200.0f;   // pixels of drag for full sweep
+    
+    bool isLocked = false;        // prevents dragging and selection on canvas
 };
 
 //==============================================================================
@@ -82,7 +84,7 @@ public:
     }
 
     // Snap grid size in mm
-    static constexpr float gridSize = 1.0f; // 1mm snap
+    float gridSize = 1.0f; // 1mm snap default
 
     // Chassis presets — real-world enclosure dimensions in millimeters
     struct ChassisPreset { const char* name; float w; float h; };
@@ -126,7 +128,7 @@ public:
         if (type == "label") return 6.0f;
         if (type == "vu_meter") return 18.0f;
         if (type == "oscilloscope") return 15.0f;
-        if (type == "file_loader") return 8.0f;
+        if (type == "file_loader" || type == "plugin_browser") return 8.0f;
         return 12.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
@@ -139,7 +141,7 @@ public:
         if (type == "label") return 25.0f;
         if (type == "vu_meter") return 6.0f;
         if (type == "oscilloscope") return 25.0f;
-        if (type == "file_loader") return 22.0f;
+        if (type == "file_loader" || type == "plugin_browser") return 22.0f;
         return sizeForType (type);
     }
 
@@ -239,7 +241,18 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (PedalForgeLookAndFeel::bgDark);
+        // ── Checkerboard artboard background ──
+        {
+            int tileSize = 12;
+            juce::Colour c1 (0xFF101018);
+            juce::Colour c2 (0xFF141420);
+            for (int y = 0; y < getHeight(); y += tileSize)
+                for (int x = 0; x < getWidth(); x += tileSize)
+                {
+                    g.setColour (((x / tileSize + y / tileSize) & 1) ? c2 : c1);
+                    g.fillRect (x, y, tileSize, tileSize);
+                }
+        }
         g.saveState();
 
         juce::AffineTransform t = juce::AffineTransform::rotation (rotation, getWidth() / 2.0f, getHeight() / 2.0f)
@@ -247,25 +260,55 @@ public:
                                   .translated (panX, panY);
         g.addTransform (t);
 
-        // Draw chassis
         float cx = getWidth() / 2.0f - chassisW / 2.0f;
         float cy = getHeight() / 2.0f - chassisH / 2.0f;
-
         g.addTransform (juce::AffineTransform::translation (cx, cy));
 
+        // ── Drop shadow behind chassis ──
+        {
+            float sh = 8.0f;
+            juce::Colour shadowCol (0x40000000);
+            for (float i = sh; i > 0; i -= 2.0f)
+            {
+                g.setColour (shadowCol.withMultipliedAlpha (1.0f - i / sh));
+                g.fillRoundedRectangle (-i, -i + 2, chassisW + i * 2, chassisH + i * 2, 6.0f + i * 0.5f);
+            }
+        }
+
+        // ── Draw chassis ──
         HardwareDrawing::CustomStyles chassisStyles;
         chassisStyles.imageChassis = chassisImage;
         HardwareDrawing::drawChassis (g, { 0, 0, chassisW, chassisH }, chassisColour, &chassisStyles);
 
-        // Draw grid overlay on chassis
-        float gs = gridSize;
-        g.setColour (juce::Colour (0x18FFFFFF));
-        for (float gx = 0; gx <= chassisW; gx += gs)
-            g.drawVerticalLine ((int) gx, 0, chassisH);
-        for (float gy = 0; gy <= chassisH; gy += gs)
-            g.drawHorizontalLine ((int) gy, 0, chassisW);
+        // ── Grid overlay — major/minor lines ──
+        if (gridSize >= 0.5f)
+        {
+            float gs = gridSize;
+            float majorEvery = (gs <= 1.0f) ? 10.0f : (gs <= 2.0f) ? 10.0f : (gs <= 5.0f) ? 5.0f : 1.0f;
+            float majorStep = gs * majorEvery;
 
-        // Draw placed hardware with values
+            // Minor grid lines
+            g.setColour (juce::Colour (0x0CFFFFFF));
+            for (float gx = gs; gx < chassisW; gx += gs)
+                g.drawLine (gx, 0, gx, chassisH, 0.5f);
+            for (float gy = gs; gy < chassisH; gy += gs)
+                g.drawLine (0, gy, chassisW, gy, 0.5f);
+
+            // Major grid lines
+            g.setColour (juce::Colour (0x22FFFFFF));
+            for (float gx = majorStep; gx < chassisW; gx += majorStep)
+                g.drawLine (gx, 0, gx, chassisH, 1.0f);
+            for (float gy = majorStep; gy < chassisH; gy += majorStep)
+                g.drawLine (0, gy, chassisW, gy, 1.0f);
+
+            // Centre crosshair
+            g.setColour (juce::Colour (0x18FF6366));
+            float midX = chassisW / 2.0f, midY = chassisH / 2.0f;
+            g.drawLine (midX, 0, midX, chassisH, 0.5f);
+            g.drawLine (0, midY, chassisW, midY, 0.5f);
+        }
+
+        // ── Draw placed hardware ──
         for (int i = 0; i < (int) placedHardware.size(); ++i)
         {
             const auto& hw = placedHardware[i];
@@ -275,58 +318,156 @@ public:
             styles.customColour = hw.customColour;
             styles.stretchImage = hw.stretchImage;
 
-            HardwareDrawing::drawForType (g, hw.type, { hw.x, hw.y, hw.width, hw.height }, hw.value, &styles);
+            // Dim locked items slightly
+            if (hw.isLocked && !selectedIndices.count(i))
+                g.setOpacity (0.55f);
 
+            HardwareDrawing::drawForType (g, hw.type, { hw.x, hw.y, hw.width, hw.height }, hw.value, &styles);
+            g.setOpacity (1.0f);
+
+            // ── Selection visuals ──
             if (selectedIndices.count(i))
             {
+                // Accent glow
+                g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.15f));
+                g.fillRoundedRectangle (hw.x - 5, hw.y - 5, hw.width + 10, hw.height + 10, 6.0f);
+
+                // Dashed selection border
                 g.setColour (PedalForgeLookAndFeel::accent);
-                g.drawRoundedRectangle (hw.x - 3, hw.y - 3, hw.width + 6, hw.height + 6, 6.0f, 2.5f);
-                float hs = 6.0f;
-                g.setColour (juce::Colours::white);
-                g.fillRoundedRectangle (hw.x - hs/2 - 1, hw.y - hs/2 - 1, hs, hs, 2.0f);
-                g.fillRoundedRectangle (hw.x + hw.width - hs/2 + 1, hw.y - hs/2 - 1, hs, hs, 2.0f);
-                g.fillRoundedRectangle (hw.x - hs/2 - 1, hw.y + hw.height - hs/2 + 1, hs, hs, 2.0f);
-                g.fillRoundedRectangle (hw.x + hw.width - hs/2 + 1, hw.y + hw.height - hs/2 + 1, hs, hs, 2.0f);
+                float dashLen[] = { 4.0f, 3.0f };
+                juce::Path selPath;
+                selPath.addRoundedRectangle (hw.x - 2, hw.y - 2, hw.width + 4, hw.height + 4, 4.0f);
+                juce::PathStrokeType stroke (1.5f);
+                stroke.createDashedStroke (selPath, selPath, dashLen, 2);
+                g.strokePath (selPath, juce::PathStrokeType (1.5f));
+
+                // Corner handles
+                float hs = 7.0f;
+                auto drawHandle = [&](float hx, float hy) {
+                    g.setColour (PedalForgeLookAndFeel::accent);
+                    g.fillRoundedRectangle (hx - hs/2, hy - hs/2, hs, hs, 2.0f);
+                    g.setColour (juce::Colours::white);
+                    g.fillRoundedRectangle (hx - hs/2 + 1, hy - hs/2 + 1, hs - 2, hs - 2, 1.5f);
+                };
+                drawHandle (hw.x, hw.y);
+                drawHandle (hw.x + hw.width, hw.y);
+                drawHandle (hw.x, hw.y + hw.height);
+                drawHandle (hw.x + hw.width, hw.y + hw.height);
             }
 
-            if (hw.label.isNotEmpty())
+            // ── Lock badge on locked items ──
+            if (hw.isLocked)
             {
-                g.setColour (PedalForgeLookAndFeel::textPrimary);
-                g.setFont (juce::FontOptions (12.0f).withStyle ("Bold"));
+                float bx = hw.x + hw.width - 6, by = hw.y - 2;
+                g.setColour (juce::Colour (0xCC222233));
+                g.fillRoundedRectangle (bx, by, 10, 10, 3.0f);
+                g.setColour (juce::Colour (0xFFFF9944));
+                g.setFont (juce::FontOptions (8.0f).withStyle ("Bold"));
+                g.drawText ("L", (int)bx, (int)by, 10, 10, juce::Justification::centred);
+            }
+
+            // ── Label below component ──
+            if (hw.label.isNotEmpty() && hw.type != "label" && hw.type != "graphic")
+            {
+                g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.85f));
+                g.setFont (juce::FontOptions (11.0f).withStyle ("Bold"));
                 g.drawText (hw.label, (int)(hw.x - 20), (int)(hw.y + hw.height + 2),
-                           (int)(hw.width + 40), 16, juce::Justification::centredTop);
+                           (int)(hw.width + 40), 14, juce::Justification::centredTop);
             }
         }
 
+        // ── Snap guide lines (drawn when single-item drag is snapping) ──
+        if (isDraggingHardware && selectedIndices.size() == 1)
+        {
+            int idx = *selectedIndices.begin();
+            const auto& hw = placedHardware[idx];
+            g.setColour (juce::Colour (0xAAFF4488));
+            for (int i = 0; i < (int) placedHardware.size(); ++i)
+            {
+                if (i == idx) continue;
+                const auto& other = placedHardware[i];
+                float snapDist = 2.0f;
+
+                // Vertical guides
+                if (std::abs(hw.x - other.x) < 0.1f)
+                    g.drawLine (hw.x, juce::jmin(hw.y, other.y) - 10, hw.x, juce::jmax(hw.y + hw.height, other.y + other.height) + 10, 0.5f);
+                if (std::abs((hw.x + hw.width/2) - (other.x + other.width/2)) < 0.1f)
+                { float mx = hw.x + hw.width / 2; g.drawLine (mx, juce::jmin(hw.y, other.y) - 10, mx, juce::jmax(hw.y + hw.height, other.y + other.height) + 10, 0.5f); }
+                if (std::abs((hw.x + hw.width) - (other.x + other.width)) < 0.1f)
+                { float rx = hw.x + hw.width; g.drawLine (rx, juce::jmin(hw.y, other.y) - 10, rx, juce::jmax(hw.y + hw.height, other.y + other.height) + 10, 0.5f); }
+
+                // Horizontal guides
+                if (std::abs(hw.y - other.y) < 0.1f)
+                    g.drawLine (juce::jmin(hw.x, other.x) - 10, hw.y, juce::jmax(hw.x + hw.width, other.x + other.width) + 10, hw.y, 0.5f);
+                if (std::abs((hw.y + hw.height/2) - (other.y + other.height/2)) < 0.1f)
+                { float my = hw.y + hw.height / 2; g.drawLine (juce::jmin(hw.x, other.x) - 10, my, juce::jmax(hw.x + hw.width, other.x + other.width) + 10, my, 0.5f); }
+                if (std::abs((hw.y + hw.height) - (other.y + other.height)) < 0.1f)
+                { float by = hw.y + hw.height; g.drawLine (juce::jmin(hw.x, other.x) - 10, by, juce::jmax(hw.x + hw.width, other.x + other.width) + 10, by, 0.5f); }
+            }
+        }
+
+        // ── Chassis resize handles ──
         if (selectedIndices.empty())
         {
-            float hs = 6.0f;
-            g.setColour (juce::Colours::white);
-            g.fillRoundedRectangle (0 - hs/2 - 1, 0 - hs/2 - 1, hs, hs, 2.0f);
-            g.fillRoundedRectangle (chassisW - hs/2 + 1, 0 - hs/2 - 1, hs, hs, 2.0f);
-            g.fillRoundedRectangle (0 - hs/2 - 1, chassisH - hs/2 + 1, hs, hs, 2.0f);
-            g.fillRoundedRectangle (chassisW - hs/2 + 1, chassisH - hs/2 + 1, hs, hs, 2.0f);
+            float hs = 7.0f;
+            auto drawHandle = [&](float hx, float hy) {
+                g.setColour (PedalForgeLookAndFeel::accent);
+                g.fillRoundedRectangle (hx - hs/2, hy - hs/2, hs, hs, 2.0f);
+                g.setColour (juce::Colours::white);
+                g.fillRoundedRectangle (hx - hs/2 + 1, hy - hs/2 + 1, hs - 2, hs - 2, 1.5f);
+            };
+            drawHandle (0, 0);
+            drawHandle (chassisW, 0);
+            drawHandle (0, chassisH);
+            drawHandle (chassisW, chassisH);
         }
 
+        // ── Drag preview ──
         if (showDragPreview)
         {
             float pw = widthForType (dragPreviewType), ph = sizeForType (dragPreviewType);
             float sx = snapToGrid (dragPreviewCanvasX);
             float sy = snapToGrid (dragPreviewCanvasY);
-            g.setOpacity (0.5f);
+            g.setOpacity (0.45f);
             HardwareDrawing::drawForType (g, dragPreviewType, { sx, sy, pw, ph });
             g.setOpacity (1.0f);
+            // Preview crosshair
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.4f));
+            g.drawLine (sx + pw / 2, 0, sx + pw / 2, chassisH, 0.5f);
+            g.drawLine (0, sy + ph / 2, chassisW, sy + ph / 2, 0.5f);
         }
 
+        // ── Marquee selection ──
         if (isMarquee)
         {
-            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.3f));
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.12f));
             g.fillRect (marqueeRect);
-            g.setColour (PedalForgeLookAndFeel::accent);
-            g.drawRect (marqueeRect, 1.0f);
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.7f));
+            float dashLen[] = { 5.0f, 3.0f };
+            juce::Path marquee;
+            marquee.addRectangle (marqueeRect);
+            juce::PathStrokeType stroke (1.0f);
+            stroke.createDashedStroke (marquee, marquee, dashLen, 2);
+            g.strokePath (marquee, juce::PathStrokeType (1.0f));
         }
 
         g.restoreState();
+
+        // ── HUD: zoom level + coordinates ──
+        {
+            juce::String hudText = juce::String ((int)(scale * 100)) + "%";
+            if (!selectedIndices.empty() && selectedIndices.size() == 1)
+            {
+                auto* hw = &placedHardware[*selectedIndices.begin()];
+                hudText += "    X:" + juce::String (hw->x, 1) + "  Y:" + juce::String (hw->y, 1)
+                        + "  W:" + juce::String (hw->width, 1) + "  H:" + juce::String (hw->height, 1);
+            }
+            g.setColour (juce::Colour (0xCC0A0A14));
+            g.fillRoundedRectangle (8.0f, getHeight() - 26.0f, g.getCurrentFont().getStringWidthFloat(hudText) + 60.0f, 20.0f, 4.0f);
+            g.setColour (PedalForgeLookAndFeel::textSecondary);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText (hudText, 16, getHeight() - 26, getWidth(), 20, juce::Justification::centredLeft);
+        }
     }
 
     // --- Mouse / camera ---
@@ -355,6 +496,7 @@ public:
         for (int i = (int) placedHardware.size() - 1; i >= 0; --i)
         {
             auto& hw = placedHardware[i];
+            if (hw.isLocked) continue;
             if (juce::Rectangle<float> (hw.x, hw.y, hw.width, hw.height).contains (p))
                 return i;
         }
@@ -410,6 +552,7 @@ public:
         for (int idx : selectedIndices)
         {
             const auto& hw = placedHardware[idx];
+            if (hw.isLocked) continue;
             if (juce::Rectangle<float>(hw.x - hs, hw.y - hs, hs*2, hs*2).contains(p)) { outHandle = 0; return idx; }
             if (juce::Rectangle<float>(hw.x + hw.width - hs, hw.y - hs, hs*2, hs*2).contains(p)) { outHandle = 1; return idx; }
             if (juce::Rectangle<float>(hw.x - hs, hw.y + hw.height - hs, hs*2, hs*2).contains(p)) { outHandle = 2; return idx; }
@@ -652,10 +795,50 @@ public:
             float dx = cp.x - hardwareDragStartPos.x;
             float dy = cp.y - hardwareDragStartPos.y;
 
-            for (auto& start : dragStarts)
+            if (selectedIndices.size() == 1)
             {
-                placedHardware[start.idx].x = snapToGrid(start.startX + dx);
-                placedHardware[start.idx].y = snapToGrid(start.startY + dy);
+                int movingIdx = *selectedIndices.begin();
+                auto& hw = placedHardware[movingIdx];
+                float targetX = dragStarts[0].startX + dx;
+                float targetY = dragStarts[0].startY + dy;
+
+                float snappedX = targetX;
+                float snappedY = targetY;
+
+                bool snapped = false;
+                for (int i = 0; i < placedHardware.size(); ++i)
+                {
+                    if (i == movingIdx) continue;
+                    const auto& other = placedHardware[i];
+                    float snapDist = 2.0f; // 2mm snapping radius
+                    
+                    if (std::abs(targetX - other.x) < snapDist) { snappedX = other.x; snapped = true; }
+                    else if (std::abs((targetX + hw.width/2) - (other.x + other.width/2)) < snapDist) { snappedX = other.x + other.width/2 - hw.width/2; snapped = true; }
+                    else if (std::abs((targetX + hw.width) - (other.x + other.width)) < snapDist) { snappedX = other.x + other.width - hw.width; snapped = true; }
+
+                    if (std::abs(targetY - other.y) < snapDist) { snappedY = other.y; snapped = true; }
+                    else if (std::abs((targetY + hw.height/2) - (other.y + other.height/2)) < snapDist) { snappedY = other.y + other.height/2 - hw.height/2; snapped = true; }
+                    else if (std::abs((targetY + hw.height) - (other.y + other.height)) < snapDist) { snappedY = other.y + other.height - hw.height; snapped = true; }
+                }
+
+                if (snapped)
+                {
+                    hw.x = snappedX;
+                    hw.y = snappedY;
+                }
+                else
+                {
+                    hw.x = snapToGrid (targetX);
+                    hw.y = snapToGrid (targetY);
+                }
+            }
+            else
+            {
+                for (auto& start : dragStarts)
+                {
+                    placedHardware[start.idx].x = snapToGrid(start.startX + dx);
+                    placedHardware[start.idx].y = snapToGrid(start.startY + dy);
+                }
             }
             repaint();
             return;
@@ -683,6 +866,7 @@ public:
             for (int i = 0; i < (int)placedHardware.size(); ++i)
             {
                 auto& hw = placedHardware[i];
+                if (hw.isLocked) continue;
                 if (marqueeRect.intersects (juce::Rectangle<float>(hw.x, hw.y, hw.width, hw.height)))
                 {
                     selectedIndices.insert(i);
@@ -776,14 +960,21 @@ public:
         while (it != selectedIndices.rend())
         {
             if (*it >= 0 && *it < (int)placedHardware.size())
-                placedHardware.erase (placedHardware.begin() + *it);
+            {
+                if (!placedHardware[*it].isLocked)
+                    placedHardware.erase (placedHardware.begin() + *it);
+            }
             ++it;
         }
         setSelection ({});
-        repaint();
+        notifyHardwareChanged();
     }
     
-    void notifyHardwareChanged() { repaint(); }
+    std::function<void()> onHardwareListChanged;
+    void notifyHardwareChanged() { 
+        if (onHardwareListChanged) onHardwareListChanged();
+        repaint(); 
+    }
 
     friend class PedalDesignerComponent;
 
@@ -1433,22 +1624,255 @@ private:
 };
 
 //==============================================================================
+class PedalDesignerComponent::LayersPanel : public juce::Component, public juce::ListBoxModel
+{
+public:
+    ChassisCanvas* canvas = nullptr;
+    juce::ListBox listBox;
+    juce::TextButton btnUp {"Up"}, btnDown {"Down"}, btnLock {"Lock"};
+
+    LayersPanel()
+    {
+        listBox.setModel (this);
+        listBox.setMultipleSelectionEnabled (true);
+        listBox.setColour (juce::ListBox::backgroundColourId, PedalForgeLookAndFeel::bgDark);
+        addAndMakeVisible (listBox);
+
+        auto setupBtn = [this](juce::TextButton& b, auto cb) { 
+            b.onClick = cb; 
+            b.setColour(juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+            b.setColour(juce::TextButton::textColourOffId, PedalForgeLookAndFeel::textPrimary);
+            addAndMakeVisible(b); 
+        };
+        setupBtn (btnUp, [this] { moveSelected(-1); });
+        setupBtn (btnDown, [this] { moveSelected(1); });
+        setupBtn (btnLock, [this] { toggleLock(); });
+        btnUp.setButtonText ("▲");
+        btnDown.setButtonText ("▼");
+        btnLock.setButtonText ("🔒");
+        listBox.setRowHeight (28);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (PedalForgeLookAndFeel::bgDark);
+        // Header
+        g.setColour (PedalForgeLookAndFeel::bgMid);
+        g.fillRect (0, 0, getWidth(), 24);
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawHorizontalLine (23, 0, (float)getWidth());
+        g.setColour (PedalForgeLookAndFeel::textMuted);
+        g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+        g.drawText ("  LAYERS  (" + juce::String(getNumRows()) + ")", 0, 0, getWidth(), 24, juce::Justification::centredLeft);
+    }
+
+    void resized() override
+    {
+        auto bounds = getLocalBounds();
+        bounds.removeFromTop (24); // header
+        auto row = bounds.removeFromBottom(32).reduced(4, 2);
+        int bw = row.getWidth() / 3;
+        btnUp.setBounds(row.removeFromLeft(bw).reduced(2));
+        btnDown.setBounds(row.removeFromLeft(bw).reduced(2));
+        btnLock.setBounds(row.reduced(2));
+        listBox.setBounds(bounds);
+    }
+
+    int getNumRows() override { return canvas ? (int)canvas->placedHardware.size() : 0; }
+    void paintListBoxItem (int rowNumber, juce::Graphics& g, int w, int h, bool rowIsSelected) override
+    {
+        if (!(canvas && rowNumber >= 0 && rowNumber < (int)canvas->placedHardware.size())) return;
+        auto& hw = canvas->placedHardware[rowNumber];
+
+        // Alternating row bg
+        g.fillAll ((rowNumber & 1) ? PedalForgeLookAndFeel::bgDark : PedalForgeLookAndFeel::bgDark.brighter(0.03f));
+
+        // Selection highlight
+        if (rowIsSelected)
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.25f));
+            g.fillRect (0, 0, w, h);
+            g.setColour (PedalForgeLookAndFeel::accent);
+            g.fillRect (0, 0, 3, h); // accent bar on left
+        }
+
+        // Type badge
+        juce::String typeShort = hw.type.substring(0, 3).toUpperCase();
+        juce::Colour badgeCol = PedalForgeLookAndFeel::accent;
+        if (hw.type == "knob" || hw.type == "fader" || hw.type == "switch") badgeCol = juce::Colour (0xFF22C55E);
+        else if (hw.type == "led" || hw.type == "rgb_led") badgeCol = juce::Colour (0xFFEAB308);
+        else if (hw.type == "label" || hw.type == "graphic") badgeCol = juce::Colour (0xFF8B5CF6);
+        else if (hw.type == "footswitch") badgeCol = juce::Colour (0xFFEF4444);
+
+        g.setColour (badgeCol.withAlpha (0.2f));
+        g.fillRoundedRectangle (8.0f, (h - 16) / 2.0f, 30.0f, 16.0f, 4.0f);
+        g.setColour (badgeCol);
+        g.setFont (juce::FontOptions (9.0f).withStyle ("Bold"));
+        g.drawText (typeShort, 8, (h - 16) / 2, 30, 16, juce::Justification::centred);
+
+        // Label text
+        g.setColour (hw.isLocked ? PedalForgeLookAndFeel::textMuted : PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (12.0f));
+        juce::String text = hw.label.isNotEmpty() ? hw.label : hw.type;
+        g.drawText (text, 44, 0, w - 68, h, juce::Justification::centredLeft, true);
+
+        // Lock icon on right
+        if (hw.isLocked)
+        {
+            g.setColour (juce::Colour (0xFFFF9944));
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText ("🔒", w - 24, 0, 20, h, juce::Justification::centred);
+        }
+
+        // Bottom separator
+        g.setColour (PedalForgeLookAndFeel::gridLine.withAlpha (0.5f));
+        g.drawHorizontalLine (h - 1, 8.0f, (float)(w - 8));
+    }
+    
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override
+    {
+        if (!canvas) return;
+        std::set<int> newSel;
+        for (int i=0; i < listBox.getNumSelectedRows(); ++i)
+            newSel.insert (listBox.getSelectedRow(i));
+        
+        isUpdatingSelection = true;
+        canvas->setSelection (newSel);
+        isUpdatingSelection = false;
+    }
+
+    bool isUpdatingSelection = false;
+
+    void updateSelectionFromCanvas()
+    {
+        if (isUpdatingSelection || !canvas) return;
+        listBox.deselectAllRows();
+        for (int idx : canvas->getSelectedIndices())
+            listBox.selectRow (idx, false, false);
+    }
+
+    void moveSelected(int delta)
+    {
+        if (!canvas || canvas->selectedIndices.empty()) return;
+        std::vector<int> sel (canvas->selectedIndices.begin(), canvas->selectedIndices.end());
+        if (delta < 0) std::sort(sel.begin(), sel.end()); 
+        else std::sort(sel.rbegin(), sel.rend()); 
+
+        for (int idx : sel)
+        {
+            int newIdx = idx + delta;
+            if (newIdx >= 0 && newIdx < canvas->placedHardware.size())
+            {
+                std::swap (canvas->placedHardware[idx], canvas->placedHardware[newIdx]);
+            }
+        }
+        
+        std::set<int> newSel;
+        for (int idx : sel)
+        {
+            int newIdx = juce::jlimit(0, (int)canvas->placedHardware.size() - 1, idx + delta);
+            newSel.insert(newIdx);
+        }
+        canvas->selectedIndices = newSel;
+        
+        listBox.updateContent();
+        updateSelectionFromCanvas();
+        canvas->repaint();
+    }
+
+    void toggleLock()
+    {
+        if (!canvas) return;
+        for (int idx : canvas->selectedIndices)
+            canvas->placedHardware[idx].isLocked = !canvas->placedHardware[idx].isLocked;
+        listBox.updateContent();
+        canvas->repaint();
+    }
+};
+
  PedalDesignerComponent::PedalDesignerComponent()
 {
     canvas = std::make_unique<ChassisCanvas>();    addAndMakeVisible (*canvas);
-    properties = std::make_unique<PropertiesPanel>(); addAndMakeVisible (*properties);
+    properties = std::make_unique<PropertiesPanel>(); 
+    layersPanel = std::make_unique<LayersPanel>(); 
+
+    rightTabs = std::make_unique<juce::TabbedComponent>(juce::TabbedButtonBar::TabsAtTop);
+    rightTabs->setTabBarDepth(30);
+    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, properties.get(), false);
+    rightTabs->addTab ("Layers", PedalForgeLookAndFeel::bgDark, layersPanel.get(), false);
+    rightTabs->setOutline(0);
+    addAndMakeVisible (*rightTabs);
 
     properties->setCanvas (canvas.get());
-    canvas->onSelectionChanged = [this] () { properties->showForIndices (); };
+    layersPanel->canvas = canvas.get();
+
+    canvas->onSelectionChanged = [this] () { 
+        properties->showForIndices (); 
+        layersPanel->updateSelectionFromCanvas();
+    };
+    canvas->onHardwareListChanged = [this] () {
+        layersPanel->listBox.updateContent();
+    };
     properties->onDeleteClicked = [this] { canvas->deleteSelected(); };
 
-    // Colour swatch button in the toolbar
+    // ── Toolbar: Colour swatch ──
     colourSwatchBtn.setColour (juce::TextButton::buttonColourId, canvas->chassisColour);
     colourSwatchBtn.setButtonText ("");
     colourSwatchBtn.onClick = [this] { showColourPicker(); };
     addAndMakeVisible (colourSwatchBtn);
 
-    // Initialize properties panel to chassis immediately
+    // ── Toolbar: Grid combo ──
+    gridCombo.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
+    gridCombo.setColour (juce::ComboBox::textColourId, PedalForgeLookAndFeel::textPrimary);
+    gridCombo.setColour (juce::ComboBox::outlineColourId, PedalForgeLookAndFeel::gridLine);
+    gridCombo.addItem ("Off", 1);
+    gridCombo.addItem ("1mm", 2);
+    gridCombo.addItem ("2mm", 3);
+    gridCombo.addItem ("5mm", 4);
+    gridCombo.addItem ("10mm", 5);
+    gridCombo.setSelectedId (2, juce::dontSendNotification);
+    gridCombo.onChange = [this] {
+        int s = gridCombo.getSelectedId();
+        if (s == 1) canvas->gridSize = 0.1f;
+        else if (s == 2) canvas->gridSize = 1.0f;
+        else if (s == 3) canvas->gridSize = 2.0f;
+        else if (s == 4) canvas->gridSize = 5.0f;
+        else if (s == 5) canvas->gridSize = 10.0f;
+        canvas->repaint();
+    };
+    addAndMakeVisible (gridCombo);
+
+    // ── Toolbar: Zoom ──
+    auto setupToolBtn = [this](juce::TextButton& btn) {
+        btn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+        btn.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::textPrimary);
+        addAndMakeVisible (btn);
+    };
+    setupToolBtn (btnZoomIn);
+    setupToolBtn (btnZoomOut);
+    setupToolBtn (btnFitView);
+    btnZoomIn.onClick = [this]  { canvas->scale = juce::jmin (10.0f, canvas->scale * 1.25f); canvas->repaint(); };
+    btnZoomOut.onClick = [this] { canvas->scale = juce::jmax (0.1f, canvas->scale / 1.25f); canvas->repaint(); };
+    btnFitView.onClick = [this] {
+        float sw = (float)(canvas->getWidth()) / (canvas->chassisW + 40.0f);
+        float sh = (float)(canvas->getHeight()) / (canvas->chassisH + 40.0f);
+        canvas->scale = juce::jmin (sw, sh);
+        canvas->panX = 0; canvas->panY = 0;
+        canvas->repaint();
+    };
+
+    // ── Toolbar: Align ──
+    setupToolBtn (btnAlignLeft);
+    setupToolBtn (btnAlignCenterH);
+    setupToolBtn (btnAlignRight);
+    setupToolBtn (btnDistributeH);
+    setupToolBtn (btnDistributeV);
+    btnAlignLeft.onClick    = [this] { alignSelected(0); };
+    btnAlignCenterH.onClick = [this] { alignSelected(1); };
+    btnAlignRight.onClick   = [this] { alignSelected(2); };
+    btnDistributeH.onClick  = [this] { distributeSelected(true); };
+    btnDistributeV.onClick  = [this] { distributeSelected(false); };
+
     properties->showForIndices();
 }
 
@@ -1456,29 +1880,65 @@ PedalDesignerComponent::~PedalDesignerComponent() = default;
 
 void PedalDesignerComponent::paint (juce::Graphics& g)
 {
-    // Tab Toolbar Background
     auto toolbarArea = getLocalBounds().removeFromTop (36);
-    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    // Toolbar gradient background
+    g.setGradientFill (juce::ColourGradient (
+        PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
+        PedalForgeLookAndFeel::bgMid.darker (0.35f), 0, (float)toolbarArea.getBottom(), false));
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float)getWidth());
 
-    // Colour label
-    g.setColour (PedalForgeLookAndFeel::textSecondary);
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("Colour", colourSwatchBtn.getX() - 48, colourSwatchBtn.getY(), 44, 24,
-                juce::Justification::centredRight);
+    // Toolbar labels
+    g.setColour (PedalForgeLookAndFeel::textMuted);
+    g.setFont (juce::FontOptions (10.0f));
+    g.drawText ("COLOUR", colourSwatchBtn.getX() - 42, colourSwatchBtn.getY(), 40, 24, juce::Justification::centredRight);
+    g.drawText ("GRID", gridCombo.getX() - 32, gridCombo.getY(), 30, 24, juce::Justification::centredRight);
+
+    // Separators
+    auto drawSep = [&](int x) {
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawVerticalLine (x, 8, 28);
+    };
+    drawSep (colourSwatchBtn.getRight() + 8);
+    drawSep (gridCombo.getRight() + 8);
+    drawSep (btnFitView.getRight() + 8);
 }
 
 void PedalDesignerComponent::resized()
 {
     auto area = getLocalBounds();
     auto toolbar = area.removeFromTop (36);
-    
-    // Colour swatch in toolbar
-    colourSwatchBtn.setBounds (toolbar.removeFromLeft (80).withSizeKeepingCentre (24, 24).translated (48, 0));
-    
-    properties->setBounds (area.removeFromRight (250));
+    int m = 8;
+    int bw = 28, bh = 24;
+
+    // Colour swatch
+    toolbar.removeFromLeft (m);
+    auto colourLabel = toolbar.removeFromLeft (46);
+    colourSwatchBtn.setBounds (toolbar.removeFromLeft (bw).withSizeKeepingCentre (24, 24));
+    toolbar.removeFromLeft (16); // separator gap
+
+    // Grid combo
+    toolbar.removeFromLeft (32); // label
+    gridCombo.setBounds (toolbar.removeFromLeft (70).withSizeKeepingCentre (70, bh));
+    toolbar.removeFromLeft (16);
+
+    // Zoom buttons
+    btnZoomOut.setBounds (toolbar.removeFromLeft (bw).withSizeKeepingCentre (bw, bh));
+    btnZoomIn.setBounds (toolbar.removeFromLeft (bw).withSizeKeepingCentre (bw, bh));
+    btnFitView.setBounds (toolbar.removeFromLeft (36).withSizeKeepingCentre (36, bh));
+    toolbar.removeFromLeft (16);
+
+    // Align buttons
+    int abw = 36;
+    btnAlignLeft.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+    btnAlignCenterH.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+    btnAlignRight.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+    toolbar.removeFromLeft (4);
+    btnDistributeH.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+    btnDistributeV.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+
+    rightTabs->setBounds (area.removeFromRight (260));
     canvas->setBounds (area);
 }
 
@@ -1598,4 +2058,63 @@ PedalDesign PedalDesignerComponent::getDesign() const
     if (canvas)
         return canvas->buildPedalDesign();
     return PedalDesign();
+}
+
+void PedalDesignerComponent::alignSelected (int mode)
+{
+    if (!canvas || canvas->selectedIndices.size() < 2) return;
+    auto& hw = canvas->placedHardware;
+    auto& sel = canvas->selectedIndices;
+
+    if (mode == 0) // Align Left
+    {
+        float minX = std::numeric_limits<float>::max();
+        for (int i : sel) minX = juce::jmin (minX, hw[i].x);
+        for (int i : sel) hw[i].x = minX;
+    }
+    else if (mode == 1) // Align Center H
+    {
+        float sumCX = 0;
+        for (int i : sel) sumCX += hw[i].x + hw[i].width / 2.0f;
+        float avgCX = sumCX / (float) sel.size();
+        for (int i : sel) hw[i].x = avgCX - hw[i].width / 2.0f;
+    }
+    else if (mode == 2) // Align Right
+    {
+        float maxR = -std::numeric_limits<float>::max();
+        for (int i : sel) maxR = juce::jmax (maxR, hw[i].x + hw[i].width);
+        for (int i : sel) hw[i].x = maxR - hw[i].width;
+    }
+    canvas->repaint();
+}
+
+void PedalDesignerComponent::distributeSelected (bool horizontal)
+{
+    if (!canvas || canvas->selectedIndices.size() < 3) return;
+    auto& hw = canvas->placedHardware;
+
+    std::vector<int> sorted (canvas->selectedIndices.begin(), canvas->selectedIndices.end());
+    if (horizontal)
+        std::sort (sorted.begin(), sorted.end(), [&](int a, int b) { return hw[a].x < hw[b].x; });
+    else
+        std::sort (sorted.begin(), sorted.end(), [&](int a, int b) { return hw[a].y < hw[b].y; });
+
+    int n = (int) sorted.size();
+    if (horizontal)
+    {
+        float first = hw[sorted.front()].x;
+        float last = hw[sorted.back()].x;
+        float step = (last - first) / (float)(n - 1);
+        for (int i = 0; i < n; ++i)
+            hw[sorted[i]].x = first + step * (float)i;
+    }
+    else
+    {
+        float first = hw[sorted.front()].y;
+        float last = hw[sorted.back()].y;
+        float step = (last - first) / (float)(n - 1);
+        for (int i = 0; i < n; ++i)
+            hw[sorted[i]].y = first + step * (float)i;
+    }
+    canvas->repaint();
 }

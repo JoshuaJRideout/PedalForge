@@ -61,6 +61,7 @@ LibraryComponent::LibraryComponent()
     root->addSubItem(irNode);
 
     root->addSubItem(new CategoryTreeItem("Presets", "Presets", *this));
+    root->addSubItem(new CategoryTreeItem("Images", "Images", *this));
     addAndMakeVisible (searchBox);
     searchBox.setTextToShowWhenEmpty ("Search library...", juce::Colours::grey);
     searchBox.setColour (juce::TextEditor::backgroundColourId, PedalForgeLookAndFeel::bgMid);
@@ -175,7 +176,19 @@ void LibraryComponent::applyFilter()
         filteredAssets.clear();
         for (const auto& item : currentAssets)
         {
-            if (item.name.toLowerCase().contains (query))
+            bool match = item.name.toLowerCase().contains (query);
+            if (!match)
+            {
+                for (auto& tag : item.tags)
+                {
+                    if (tag.toLowerCase().contains(query))
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+            }
+            if (match)
                 filteredAssets.push_back (item);
         }
     }
@@ -268,15 +281,25 @@ void LibraryComponent::AssetGrid::paint (juce::Graphics& g)
         g.setColour (PedalForgeLookAndFeel::accent);
         g.setFont (20.0f);
         g.drawText (assets[i].category == "NAM" ? juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa1")) :
-                    assets[i].category.startsWith("IR") ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x94\x8a")) : juce::String(),
+                    assets[i].category.startsWith("IR") ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x94\x8a")) : 
+                    assets[i].category == "Images" ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x96\xbc")) : juce::String(),
                     iconArea.reduced (8), juce::Justification::centred);
 
         // Text
         auto textArea = juce::Rectangle<int> (iconArea.getRight() + 4, itemBounds.getY(), itemW - itemH - 8, itemH);
         g.setColour (isSelected ? juce::Colours::white : juce::Colours::white.withAlpha (0.9f));
         g.setFont (13.0f);
-        g.drawText (assets[i].name, textArea.removeFromTop (28).reduced (0, 4),
-                    juce::Justification::centredLeft, true);
+        auto nameArea = textArea.removeFromTop (18).reduced (0, 2);
+        g.drawText (assets[i].name, nameArea, juce::Justification::centredLeft, true);
+
+        // Tags
+        if (!assets[i].tags.isEmpty())
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.8f));
+            g.setFont (10.0f);
+            auto tagsArea = textArea.removeFromTop (14).reduced (0, 0);
+            g.drawText (assets[i].tags.joinIntoString(", "), tagsArea, juce::Justification::centredLeft, true);
+        }
 
         // File size
         float sizeKB = (float) assets[i].sizeBytes / 1024.0f;
@@ -313,6 +336,7 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
             {
                 menu.addItem (1, "Load");
                 menu.addItem (2, "Show in Finder");
+                menu.addItem (4, "Edit Tags...");
                 menu.addSeparator();
             }
             menu.addItem (3, selectedIndices.size() > 1 ? "Remove Selected from Library" : "Remove from Library");
@@ -327,7 +351,7 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
             }
             auto fileToLoad = asset.file;
             
-            menu.showMenuAsync (juce::PopupMenu::Options(), [sp, fileToLoad, filesToDelete] (int result)
+            menu.showMenuAsync (juce::PopupMenu::Options(), [sp, fileToLoad, filesToDelete, asset] (int result)
             {
                 if (sp == nullptr) return;
                 if (result == 1 && sp->onAssetSelected)
@@ -337,9 +361,35 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
                 else if (result == 3)
                 {
                     for (auto& f : filesToDelete)
-                        f.deleteFile();
+                    {
+                        AssetLibrary::AssetItem itemToDelete;
+                        itemToDelete.file = f;
+                        sp->library.removeAsset(itemToDelete);
+                    }
                     sp->assetGrid.selectedIndices.clear();
                     sp->refreshAssets();
+                }
+                else if (result == 4)
+                {
+                    juce::AlertWindow* alert = new juce::AlertWindow ("Edit Tags", "Enter tags separated by commas:", juce::AlertWindow::NoIcon);
+                    alert->addTextEditor ("tags", asset.tags.joinIntoString (", "));
+                    alert->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+                    alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+                    
+                    alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, asset, alert] (int r) {
+                        if (r == 1 && sp != nullptr)
+                        {
+                            auto text = alert->getTextEditorContents ("tags");
+                            auto newTags = juce::StringArray::fromTokens (text, ",", "\"");
+                            newTags.trim();
+                            newTags.removeEmptyStrings (true);
+                            
+                            auto updatedAsset = asset;
+                            updatedAsset.tags = newTags;
+                            sp->library.saveMetadata (updatedAsset);
+                            sp->refreshAssets();
+                        }
+                    }));
                 }
             });
         }

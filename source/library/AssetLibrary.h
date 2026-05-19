@@ -27,6 +27,7 @@ public:
         juce::String extension;       // ".nam", ".wav", etc.
         juce::int64  sizeBytes = 0;
         juce::Time   dateAdded;
+        juce::StringArray tags;       // Custom metatags
     };
 
     //==========================================================================
@@ -70,6 +71,7 @@ public:
             item.extension = f.getFileExtension();
             item.sizeBytes = f.getSize();
             item.dateAdded = f.getLastModificationTime();
+            loadMetadata(item);
             result.push_back (item);
         }
 
@@ -109,7 +111,48 @@ public:
     /** Remove an asset from the library. */
     bool removeAsset (const AssetItem& item)
     {
+        auto metaFile = getMetadataFile(item.file);
+        if (metaFile.existsAsFile())
+            metaFile.deleteFile();
+            
         return item.file.deleteFile();
+    }
+
+    //==========================================================================
+    /** Metadata Management */
+    juce::File getMetadataFile(const juce::File& assetFile) const
+    {
+        return assetFile.withFileExtension(assetFile.getFileExtension() + ".meta");
+    }
+
+    void loadMetadata(AssetItem& item) const
+    {
+        auto metaFile = getMetadataFile(item.file);
+        if (metaFile.existsAsFile())
+        {
+            auto json = juce::JSON::parse(metaFile);
+            if (auto* obj = json.getDynamicObject())
+            {
+                if (auto* tagsArr = obj->getProperty("tags").getArray())
+                {
+                    for (auto& t : *tagsArr)
+                        item.tags.add(t.toString());
+                }
+            }
+        }
+    }
+
+    void saveMetadata(const AssetItem& item) const
+    {
+        auto metaFile = getMetadataFile(item.file);
+        juce::DynamicObject::Ptr obj = new juce::DynamicObject();
+        
+        juce::Array<juce::var> tagsArr;
+        for (const auto& t : item.tags)
+            tagsArr.add(t);
+        obj->setProperty("tags", tagsArr);
+
+        metaFile.replaceWithText(juce::JSON::toString(juce::var(obj.get())));
     }
 
     //==========================================================================
@@ -118,6 +161,7 @@ public:
     {
         if (category == "NAM")   return "*.nam";
         if (category.startsWith("IR")) return "*.wav;*.aif;*.flac";
+        if (category == "Images") return "*.png;*.jpg;*.jpeg;*.svg";
         return "*";
     }
 
@@ -126,6 +170,7 @@ public:
     {
         if (category == "NAM")   return "*.nam";
         if (category.startsWith("IR")) return "*.wav;*.aif;*.flac";
+        if (category == "Images") return "*.png;*.jpg;*.jpeg;*.svg";
         return "*";
     }
 

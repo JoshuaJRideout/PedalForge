@@ -77,6 +77,7 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
     juce::TextButton bypassButton { "BYPASS" };
     juce::TextButton removeButton { "Remove" };
+    juce::TextButton saveDefaultButton { "Save as Default" };
     juce::TextButton closeButton  { "×" };
 
     juce::ListenerList<Listener> listeners;
