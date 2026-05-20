@@ -5,6 +5,7 @@
 #include "../pedals/PedalRegistry.h"
 #include "../dsp/GraphPedalProcessor.h"
 #include "../dsp/PedalDesign.h"
+#include "NotesOverlay.h"
 
 //==============================================================================
 /**
@@ -168,6 +169,11 @@ private:
     int findNodeByEngineId (AudioGraphEngine::NodeID id) const;
     void selectNode (int idx);
     void addPedalToRoute (const juce::String& pedalName, float canvasX, float canvasY);
+
+    // ── Notes ──
+    std::vector<StickyNote> routeNotes;
+    NotesOverlay notesOverlay;
+    juce::TextButton btnNotes { "Notes" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RoutingGraphEditor)
 };

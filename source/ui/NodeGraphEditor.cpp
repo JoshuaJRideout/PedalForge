@@ -24,6 +24,18 @@ NodeGraphEditor::NodeGraphEditor() : canvas (*this)
         if (onGraphChanged) onGraphChanged();
         canvas.repaint();
     };
+
+    // Notes
+    notesOverlay.setNotes (fxNotes);
+    addChildComponent (notesOverlay);
+    addAndMakeVisible (btnNotes);
+    btnNotes.setTooltip ("Toggle Notes");
+    btnNotes.onClick = [this] {
+        bool show = !notesOverlay.isNotesVisible();
+        notesOverlay.setVisible (show);
+        if (show && fxNotes.empty())
+            notesOverlay.addNote (120, 80);
+    };
 }
 
 NodeGraphEditor::~NodeGraphEditor() = default;
@@ -64,9 +76,10 @@ void NodeGraphEditor::clearGraph()
 
 void NodeGraphEditor::paint (juce::Graphics& g)
 {
-    // Tab Toolbar Background
     auto toolbarArea = getLocalBounds().removeFromTop (36);
-    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.setGradientFill (juce::ColourGradient (
+        PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
+        PedalForgeLookAndFeel::bgMid.darker (0.35f), 0, (float)toolbarArea.getBottom(), false));
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float)getWidth());
@@ -76,8 +89,12 @@ void NodeGraphEditor::resized()
 {
     auto area = getLocalBounds();
     auto toolbar = area.removeFromTop (36);
+    toolbar.reduce (8, 4);
+    btnNotes.setBounds (toolbar.removeFromLeft (60).withSizeKeepingCentre (60, 24));
+
     propertiesPanel.setBounds (area.removeFromRight (propertiesWidth));
     canvas.setBounds (area);
+    notesOverlay.setBounds (area);
 }
 
 void NodeGraphEditor::selectNode (int nodeID)

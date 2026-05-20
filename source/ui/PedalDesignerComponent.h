@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "LookAndFeel.h"
+#include "NotesOverlay.h"
 
 class DSPGraph;
 struct PedalDesign;
@@ -38,10 +39,12 @@ private:
     class ChassisCanvas;
     class PropertiesPanel;
     class LayersPanel;
+    class PagesPanel;
 
     std::unique_ptr<ChassisCanvas> canvas;
     std::unique_ptr<PropertiesPanel> properties;
     std::unique_ptr<LayersPanel> layersPanel;
+    std::unique_ptr<PagesPanel> pagesPanel;
     std::unique_ptr<juce::TabbedComponent> rightTabs;
     DSPGraph* effectsGraph = nullptr;
 
@@ -54,6 +57,11 @@ private:
     void showColourPicker();
     void alignSelected (int mode);
     void distributeSelected (bool horizontal);
+
+    // ── Notes ──
+    std::vector<StickyNote> designNotes;
+    NotesOverlay notesOverlay;
+    juce::TextButton btnNotes { "Notes" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalDesignerComponent)
 };

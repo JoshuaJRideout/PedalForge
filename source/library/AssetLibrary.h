@@ -23,6 +23,7 @@ public:
     {
         juce::String name;            // Display name (filename without extension)
         juce::String category;        // "NAM", "IR", etc.
+        juce::String subcategory;     // User-defined subfolder (e.g. "Stencils")
         juce::File   file;            // Full path to the file
         juce::String extension;       // ".nam", ".wav", etc.
         juce::int64  sizeBytes = 0;
@@ -51,7 +52,7 @@ public:
 
     //==========================================================================
     /** Scan a category directory and return all matching assets. */
-    std::vector<AssetItem> getAssets (const juce::String& category) const
+    std::vector<AssetItem> getAssets (const juce::String& category, const juce::String& subcategory = "") const
     {
         std::vector<AssetItem> result;
         auto dir = libraryRoot.getChildFile (category);
@@ -61,18 +62,42 @@ public:
 
         auto wildcards = getWildcardsForCategory (category);
 
-        for (const auto& entry : juce::RangedDirectoryIterator (dir, false, wildcards))
+        // Scan root of category
+        auto scanDir = [&](const juce::File& scanTarget, const juce::String& subcat)
         {
-            auto f = entry.getFile();
-            AssetItem item;
-            item.name = f.getFileNameWithoutExtension();
-            item.category = category;
-            item.file = f;
-            item.extension = f.getFileExtension();
-            item.sizeBytes = f.getSize();
-            item.dateAdded = f.getLastModificationTime();
-            loadMetadata(item);
-            result.push_back (item);
+            for (const auto& entry : juce::RangedDirectoryIterator (scanTarget, false, wildcards))
+            {
+                auto f = entry.getFile();
+                AssetItem item;
+                item.name = f.getFileNameWithoutExtension();
+                item.category = category;
+                item.subcategory = subcat;
+                item.file = f;
+                item.extension = f.getFileExtension();
+                item.sizeBytes = f.getSize();
+                item.dateAdded = f.getLastModificationTime();
+                loadMetadata(item);
+                // Metadata subcategory overrides directory-based one
+                if (item.subcategory.isEmpty())
+                    item.subcategory = subcat;
+                result.push_back (item);
+            }
+        };
+
+        if (subcategory.isNotEmpty())
+        {
+            // Scan only the specific subcategory folder
+            auto subDir = dir.getChildFile (subcategory);
+            if (subDir.isDirectory())
+                scanDir (subDir, subcategory);
+        }
+        else
+        {
+            // Scan root
+            scanDir (dir, "");
+            // Scan all subdirectories
+            for (const auto& entry : juce::RangedDirectoryIterator (dir, false, "*", juce::File::findDirectories))
+                scanDir (entry.getFile(), entry.getFile().getFileName());
         }
 
         // Sort alphabetically
@@ -80,6 +105,24 @@ public:
                    [](const AssetItem& a, const AssetItem& b) { return a.name.compareIgnoreCase (b.name) < 0; });
 
         return result;
+    }
+
+    /** Get list of subcategory names (subdirectories) for a category. */
+    juce::StringArray getSubcategories (const juce::String& category) const
+    {
+        juce::StringArray result;
+        auto dir = libraryRoot.getChildFile (category);
+        if (!dir.isDirectory()) return result;
+        for (const auto& entry : juce::RangedDirectoryIterator (dir, false, "*", juce::File::findDirectories))
+            result.add (entry.getFile().getFileName());
+        result.sort (true);
+        return result;
+    }
+
+    /** Create a subcategory folder. */
+    bool createSubcategory (const juce::String& category, const juce::String& name)
+    {
+        return libraryRoot.getChildFile(category).getChildFile(name).createDirectory();
     }
 
     //==========================================================================
@@ -118,6 +161,47 @@ public:
         return item.file.deleteFile();
     }
 
+    /** Rename an asset file on disk and return the new file. */
+    juce::File renameAsset (const AssetItem& item, const juce::String& newName)
+    {
+        auto newFile = item.file.getParentDirectory().getChildFile (newName + item.extension);
+        if (newFile.existsAsFile()) return {}; // name already taken
+        
+        // Rename the metadata file too
+        auto oldMeta = getMetadataFile(item.file);
+        auto newMeta = getMetadataFile(newFile);
+        
+        if (item.file.moveFileTo (newFile))
+        {
+            if (oldMeta.existsAsFile())
+                oldMeta.moveFileTo (newMeta);
+            return newFile;
+        }
+        return {};
+    }
+
+    /** Move an asset to a subcategory folder. */
+    juce::File moveToSubcategory (const AssetItem& item, const juce::String& subcategory)
+    {
+        auto catDir = libraryRoot.getChildFile (item.category);
+        juce::File destDir = subcategory.isEmpty() ? catDir : catDir.getChildFile (subcategory);
+        destDir.createDirectory();
+        auto destFile = destDir.getChildFile (item.file.getFileName());
+        if (destFile == item.file) return item.file; // already there
+        if (destFile.existsAsFile()) return {}; // conflict
+
+        auto oldMeta = getMetadataFile(item.file);
+        auto newMeta = getMetadataFile(destFile);
+
+        if (item.file.moveFileTo (destFile))
+        {
+            if (oldMeta.existsAsFile())
+                oldMeta.moveFileTo (newMeta);
+            return destFile;
+        }
+        return {};
+    }
+
     //==========================================================================
     /** Metadata Management */
     juce::File getMetadataFile(const juce::File& assetFile) const
@@ -138,6 +222,8 @@ public:
                     for (auto& t : *tagsArr)
                         item.tags.add(t.toString());
                 }
+                if (obj->hasProperty("subcategory"))
+                    item.subcategory = obj->getProperty("subcategory").toString();
             }
         }
     }
@@ -151,6 +237,9 @@ public:
         for (const auto& t : item.tags)
             tagsArr.add(t);
         obj->setProperty("tags", tagsArr);
+        
+        if (item.subcategory.isNotEmpty())
+            obj->setProperty("subcategory", item.subcategory);
 
         metaFile.replaceWithText(juce::JSON::toString(juce::var(obj.get())));
     }

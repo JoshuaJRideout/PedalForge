@@ -219,22 +219,23 @@ void PlayTabComponent::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgDark.darker(0.5f));
     
-    // Draw top bar for presets
-    auto bounds = getLocalBounds();
-    auto topBar = bounds.removeFromTop (44);
-    g.setColour (PedalForgeLookAndFeel::bgDark);
-    g.fillRect (topBar);
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setGradientFill (juce::ColourGradient (
+        PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
+        PedalForgeLookAndFeel::bgMid.darker (0.35f), 0, (float)toolbarArea.getBottom(), false));
+    g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
-    g.drawHorizontalLine (43, 0.0f, (float) getWidth());
+    g.drawHorizontalLine (35, 0.0f, (float) getWidth());
 }
 
 void PlayTabComponent::resized()
 {
     auto bounds = getLocalBounds();
     
-    auto topBar = bounds.removeFromTop (44);
-    presetMenu.setBounds (topBar.reduced (10, 8).removeFromLeft (200));
-    addSlotButton.setBounds (topBar.reduced (10, 8).removeFromRight (120));
+    auto topBar = bounds.removeFromTop (36);
+    topBar.reduce (8, 4);
+    presetMenu.setBounds (topBar.removeFromLeft (200).withSizeKeepingCentre (200, 24));
+    addSlotButton.setBounds (topBar.removeFromRight (120).withSizeKeepingCentre (120, 24));
 
     viewport.setBounds (bounds);
     

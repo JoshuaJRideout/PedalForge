@@ -27,6 +27,17 @@ struct PlacedHardware
     float sensitivity = 200.0f;   // pixels of drag for full sweep
     
     bool isLocked = false;        // prevents dragging and selection on canvas
+    juce::String overlayPage;     // target page for overlay_launcher
+};
+
+//==============================================================================
+/** Context for a single overlay page (or the pedal face). */
+struct PageContext
+{
+    juce::String pageName;                         // "" = pedal face
+    float width = 800.0f, height = 600.0f;
+    juce::Colour bgColour { 0xFF222222 };
+    std::vector<PlacedHardware> hardware;
 };
 
 //==============================================================================
@@ -128,7 +139,7 @@ public:
         if (type == "label") return 6.0f;
         if (type == "vu_meter") return 18.0f;
         if (type == "oscilloscope") return 15.0f;
-        if (type == "file_loader" || type == "plugin_browser") return 8.0f;
+        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 8.0f;
         return 12.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
@@ -141,7 +152,7 @@ public:
         if (type == "label") return 25.0f;
         if (type == "vu_meter") return 6.0f;
         if (type == "oscilloscope") return 25.0f;
-        if (type == "file_loader" || type == "plugin_browser") return 22.0f;
+        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 22.0f;
         return sizeForType (type);
     }
 
@@ -169,7 +180,7 @@ public:
     {
         if (pedalName.isEmpty()) pedalName = "Untitled Pedal";
         
-        PedalDesign design = buildPedalDesign();
+        PedalDesign design = buildPedalDesign (pedalFaceBackupPtr);
         
         // Save to designs directory
         auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
@@ -184,7 +195,7 @@ public:
                                                  "Pedal design saved to:\n" + file.getFullPathName());
     }
 
-    PedalDesign buildPedalDesign() const
+    PedalDesign buildPedalDesign (const std::vector<PlacedHardware>* pedalFaceBackup = nullptr) const
     {
         PedalDesign design;
         design.name = pedalName;
@@ -196,35 +207,75 @@ public:
         design.chassisColour = chassisColour;
         design.chassisImage = chassisImage;
 
-        // Controls
-        for (const auto& hw : placedHardware)
+        // Helper: convert PlacedHardware → PedalDesign::Control + Mapping
+        auto convertHardware = [&design](const std::vector<PlacedHardware>& hardware)
         {
-            PedalDesign::Control ctrl;
-            ctrl.type = hw.type;
-            ctrl.x = hw.x;
-            ctrl.y = hw.y;
-            ctrl.width = hw.width;
-            ctrl.height = hw.height;
-            ctrl.label = hw.label;
-            ctrl.controlID = hw.controlID;
-            ctrl.defaultValue = hw.value;
-            ctrl.imageMain = hw.imageMain;
-            ctrl.imageTrack = hw.imageTrack;
-            ctrl.customColour = hw.customColour;
-            ctrl.stretchImage = hw.stretchImage;
-            ctrl.fontFamily = hw.fontFamily;
-            ctrl.fontStyle = hw.fontStyle;
-            ctrl.rotationRange = hw.rotationRange;
-            ctrl.sensitivity = hw.sensitivity;
-            design.controls.push_back (ctrl);
-
-            // Mapping
-            if (hw.parameterID.isNotEmpty())
+            std::vector<PedalDesign::Control> controls;
+            for (const auto& hw : hardware)
             {
-                PedalDesign::Mapping m;
-                m.controlID = hw.controlID;
-                m.nodeParam = hw.parameterID;
-                design.mappings.push_back (m);
+                PedalDesign::Control ctrl;
+                ctrl.type = hw.type;
+                ctrl.x = hw.x;
+                ctrl.y = hw.y;
+                ctrl.width = hw.width;
+                ctrl.height = hw.height;
+                ctrl.label = hw.label;
+                ctrl.controlID = hw.controlID;
+                ctrl.defaultValue = hw.value;
+                ctrl.imageMain = hw.imageMain;
+                ctrl.imageTrack = hw.imageTrack;
+                ctrl.customColour = hw.customColour;
+                ctrl.stretchImage = hw.stretchImage;
+                ctrl.fontFamily = hw.fontFamily;
+                ctrl.fontStyle = hw.fontStyle;
+                ctrl.rotationRange = hw.rotationRange;
+                ctrl.sensitivity = hw.sensitivity;
+                ctrl.overlayPage = hw.overlayPage;
+                controls.push_back (ctrl);
+
+                if (hw.parameterID.isNotEmpty())
+                {
+                    PedalDesign::Mapping m;
+                    m.controlID = hw.controlID;
+                    m.nodeParam = hw.parameterID;
+                    design.mappings.push_back (m);
+                }
+            }
+            return controls;
+        };
+
+        // If editing an overlay page, placedHardware is the page's controls
+        // and the pedal face is stashed in pedalFaceBackup.
+        if (activePageIndex >= 0 && pedalFaceBackup != nullptr)
+        {
+            design.controls = convertHardware (*pedalFaceBackup);
+
+            // Build overlay pages, substituting placedHardware for the active page
+            for (int i = 0; i < (int)overlayPages.size(); ++i)
+            {
+                PedalDesign::CanvasPage cp;
+                cp.pageName = overlayPages[i].pageName;
+                cp.width = overlayPages[i].width;
+                cp.height = overlayPages[i].height;
+                cp.backgroundColour = overlayPages[i].bgColour;
+                cp.controls = convertHardware (i == activePageIndex ? placedHardware : overlayPages[i].hardware);
+                design.canvasPages.push_back (cp);
+            }
+        }
+        else
+        {
+            // Not editing an overlay page — placedHardware IS the pedal face
+            design.controls = convertHardware (placedHardware);
+
+            for (const auto& page : overlayPages)
+            {
+                PedalDesign::CanvasPage cp;
+                cp.pageName = page.pageName;
+                cp.width = page.width;
+                cp.height = page.height;
+                cp.backgroundColour = page.bgColour;
+                cp.controls = convertHardware (page.hardware);
+                design.canvasPages.push_back (cp);
             }
         }
 
@@ -260,25 +311,39 @@ public:
                                   .translated (panX, panY);
         g.addTransform (t);
 
-        float cx = getWidth() / 2.0f - chassisW / 2.0f;
-        float cy = getHeight() / 2.0f - chassisH / 2.0f;
+        float drawW, drawH;
+        juce::Colour drawBg;
+        getActivePageDimensions (drawW, drawH, drawBg);
+
+        float cx = getWidth() / 2.0f - drawW / 2.0f;
+        float cy = getHeight() / 2.0f - drawH / 2.0f;
         g.addTransform (juce::AffineTransform::translation (cx, cy));
 
-        // ── Drop shadow behind chassis ──
+        // ── Drop shadow ──
         {
             float sh = 8.0f;
             juce::Colour shadowCol (0x40000000);
             for (float i = sh; i > 0; i -= 2.0f)
             {
                 g.setColour (shadowCol.withMultipliedAlpha (1.0f - i / sh));
-                g.fillRoundedRectangle (-i, -i + 2, chassisW + i * 2, chassisH + i * 2, 6.0f + i * 0.5f);
+                g.fillRoundedRectangle (-i, -i + 2, drawW + i * 2, drawH + i * 2, 6.0f + i * 0.5f);
             }
         }
 
-        // ── Draw chassis ──
-        HardwareDrawing::CustomStyles chassisStyles;
-        chassisStyles.imageChassis = chassisImage;
-        HardwareDrawing::drawChassis (g, { 0, 0, chassisW, chassisH }, chassisColour, &chassisStyles);
+        // ── Draw chassis or overlay page background ──
+        if (isEditingOverlayPage())
+        {
+            g.setColour (drawBg);
+            g.fillRoundedRectangle (0, 0, drawW, drawH, 6.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.1f));
+            g.drawRoundedRectangle (0, 0, drawW, drawH, 6.0f, 1.5f);
+        }
+        else
+        {
+            HardwareDrawing::CustomStyles chassisStyles;
+            chassisStyles.imageChassis = chassisImage;
+            HardwareDrawing::drawChassis (g, { 0, 0, drawW, drawH }, chassisColour, &chassisStyles);
+        }
 
         // ── Grid overlay — major/minor lines ──
         if (gridSize >= 0.5f)
@@ -289,23 +354,23 @@ public:
 
             // Minor grid lines
             g.setColour (juce::Colour (0x0CFFFFFF));
-            for (float gx = gs; gx < chassisW; gx += gs)
-                g.drawLine (gx, 0, gx, chassisH, 0.5f);
-            for (float gy = gs; gy < chassisH; gy += gs)
-                g.drawLine (0, gy, chassisW, gy, 0.5f);
+            for (float gx = gs; gx < drawW; gx += gs)
+                g.drawLine (gx, 0, gx, drawH, 0.5f);
+            for (float gy = gs; gy < drawH; gy += gs)
+                g.drawLine (0, gy, drawW, gy, 0.5f);
 
             // Major grid lines
             g.setColour (juce::Colour (0x22FFFFFF));
-            for (float gx = majorStep; gx < chassisW; gx += majorStep)
-                g.drawLine (gx, 0, gx, chassisH, 1.0f);
-            for (float gy = majorStep; gy < chassisH; gy += majorStep)
-                g.drawLine (0, gy, chassisW, gy, 1.0f);
+            for (float gx = majorStep; gx < drawW; gx += majorStep)
+                g.drawLine (gx, 0, gx, drawH, 1.0f);
+            for (float gy = majorStep; gy < drawH; gy += majorStep)
+                g.drawLine (0, gy, drawW, gy, 1.0f);
 
             // Centre crosshair
             g.setColour (juce::Colour (0x18FF6366));
-            float midX = chassisW / 2.0f, midY = chassisH / 2.0f;
-            g.drawLine (midX, 0, midX, chassisH, 0.5f);
-            g.drawLine (0, midY, chassisW, midY, 0.5f);
+            float midX = drawW / 2.0f, midY = drawH / 2.0f;
+            g.drawLine (midX, 0, midX, drawH, 0.5f);
+            g.drawLine (0, midY, drawW, midY, 0.5f);
         }
 
         // ── Draw placed hardware ──
@@ -483,8 +548,10 @@ public:
     juce::Point<float> getChassisRelativeCanvasPosForPoint (juce::Point<float> p)
     {
         auto absP = getAbsoluteCanvasPosForPoint (p);
-        float cx = getWidth() / 2.0f - chassisW / 2.0f;
-        float cy = getHeight() / 2.0f - chassisH / 2.0f;
+        float dw, dh; juce::Colour dbg;
+        getActivePageDimensions (dw, dh, dbg);
+        float cx = getWidth() / 2.0f - dw / 2.0f;
+        float cy = getHeight() / 2.0f - dh / 2.0f;
         return { absP.x - cx, absP.y - cy };
     }
 
@@ -1003,7 +1070,64 @@ public:
 
     std::set<int> selectedIndices;
     std::vector<PlacedHardware> clipboard;
-    std::vector<PlacedHardware> placedHardware;
+    std::vector<PlacedHardware> placedHardware;   // the ACTIVE page's hardware
+
+    // ── Overlay Pages ──
+    std::vector<PageContext> overlayPages;         // index 0..N = overlay pages (pedal face is NOT stored here)
+    int activePageIndex = -1;                      // -1 = pedal face, 0..N = overlayPages[i]
+    std::vector<PlacedHardware>* pedalFaceBackupPtr = nullptr;  // set by PagesPanel so save works correctly
+    std::function<void()> onPageChanged;
+
+    /** Store the current placedHardware back to the correct page. */
+    void stashActivePage()
+    {
+        if (activePageIndex >= 0 && activePageIndex < (int)overlayPages.size())
+            overlayPages[activePageIndex].hardware = placedHardware;
+    }
+
+    /** Switch to editing a different page. -1 = pedal face. */
+    void switchToPage (int pageIdx, std::vector<PlacedHardware>& pedalFaceHardware)
+    {
+        stashActivePage();
+
+        // If currently on the pedal face, stash it
+        if (activePageIndex < 0)
+            pedalFaceHardware = placedHardware;
+
+        activePageIndex = pageIdx;
+
+        if (pageIdx < 0)
+        {
+            placedHardware = pedalFaceHardware;
+        }
+        else if (pageIdx < (int)overlayPages.size())
+        {
+            placedHardware = overlayPages[pageIdx].hardware;
+        }
+
+        setSelection ({});
+        repaint();
+        if (onPageChanged) onPageChanged();
+    }
+
+    /** Get the dimensions of the active page (or chassis). */
+    void getActivePageDimensions (float& w, float& h, juce::Colour& bg) const
+    {
+        if (activePageIndex >= 0 && activePageIndex < (int)overlayPages.size())
+        {
+            w  = overlayPages[activePageIndex].width;
+            h  = overlayPages[activePageIndex].height;
+            bg = overlayPages[activePageIndex].bgColour;
+        }
+        else
+        {
+            w  = chassisW;
+            h  = chassisH;
+            bg = chassisColour;
+        }
+    }
+
+    bool isEditingOverlayPage() const { return activePageIndex >= 0; }
 
     bool isMarquee = false;
     juce::Point<float> marqueeStart;
@@ -1102,6 +1226,8 @@ public:
         // Knob-specific editors
         setupEditor (rotationEditor);
         setupEditor (sensitivityEditor);
+
+        setupCombo (overlayPageCombo);
     }
 
     void pickImage (bool isMain)
@@ -1201,10 +1327,15 @@ public:
                 else if (c == juce::Colours::grey) colourCombo.setSelectedId (8, juce::dontSendNotification);
                 else colourCombo.setSelectedId (1, juce::dontSendNotification);
 
+                bool isOverlayLauncher = (hwPtr->type == "overlay_launcher");
+                overlayPageCombo.setVisible (isOverlayLauncher);
+                if (isOverlayLauncher)
+                    rebuildOverlayPageCombo (hwPtr);
+
                 labelEditor.setVisible (true);
                 wEditor.setVisible (true);
                 hEditor.setVisible (true);
-                paramCombo.setVisible (true);
+                paramCombo.setVisible (!isOverlayLauncher);
                 deleteButton.setVisible (true);
 
                 btnImageMain.setVisible (!isLabel);
@@ -1233,6 +1364,7 @@ public:
         else if (sel.empty())
         {
             // Chassis selected (no hardware selected)
+            overlayPageCombo.setVisible (false);
             labelEditor.setVisible (false);
             wEditor.setVisible (true);
             hEditor.setVisible (true);
@@ -1263,6 +1395,7 @@ public:
         else
         {
             // Multiple items selected
+            overlayPageCombo.setVisible (false);
             labelEditor.setVisible (false);
             wEditor.setVisible (false);
             hEditor.setVisible (false);
@@ -1329,8 +1462,17 @@ public:
                 g.drawText ("LABEL", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
                 y = labelEditor.getBottom() + 12;
 
-                g.drawText ("MAP TO PARAMETER", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
-                y = paramCombo.getBottom() + 16;
+                bool isOverlayLauncher = (hw->type == "overlay_launcher");
+                if (isOverlayLauncher)
+                {
+                    g.drawText ("TARGET PAGE", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
+                    y = overlayPageCombo.getBottom() + 16;
+                }
+                else
+                {
+                    g.drawText ("MAP TO PARAMETER", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
+                    y = paramCombo.getBottom() + 16;
+                }
 
                 g.drawText ("CUSTOM RENDERING", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
                 y += 20;
@@ -1441,9 +1583,13 @@ public:
             labelEditor.setBounds (m, y, getWidth()-m*2, 28);
             
             y = labelEditor.getBottom() + 28;
-            paramCombo.setBounds   (m, y, getWidth()-m*2, 28);
+            bool isOverlayLauncher = hw && hw->type == "overlay_launcher";
+            if (isOverlayLauncher)
+                overlayPageCombo.setBounds (m, y, getWidth()-m*2, 28);
+            else
+                paramCombo.setBounds       (m, y, getWidth()-m*2, 28);
 
-            y = paramCombo.getBottom() + 36;
+            y = juce::jmax (paramCombo.getBottom(), overlayPageCombo.getBottom()) + 36;
             if (isLabel)
             {
                 fontFamilyCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
@@ -1534,6 +1680,18 @@ public:
                             hw->parameterID = txt.substring (start + 1, end);
                     }
                 }
+                else if (box == &overlayPageCombo)
+                {
+                    int s = overlayPageCombo.getSelectedId();
+                    if (s == 1) // "(none)"
+                        hw->overlayPage = "";
+                    else if (s == 2) // "Close"
+                        hw->overlayPage = "Close";
+                    else
+                        hw->overlayPage = overlayPageCombo.getText();
+
+                    canvas->notifyHardwareChanged();
+                }
                 else if (box == &fontStyleCombo)
                 {
                     int s = fontStyleCombo.getSelectedId();
@@ -1575,7 +1733,7 @@ private:
     juce::TextEditor labelEditor;
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor;
-    juce::ComboBox paramCombo, fontStyleCombo, fontFamilyCombo, colourCombo;
+    juce::ComboBox paramCombo, fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
@@ -1620,6 +1778,29 @@ private:
 
         if (hw && hw->parameterID.isEmpty())
             paramCombo.setSelectedId (1, juce::dontSendNotification);
+    }
+
+    void rebuildOverlayPageCombo (PlacedHardware* hw)
+    {
+        overlayPageCombo.clear (juce::dontSendNotification);
+        overlayPageCombo.addItem ("(none)", 1);
+        overlayPageCombo.addItem ("Close Overlay", 2);
+        
+        int selectId = 1;
+        if (hw && hw->overlayPage == "Close") selectId = 2;
+
+        int itemId = 3;
+        if (canvas)
+        {
+            for (const auto& page : canvas->overlayPages)
+            {
+                overlayPageCombo.addItem (page.pageName, itemId);
+                if (hw && hw->overlayPage == page.pageName)
+                    selectId = itemId;
+                itemId++;
+            }
+        }
+        overlayPageCombo.setSelectedId (selectId, juce::dontSendNotification);
     }
 };
 
@@ -1790,21 +1971,320 @@ public:
     }
 };
 
+//==============================================================================
+class PedalDesignerComponent::PagesPanel : public juce::Component,
+                                            public juce::ListBoxModel,
+                                            public juce::TextEditor::Listener
+{
+public:
+    ChassisCanvas* canvas = nullptr;
+    std::vector<PlacedHardware> pedalFaceHardware;   // stash when switching away from pedal face
+
+    juce::ListBox listBox;
+    juce::TextButton btnAddPage { "+ New Page" };
+    juce::TextButton btnDeletePage { "Delete" };
+
+    // Page property editors
+    juce::TextEditor nameEditor, widthEditor, heightEditor;
+    juce::TextButton  btnBgColour { "" };
+
+    std::function<void()> onPageSwitched;
+
+    PagesPanel()
+    {
+        listBox.setModel (this);
+        listBox.setMultipleSelectionEnabled (false);
+        listBox.setColour (juce::ListBox::backgroundColourId, PedalForgeLookAndFeel::bgDark);
+        listBox.setRowHeight (30);
+        addAndMakeVisible (listBox);
+
+        auto setupBtn = [this](juce::TextButton& b) {
+            b.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+            b.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::textPrimary);
+            addAndMakeVisible (b);
+        };
+        setupBtn (btnAddPage);
+        setupBtn (btnDeletePage);
+
+        btnAddPage.onClick = [this] { addPage(); };
+        btnDeletePage.onClick = [this] { deletePage(); };
+
+        auto setupEditor = [this](juce::TextEditor& ed) {
+            ed.setColour (juce::TextEditor::backgroundColourId, PedalForgeLookAndFeel::bgLight);
+            ed.setColour (juce::TextEditor::textColourId, PedalForgeLookAndFeel::textPrimary);
+            ed.setColour (juce::TextEditor::outlineColourId, PedalForgeLookAndFeel::gridLine);
+            ed.setFont (juce::FontOptions (13.0f));
+            ed.addListener (this);
+            addChildComponent (ed);
+        };
+        setupEditor (nameEditor);
+        setupEditor (widthEditor);
+        setupEditor (heightEditor);
+
+        btnBgColour.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF222222));
+        btnBgColour.onClick = [this] { pickBgColour(); };
+        addChildComponent (btnBgColour);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (PedalForgeLookAndFeel::bgDark);
+
+        g.setColour (PedalForgeLookAndFeel::bgMid);
+        g.fillRect (0, 0, getWidth(), 24);
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawHorizontalLine (23, 0, (float)getWidth());
+        g.setColour (PedalForgeLookAndFeel::textMuted);
+        g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+        g.drawText ("  PAGES", 0, 0, getWidth(), 24, juce::Justification::centredLeft);
+
+        // Show property section header when a page is selected
+        if (canvas && canvas->activePageIndex >= 0)
+        {
+            int propY = getHeight() - 130;
+            g.setColour (PedalForgeLookAndFeel::gridLine);
+            g.drawHorizontalLine (propY, 0, (float)getWidth());
+            g.setColour (PedalForgeLookAndFeel::textMuted);
+            g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+            g.drawText ("  PAGE PROPERTIES", 0, propY + 2, getWidth(), 16, juce::Justification::centredLeft);
+
+            int m = 10;
+            int y = propY + 22;
+            g.setColour (PedalForgeLookAndFeel::textSecondary);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText ("Name", m, y, 50, 20, juce::Justification::centredLeft);
+            g.drawText ("Size", m, y + 28, 50, 20, juce::Justification::centredLeft);
+            g.drawText ("BG Colour", m, y + 56, 60, 20, juce::Justification::centredLeft);
+        }
+    }
+
+    void resized() override
+    {
+        auto bounds = getLocalBounds();
+        bounds.removeFromTop (24);
+
+        auto buttonRow = bounds.removeFromTop (32).reduced (4, 4);
+        btnAddPage.setBounds (buttonRow.removeFromLeft (buttonRow.getWidth() / 2).reduced (2, 0));
+        btnDeletePage.setBounds (buttonRow.reduced (2, 0));
+
+        // Page property editors at bottom (visible only when overlay page selected)
+        bool showProps = (canvas && canvas->activePageIndex >= 0);
+        int propH = showProps ? 130 : 0;
+        auto propArea = bounds.removeFromBottom (propH);
+
+        listBox.setBounds (bounds);
+
+        if (showProps)
+        {
+            int m = 10;
+            int y = propArea.getY() + 22;
+            int edX = m + 55;
+            int edW = propArea.getWidth() - edX - m;
+            nameEditor.setBounds (edX, y, edW, 22);
+            widthEditor.setBounds (edX, y + 28, edW / 2 - 2, 22);
+            heightEditor.setBounds (edX + edW / 2 + 2, y + 28, edW / 2 - 2, 22);
+            btnBgColour.setBounds (edX, y + 56, 30, 22);
+        }
+
+        nameEditor.setVisible (showProps);
+        widthEditor.setVisible (showProps);
+        heightEditor.setVisible (showProps);
+        btnBgColour.setVisible (showProps);
+    }
+
+    // ListBox
+    int getNumRows() override
+    {
+        return 1 + (canvas ? (int)canvas->overlayPages.size() : 0); // +1 for pedal face
+    }
+
+    void paintListBoxItem (int row, juce::Graphics& g, int w, int h, bool rowIsSelected) override
+    {
+        g.fillAll ((row & 1) ? PedalForgeLookAndFeel::bgDark : PedalForgeLookAndFeel::bgDark.brighter (0.03f));
+
+        if (rowIsSelected)
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.25f));
+            g.fillRect (0, 0, w, h);
+            g.setColour (PedalForgeLookAndFeel::accent);
+            g.fillRect (0, 0, 3, h);
+        }
+
+        // Active indicator
+        int pageIdx = row - 1; // -1 = pedal face
+        bool isActive = (canvas && canvas->activePageIndex == pageIdx);
+        g.setColour (isActive ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::textMuted);
+        g.setFont (juce::FontOptions (12.0f));
+        g.drawText (isActive ? "\u25CF" : "\u25CB", 6, 0, 14, h, juce::Justification::centredLeft);
+
+        juce::String label;
+        if (row == 0)
+            label = "Pedal Face (main)";
+        else if (canvas && (row - 1) < (int)canvas->overlayPages.size())
+            label = canvas->overlayPages[row - 1].pageName;
+
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (12.0f));
+        g.drawText (label, 24, 0, w - 30, h, juce::Justification::centredLeft, true);
+    }
+
+    void listBoxItemDoubleClicked (int row, const juce::MouseEvent&) override
+    {
+        switchToPageRow (row);
+    }
+
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override
+    {
+        switchToPageRow (row);
+    }
+
+    void switchToPageRow (int row)
+    {
+        if (!canvas) return;
+        int pageIdx = row - 1;
+        canvas->switchToPage (pageIdx, pedalFaceHardware);
+        refreshPageProperties();
+        listBox.repaint();
+        resized();
+        repaint();
+        if (onPageSwitched) onPageSwitched();
+    }
+
+    void addPage()
+    {
+        if (!canvas) return;
+        PageContext page;
+        page.pageName = "Page " + juce::String (canvas->overlayPages.size() + 1);
+        page.width = 800.0f;
+        page.height = 600.0f;
+        page.bgColour = juce::Colour (0xFF222222);
+        canvas->overlayPages.push_back (page);
+        listBox.updateContent();
+        repaint();
+
+        // Switch to the new page
+        switchToPageRow ((int)canvas->overlayPages.size()); // row = overlayPages.size() because row 0 = pedal face
+    }
+
+    void deletePage()
+    {
+        if (!canvas || canvas->activePageIndex < 0) return;
+        int idx = canvas->activePageIndex;
+
+        // Switch back to pedal face first
+        canvas->switchToPage (-1, pedalFaceHardware);
+
+        if (idx >= 0 && idx < (int)canvas->overlayPages.size())
+            canvas->overlayPages.erase (canvas->overlayPages.begin() + idx);
+
+        listBox.updateContent();
+        refreshPageProperties();
+        resized();
+        repaint();
+        if (onPageSwitched) onPageSwitched();
+    }
+
+    void refreshPageProperties()
+    {
+        if (!canvas || canvas->activePageIndex < 0 || canvas->activePageIndex >= (int)canvas->overlayPages.size())
+        {
+            nameEditor.setVisible (false);
+            widthEditor.setVisible (false);
+            heightEditor.setVisible (false);
+            btnBgColour.setVisible (false);
+            return;
+        }
+        auto& page = canvas->overlayPages[canvas->activePageIndex];
+        nameEditor.setText (page.pageName, false);
+        widthEditor.setText (juce::String ((int)page.width), false);
+        heightEditor.setText (juce::String ((int)page.height), false);
+        btnBgColour.setColour (juce::TextButton::buttonColourId, page.bgColour);
+    }
+
+    void textEditorReturnKeyPressed (juce::TextEditor& ed) override
+    {
+        textEditorFocusLost (ed);
+    }
+
+    void textEditorFocusLost (juce::TextEditor& ed) override
+    {
+        if (!canvas || canvas->activePageIndex < 0 || canvas->activePageIndex >= (int)canvas->overlayPages.size())
+            return;
+        auto& page = canvas->overlayPages[canvas->activePageIndex];
+
+        if (&ed == &nameEditor)
+        {
+            page.pageName = nameEditor.getText().trim();
+            if (page.pageName.isEmpty()) page.pageName = "Untitled";
+            listBox.repaint();
+        }
+        else if (&ed == &widthEditor)
+        {
+            page.width = juce::jmax (100.0f, widthEditor.getText().getFloatValue());
+            canvas->repaint();
+        }
+        else if (&ed == &heightEditor)
+        {
+            page.height = juce::jmax (100.0f, heightEditor.getText().getFloatValue());
+            canvas->repaint();
+        }
+    }
+
+    void pickBgColour()
+    {
+        if (!canvas || canvas->activePageIndex < 0) return;
+        auto& page = canvas->overlayPages[canvas->activePageIndex];
+
+        auto* picker = new juce::ColourSelector (
+            juce::ColourSelector::showColourAtTop
+            | juce::ColourSelector::showSliders
+            | juce::ColourSelector::showColourspace);
+        picker->setCurrentColour (page.bgColour);
+        picker->setSize (240, 280);
+        picker->addChangeListener (new BgColourListener (*this));
+        juce::CallOutBox::launchAsynchronously (std::unique_ptr<juce::Component> (picker),
+                                                btnBgColour.getScreenBounds(), nullptr);
+    }
+
+    struct BgColourListener : public juce::ChangeListener
+    {
+        PagesPanel& panel;
+        BgColourListener (PagesPanel& p) : panel (p) {}
+        void changeListenerCallback (juce::ChangeBroadcaster* source) override
+        {
+            if (auto* picker = dynamic_cast<juce::ColourSelector*> (source))
+            {
+                if (panel.canvas && panel.canvas->activePageIndex >= 0
+                    && panel.canvas->activePageIndex < (int)panel.canvas->overlayPages.size())
+                {
+                    panel.canvas->overlayPages[panel.canvas->activePageIndex].bgColour = picker->getCurrentColour();
+                    panel.btnBgColour.setColour (juce::TextButton::buttonColourId, picker->getCurrentColour());
+                    panel.canvas->repaint();
+                }
+            }
+        }
+    };
+};
+
  PedalDesignerComponent::PedalDesignerComponent()
 {
     canvas = std::make_unique<ChassisCanvas>();    addAndMakeVisible (*canvas);
     properties = std::make_unique<PropertiesPanel>(); 
     layersPanel = std::make_unique<LayersPanel>(); 
+    pagesPanel = std::make_unique<PagesPanel>();
 
     rightTabs = std::make_unique<juce::TabbedComponent>(juce::TabbedButtonBar::TabsAtTop);
     rightTabs->setTabBarDepth(30);
     rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, properties.get(), false);
     rightTabs->addTab ("Layers", PedalForgeLookAndFeel::bgDark, layersPanel.get(), false);
+    rightTabs->addTab ("Pages", PedalForgeLookAndFeel::bgDark, pagesPanel.get(), false);
     rightTabs->setOutline(0);
     addAndMakeVisible (*rightTabs);
 
     properties->setCanvas (canvas.get());
     layersPanel->canvas = canvas.get();
+    pagesPanel->canvas = canvas.get();
+    canvas->pedalFaceBackupPtr = &pagesPanel->pedalFaceHardware;
 
     canvas->onSelectionChanged = [this] () { 
         properties->showForIndices (); 
@@ -1812,6 +2292,14 @@ public:
     };
     canvas->onHardwareListChanged = [this] () {
         layersPanel->listBox.updateContent();
+    };
+    canvas->onPageChanged = [this] () {
+        layersPanel->listBox.updateContent();
+        properties->showForIndices();
+    };
+    pagesPanel->onPageSwitched = [this] () {
+        layersPanel->listBox.updateContent();
+        properties->showForIndices();
     };
     properties->onDeleteClicked = [this] { canvas->deleteSelected(); };
 
@@ -1872,6 +2360,18 @@ public:
     btnAlignRight.onClick   = [this] { alignSelected(2); };
     btnDistributeH.onClick  = [this] { distributeSelected(true); };
     btnDistributeV.onClick  = [this] { distributeSelected(false); };
+
+    // ── Notes ──
+    notesOverlay.setNotes (designNotes);
+    addChildComponent (notesOverlay);
+    setupToolBtn (btnNotes);
+    btnNotes.setTooltip ("Toggle Notes");
+    btnNotes.onClick = [this] {
+        bool show = !notesOverlay.isNotesVisible();
+        notesOverlay.setVisible (show);
+        if (show && designNotes.empty())
+            notesOverlay.addNote (120, 80);
+    };
 
     properties->showForIndices();
 }
@@ -1937,9 +2437,12 @@ void PedalDesignerComponent::resized()
     toolbar.removeFromLeft (4);
     btnDistributeH.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
     btnDistributeV.setBounds (toolbar.removeFromLeft (abw).withSizeKeepingCentre (abw, bh));
+    toolbar.removeFromLeft (12);
+    btnNotes.setBounds (toolbar.removeFromLeft (50).withSizeKeepingCentre (50, bh));
 
     rightTabs->setBounds (area.removeFromRight (260));
     canvas->setBounds (area);
+    notesOverlay.setBounds (canvas->getBounds());
 }
 
 void PedalDesignerComponent::showColourPicker()
@@ -1979,7 +2482,12 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
 {
     if (canvas)
     {
+        // Always switch back to pedal face before loading
+        if (pagesPanel)
+            canvas->switchToPage (-1, pagesPanel->pedalFaceHardware);
+
         canvas->placedHardware.clear();
+        canvas->overlayPages.clear();
         canvas->chassisW = design.chassisW;
         canvas->chassisH = design.chassisH;
         canvas->chassisColour = design.chassisColour;
@@ -2001,47 +2509,73 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
             }
         }
 
-        // Load controls
-        for (const auto& ctrl : design.controls)
+        // Helper: convert controls + mappings → PlacedHardware
+        auto convertControls = [&design](const std::vector<PedalDesign::Control>& controls)
         {
-            PlacedHardware hw;
-            hw.type = ctrl.type;
-            hw.x = ctrl.x;
-            hw.y = ctrl.y;
-            hw.width = ctrl.width;
-            hw.height = ctrl.height;
-            hw.label = ctrl.label;
-            hw.parameterID = "";
-            hw.value = ctrl.defaultValue;
-            hw.controlID = ctrl.controlID;
-            hw.imageMain = ctrl.imageMain;
-            hw.imageTrack = ctrl.imageTrack;
-            hw.customColour = ctrl.customColour;
-            hw.stretchImage = ctrl.stretchImage;
-            hw.fontFamily = ctrl.fontFamily;
-            hw.fontStyle = ctrl.fontStyle;
-            hw.rotationRange = ctrl.rotationRange;
-            hw.sensitivity = ctrl.sensitivity;
+            std::vector<PlacedHardware> result;
+            for (const auto& ctrl : controls)
+            {
+                PlacedHardware hw;
+                hw.type = ctrl.type;
+                hw.x = ctrl.x;
+                hw.y = ctrl.y;
+                hw.width = ctrl.width;
+                hw.height = ctrl.height;
+                hw.label = ctrl.label;
+                hw.parameterID = "";
+                hw.value = ctrl.defaultValue;
+                hw.controlID = ctrl.controlID;
+                hw.imageMain = ctrl.imageMain;
+                hw.imageTrack = ctrl.imageTrack;
+                hw.customColour = ctrl.customColour;
+                hw.stretchImage = ctrl.stretchImage;
+                hw.fontFamily = ctrl.fontFamily;
+                hw.fontStyle = ctrl.fontStyle;
+                hw.rotationRange = ctrl.rotationRange;
+                hw.sensitivity = ctrl.sensitivity;
+                hw.overlayPage = ctrl.overlayPage;
 
-            // Find parameterID from mappings
-            for (const auto& m : design.mappings)
-                if (m.controlID == ctrl.controlID)
-                    hw.parameterID = m.nodeParam;
+                for (const auto& m : design.mappings)
+                    if (m.controlID == ctrl.controlID)
+                        hw.parameterID = m.nodeParam;
 
-            canvas->placedHardware.push_back (hw);
+                result.push_back (hw);
+            }
+            return result;
+        };
+
+        // Load pedal face controls
+        canvas->placedHardware = convertControls (design.controls);
+
+        // Load overlay pages
+        for (const auto& cp : design.canvasPages)
+        {
+            PageContext page;
+            page.pageName = cp.pageName;
+            page.width = cp.width;
+            page.height = cp.height;
+            page.bgColour = cp.backgroundColour;
+            page.hardware = convertControls (cp.controls);
+            canvas->overlayPages.push_back (page);
         }
 
         canvas->repaint();
     }
     if (properties)
         properties->showForIndices ();
+    if (pagesPanel)
+        pagesPanel->listBox.updateContent();
 }
 
 void PedalDesignerComponent::clearDesign()
 {
     if (canvas)
     {
+        if (pagesPanel)
+            canvas->switchToPage (-1, pagesPanel->pedalFaceHardware);
+
         canvas->placedHardware.clear();
+        canvas->overlayPages.clear();
         canvas->chassisW = 60.0f;
         canvas->chassisH = 112.0f;
         canvas->chassisColour = juce::Colour (0xFF8A8A94);
@@ -2051,12 +2585,14 @@ void PedalDesignerComponent::clearDesign()
     }
     if (properties)
         properties->showForIndices ();
+    if (pagesPanel)
+        pagesPanel->listBox.updateContent();
 }
 
 PedalDesign PedalDesignerComponent::getDesign() const
 {
     if (canvas)
-        return canvas->buildPedalDesign();
+        return canvas->buildPedalDesign (pagesPanel ? &pagesPanel->pedalFaceHardware : nullptr);
     return PedalDesign();
 }
 

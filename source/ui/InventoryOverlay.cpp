@@ -543,6 +543,7 @@ void InventoryOverlay::buildItemDatabase()
         { "console",     "Console",     "Screens",     "Debug console / text output." },
         { "file_loader", "File Loader", "Controls",    "Button that opens a file browser to load files." },
         { "plugin_browser", "Plugin Browser", "Controls", "Button that opens a popup menu to select installed VST/AU plugins." },
+        { "overlay_launcher", "Overlay Switch", "Controls", "Button that opens a visual overlay page or closes it." },
         { "label",       "Label",       "Decoration",  "Custom text label for the pedal face." },
         { "graphic",     "Graphic",     "Decoration",  "Custom image layer (supports transparency)." },
         { "vu_meter",    "VU Meter",    "Instruments", "Analog-style VU level meter." },

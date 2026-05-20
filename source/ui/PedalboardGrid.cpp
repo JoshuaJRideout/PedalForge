@@ -58,6 +58,18 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
     btnMaximizeRight.setTooltip ("Maximize Detail View");
     btnMaximizeRight.onClick = [this] { rightPanelMaximized = !rightPanelMaximized; resized(); };
 
+    // Notes
+    notesOverlay.setNotes (boardNotes);
+    addChildComponent (notesOverlay);
+    addAndMakeVisible (btnNotes);
+    btnNotes.setTooltip ("Toggle Notes");
+    btnNotes.onClick = [this] {
+        bool show = !notesOverlay.isNotesVisible();
+        notesOverlay.setVisible (show);
+        if (show && boardNotes.empty())
+            notesOverlay.addNote (120, 80);
+    };
+
     startTimerHz (30);
 }
 
@@ -79,7 +91,9 @@ void PedalboardGrid::paint (juce::Graphics& g)
 
     // Tab Toolbar Background
     auto toolbarArea = getLocalBounds().removeFromTop (36);
-    g.setColour (PedalForgeLookAndFeel::bgMid.darker(0.2f));
+    g.setGradientFill (juce::ColourGradient (
+        PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
+        PedalForgeLookAndFeel::bgMid.darker (0.35f), 0, (float)toolbarArea.getBottom(), false));
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float)getWidth());
@@ -223,6 +237,7 @@ void PedalboardGrid::resized()
     auto toolbar = area.removeFromTop (36);
     btnToggleLeft.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
     btnInventory.setBounds (toolbar.removeFromLeft (140).reduced (8, 6));
+    btnNotes.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
 
     btnToggleRight.setBounds (toolbar.removeFromRight (60).reduced (4, 6));
     btnMaximizeRight.setBounds (toolbar.removeFromRight (50).reduced (4, 6));
@@ -263,6 +278,8 @@ void PedalboardGrid::resized()
         boardCanvas->setBounds (area);
         boardCanvas->setVisible (area.getWidth() > 0);
     }
+
+    notesOverlay.setBounds (area);
 }
 
 //==============================================================================

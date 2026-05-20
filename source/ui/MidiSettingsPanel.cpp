@@ -241,15 +241,31 @@ void MidiSettingsPanel::rebuildBindings()
 void MidiSettingsPanel::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgDark);
+
+    // Toolbar gradient
+    auto toolbarArea = getLocalBounds().removeFromTop (36);
+    g.setGradientFill (juce::ColourGradient (
+        PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
+        PedalForgeLookAndFeel::bgMid.darker (0.35f), 0, (float)toolbarArea.getBottom(), false));
+    g.fillRect (toolbarArea);
+    g.setColour (PedalForgeLookAndFeel::gridLine);
+    g.drawHorizontalLine (35, 0.0f, (float) getWidth());
+
+    // Toolbar label
+    g.setColour (PedalForgeLookAndFeel::textMuted);
+    g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+    g.drawText ("  MIDI CONFIGURATION", toolbarArea.reduced (8, 0), juce::Justification::centredLeft);
 }
 
 void MidiSettingsPanel::resized()
 {
-    viewport.setBounds (getLocalBounds());
+    auto bounds = getLocalBounds();
+    bounds.removeFromTop (36); // toolbar
+    viewport.setBounds (bounds);
 
     int m = 24;
     int contentW = juce::jmax (400, getWidth() - 48);
-    int y = 20;
+    int y = 12;
     
     titleLabel.setBounds (m, y, contentW, 30);
     y += 40;

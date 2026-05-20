@@ -1,8 +1,10 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_graphics/juce_graphics.h>
 #include "../library/AssetLibrary.h"
 #include <functional>
 #include <set>
+#include <map>
 
 //==============================================================================
 /**
@@ -52,9 +54,12 @@ private:
 
     juce::String currentCategoryDisplay = "Pedals";
     juce::String currentCategoryID      = "Pedals";
+    juce::String currentSubcategory;     // empty = show all
 
     juce::TextEditor searchBox;
     juce::TextButton importBtn  { "Import" };
+    juce::ComboBox subcategoryCombo;
+    juce::TextButton newCategoryBtn { "+ Category" };
 
     //==========================================================================
     // Asset grid
@@ -81,9 +86,10 @@ private:
         /** Recalculate the component height based on the number of items. */
         void updateSize (int viewportWidth)
         {
-            int cols = juce::jmax (1, (viewportWidth - padding) / (itemW + padding));
+            int iw = currentItemW(), ih = currentItemH();
+            int cols = juce::jmax (1, (viewportWidth - padding) / (iw + padding));
             int rows = ((int) parent.filteredAssets.size() + cols - 1) / juce::jmax (1, cols);
-            int totalH = juce::jmax (100, padding + rows * (itemH + padding));
+            int totalH = juce::jmax (100, padding + rows * (ih + padding));
             setSize (viewportWidth, totalH);
         }
 
@@ -94,13 +100,27 @@ private:
 
         static constexpr int itemW = 200;
         static constexpr int itemH = 56;
+        static constexpr int imgItemW = 160;
+        static constexpr int imgItemH = 140;
         static constexpr int padding = 8;
+
+        bool isImageMode() const { return parent.currentCategoryID == "Images"; }
+
+        int currentItemW() const { return isImageMode() ? imgItemW : itemW; }
+        int currentItemH() const { return isImageMode() ? imgItemH : itemH; }
     };
 
     AssetGrid assetGrid { *this };
     juce::Viewport gridViewport;
 
     std::unique_ptr<juce::FileChooser> fileChooser;
+
+    // Image thumbnail cache
+    std::map<juce::String, juce::Image> thumbnailCache;
+    juce::Image getThumbnail (const juce::File& file);
+    void clearThumbnailCache() { thumbnailCache.clear(); }
+
+    void rebuildSubcategoryCombo();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LibraryComponent)
 };

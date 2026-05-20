@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../dsp/DSPGraph.h"
+#include "NotesOverlay.h"
 
 //==============================================================================
 /**
@@ -171,6 +172,11 @@ private:
     void selectNode (int nodeID);
     void addNodeAt (const juce::String& type, float cx, float cy);
     void deleteNode (int nodeID);
+
+    // ── Notes ──
+    std::vector<StickyNote> fxNotes;
+    NotesOverlay notesOverlay;
+    juce::TextButton btnNotes { "Notes" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NodeGraphEditor)
 };

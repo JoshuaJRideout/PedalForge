@@ -4,6 +4,7 @@
 #include "../engine/AudioGraphEngine.h"
 #include "PedalComponent.h"
 #include "PedalDetailPanel.h"
+#include "NotesOverlay.h"
 
 //==============================================================================
 /**
@@ -186,6 +187,11 @@ private:
     };
 
     ActivePedalsList activePedalsList { *this };
+
+    // ── Notes ──
+    std::vector<StickyNote> boardNotes;
+    NotesOverlay notesOverlay;
+    juce::TextButton btnNotes { "Notes" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalboardGrid)
 };

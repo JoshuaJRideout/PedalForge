@@ -150,6 +150,8 @@ struct PedalDesign
             if (std::abs (c.sensitivity - 200.0f) > 0.01f)
                 co->setProperty ("sensitivity", c.sensitivity);
             co->setProperty ("isLocked", c.isLocked);
+            if (c.overlayPage.isNotEmpty())
+                co->setProperty ("overlayPage", c.overlayPage);
 
             ctrlArr.add (juce::var (co));
         }
@@ -180,6 +182,51 @@ struct PedalDesign
             rpArr.add (juce::var (rpo));
         }
         root->setProperty ("routingPorts", rpArr);
+
+        // Canvas overlay pages
+        juce::Array<juce::var> cpArr;
+        for (const auto& cp : canvasPages)
+        {
+            auto* cpo = new juce::DynamicObject();
+            cpo->setProperty ("pageName", cp.pageName);
+            cpo->setProperty ("width",    cp.width);
+            cpo->setProperty ("height",   cp.height);
+            cpo->setProperty ("backgroundColour", (juce::int64) cp.backgroundColour.getARGB());
+
+            juce::Array<juce::var> pageCtrlArr;
+            for (const auto& c : cp.controls)
+            {
+                auto* co = new juce::DynamicObject();
+                co->setProperty ("type",         c.type);
+                co->setProperty ("x",            c.x);
+                co->setProperty ("y",            c.y);
+                co->setProperty ("width",        c.width);
+                co->setProperty ("height",       c.height);
+                co->setProperty ("label",        c.label);
+                co->setProperty ("controlID",    c.controlID);
+                co->setProperty ("defaultValue", c.defaultValue);
+                co->setProperty ("imageMain",    c.imageMain);
+                co->setProperty ("imageTrack",   c.imageTrack);
+                co->setProperty ("customColour", (juce::int64) c.customColour.getARGB());
+                if (c.stretchImage != true)
+                    co->setProperty ("stretchImage", c.stretchImage);
+                if (c.fontFamily != "Sans")
+                    co->setProperty ("fontFamily", c.fontFamily);
+                if (c.fontStyle != 1)
+                    co->setProperty ("fontStyle", c.fontStyle);
+                if (std::abs (c.rotationRange - 270.0f) > 0.01f)
+                    co->setProperty ("rotationRange", c.rotationRange);
+                if (std::abs (c.sensitivity - 200.0f) > 0.01f)
+                    co->setProperty ("sensitivity", c.sensitivity);
+                co->setProperty ("isLocked", c.isLocked);
+                if (c.overlayPage.isNotEmpty())
+                    co->setProperty ("overlayPage", c.overlayPage);
+                pageCtrlArr.add (juce::var (co));
+            }
+            cpo->setProperty ("controls", pageCtrlArr);
+            cpArr.add (juce::var (cpo));
+        }
+        root->setProperty ("canvasPages", cpArr);
 
         return juce::var (root);
     }
@@ -226,6 +273,7 @@ struct PedalDesign
                         if (co->hasProperty("rotationRange")) c.rotationRange = (float)(double) co->getProperty ("rotationRange");
                         if (co->hasProperty("sensitivity"))   c.sensitivity   = (float)(double) co->getProperty ("sensitivity");
                         if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
+                        if (co->hasProperty("overlayPage"))   c.overlayPage   = co->getProperty ("overlayPage").toString();
                         design.controls.push_back (c);
                     }
                 }
@@ -261,6 +309,54 @@ struct PedalDesign
                         rp.id    = ro->getProperty ("id").toString();
                         rp.label = ro->getProperty ("label").toString();
                         design.routingPorts.push_back (rp);
+                    }
+                }
+            }
+
+            // Canvas overlay pages
+            if (auto* arr = root->getProperty ("canvasPages").getArray())
+            {
+                for (const auto& cpv : *arr)
+                {
+                    if (auto* cpo = cpv.getDynamicObject())
+                    {
+                        CanvasPage cp;
+                        cp.pageName = cpo->getProperty ("pageName").toString();
+                        cp.width    = (float)(double) cpo->getProperty ("width");
+                        cp.height   = (float)(double) cpo->getProperty ("height");
+                        if (cpo->hasProperty ("backgroundColour"))
+                            cp.backgroundColour = juce::Colour ((juce::uint32)(juce::int64) cpo->getProperty ("backgroundColour"));
+
+                        if (auto* ctrlArr = cpo->getProperty ("controls").getArray())
+                        {
+                            for (const auto& cv : *ctrlArr)
+                            {
+                                if (auto* co = cv.getDynamicObject())
+                                {
+                                    Control c;
+                                    c.type         = co->getProperty ("type").toString();
+                                    c.x            = (float)(double) co->getProperty ("x");
+                                    c.y            = (float)(double) co->getProperty ("y");
+                                    c.width        = (float)(double) co->getProperty ("width");
+                                    c.height       = (float)(double) co->getProperty ("height");
+                                    c.label        = co->getProperty ("label").toString();
+                                    c.controlID    = co->getProperty ("controlID").toString();
+                                    c.defaultValue = (float)(double) co->getProperty ("defaultValue");
+                                    if (co->hasProperty("imageMain"))    c.imageMain    = co->getProperty ("imageMain").toString();
+                                    if (co->hasProperty("imageTrack"))   c.imageTrack   = co->getProperty ("imageTrack").toString();
+                                    if (co->hasProperty("customColour")) c.customColour = juce::Colour ((juce::uint32)(juce::int64) co->getProperty ("customColour"));
+                                    if (co->hasProperty("stretchImage")) c.stretchImage = (bool) co->getProperty ("stretchImage");
+                                    if (co->hasProperty("fontFamily"))   c.fontFamily   = co->getProperty ("fontFamily").toString();
+                                    if (co->hasProperty("fontStyle"))    c.fontStyle    = (int) co->getProperty ("fontStyle");
+                                    if (co->hasProperty("rotationRange")) c.rotationRange = (float)(double) co->getProperty ("rotationRange");
+                                    if (co->hasProperty("sensitivity"))   c.sensitivity   = (float)(double) co->getProperty ("sensitivity");
+                                    if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
+                                    if (co->hasProperty("overlayPage"))   c.overlayPage   = co->getProperty ("overlayPage").toString();
+                                    cp.controls.push_back (c);
+                                }
+                            }
+                        }
+                        design.canvasPages.push_back (cp);
                     }
                 }
             }

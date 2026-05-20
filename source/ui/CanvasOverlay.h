@@ -411,7 +411,18 @@ public:
                     draggedKnobStartValue = targetInstance->controlValues[ctrl.controlID];
                     return;
                 }
-                // File loader and library loader omitted for brevity, but could be added
+                else if (ctrl.type == "overlay_launcher")
+                {
+                    if (ctrl.overlayPage.isEmpty() || ctrl.overlayPage == "(none)" || ctrl.overlayPage == "Close")
+                    {
+                        hide();
+                    }
+                    else
+                    {
+                        showForPage (targetInstance, engine, midiLearn, ctrl.overlayPage);
+                    }
+                    return;
+                }
             }
         }
     }
