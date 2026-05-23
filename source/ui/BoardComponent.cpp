@@ -22,6 +22,8 @@ BoardComponent::BoardComponent (BoardConfig& cfg, AudioGraphEngine& eng, MidiLea
     
     addAndMakeVisible (btnMenu);
     btnMenu.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    
+    
     btnMenu.onClick = [this] {
         juce::PopupMenu menu;
         
@@ -145,25 +147,29 @@ void BoardComponent::paint (juce::Graphics& g)
     g.fillRoundedRectangle (bounds.withHeight (getHeaderHeight()), 6.0f);
     g.fillRect (0.0f, getHeaderHeight() - 6.0f, bounds.getWidth(), 6.0f); // square bottom corners of header
     
-    // Grid dots
-    g.setColour (PedalForgeLookAndFeel::gridLine.withAlpha (0.2f));
-    for (int col = 0; col <= config.cols; ++col)
+    // Grid overlay — major/minor lines
+    if (config.snapGridSize >= 0.5f)
     {
-        for (int row = 0; row <= config.rows; ++row)
-        {
-            float x = (float) (col * cellSize);
-            float y = (float) (getHeaderHeight() + row * cellSize);
-            float dotSize = (col % 4 == 0 && row % 4 == 0) ? 3.0f : 1.5f;
-            g.fillEllipse (x - dotSize * 0.5f, y - dotSize * 0.5f, dotSize, dotSize);
-        }
+        float gs = config.snapGridSize;
+        float majorEvery = std::max(1.0f, std::round(100.0f / gs));
+        float majorStep = gs * majorEvery;
+        float bw = getBoardWidth();
+        float bh = getBoardHeight();
+
+        // Minor grid lines
+        g.setColour (juce::Colour (0x0CFFFFFF));
+        for (float gx = gs; gx < bw; gx += gs)
+            g.drawLine (gx, getHeaderHeight(), gx, getHeaderHeight() + bh, 0.5f);
+        for (float gy = gs; gy < bh; gy += gs)
+            g.drawLine (0, getHeaderHeight() + gy, bw, getHeaderHeight() + gy, 0.5f);
+
+        // Major grid lines
+        g.setColour (juce::Colour (0x22FFFFFF));
+        for (float gx = majorStep; gx < bw; gx += majorStep)
+            g.drawLine (gx, getHeaderHeight(), gx, getHeaderHeight() + bh, 1.0f);
+        for (float gy = majorStep; gy < bh; gy += majorStep)
+            g.drawLine (0, getHeaderHeight() + gy, bw, getHeaderHeight() + gy, 1.0f);
     }
-    
-    // Grid lines
-    g.setColour (PedalForgeLookAndFeel::gridLine.withAlpha (0.06f));
-    for (int col = 0; col <= config.cols; ++col)
-        g.drawVerticalLine (col * cellSize, (float) getHeaderHeight(), (float) (getHeaderHeight() + config.rows * cellSize));
-    for (int row = 0; row <= config.rows; ++row)
-        g.drawHorizontalLine (getHeaderHeight() + row * cellSize, 0.0f, (float) (config.cols * cellSize));
         
     // Resize handle (bottom right)
     g.setColour (PedalForgeLookAndFeel::textMuted.withAlpha (0.5f));
@@ -179,16 +185,16 @@ void BoardComponent::paint (juce::Graphics& g)
     {
         auto hoverCol = dragHoverValid ? PedalForgeLookAndFeel::success : PedalForgeLookAndFeel::danger;
         g.setColour (hoverCol.withAlpha (0.2f));
-        g.fillRect (dragHoverGridX * cellSize,
-                    getHeaderHeight() + dragHoverGridY * cellSize,
-                    dragHoverGridW * cellSize,
-                    dragHoverGridH * cellSize);
+        g.fillRect (dragHoverBoardX,
+                    getHeaderHeight() + dragHoverBoardY,
+                    dragHoverBoardW,
+                    dragHoverBoardH);
         
         g.setColour (hoverCol.withAlpha (0.6f));
-        g.drawRect (dragHoverGridX * cellSize,
-                    getHeaderHeight() + dragHoverGridY * cellSize,
-                    dragHoverGridW * cellSize,
-                    dragHoverGridH * cellSize, 2);
+        g.drawRect (dragHoverBoardX,
+                    getHeaderHeight() + dragHoverBoardY,
+                    dragHoverBoardW,
+                    dragHoverBoardH, 2.0f);
     }
 
     // Border
@@ -221,8 +227,8 @@ void BoardComponent::resized()
     }
     for (auto& comp : pedalComponents)
     {
-        auto pos = gridToPixel (comp->getInstance().gridX, comp->getInstance().gridY);
-        comp->setBounds (pos.x, pos.y, comp->getInstance().gridW * cellSize, comp->getInstance().gridH * cellSize);
+        comp->setBounds (comp->getInstance().boardX, getHeaderHeight() + comp->getInstance().boardY, 
+                         comp->getInstance().boardW, comp->getInstance().boardH);
     }
 }
 
@@ -274,8 +280,8 @@ void BoardComponent::mouseDrag (const juce::MouseEvent& e)
         float dx = (e.getScreenPosition().x - dragStartPos.x) / getTransform().mat00;
         float dy = (e.getScreenPosition().y - dragStartPos.y) / getTransform().mat11;
         
-        int dCols = std::round (dx / (float)cellSize);
-        int dRows = std::round (dy / (float)cellSize);
+        int dCols = std::round (dx / 100.0f);
+        int dRows = std::round (dy / 100.0f);
         
         int newCols = juce::jmax (1, startCols + dCols);
         int newRows = juce::jmax (1, startRows + dRows);
@@ -284,7 +290,7 @@ void BoardComponent::mouseDrag (const juce::MouseEvent& e)
         {
             config.cols = newCols;
             config.rows = newRows;
-            setSize (config.cols * cellSize, getHeaderHeight() + config.rows * cellSize);
+            setSize (getBoardWidth(), getHeaderHeight() + getBoardHeight());
             getParentComponent()->repaint(); // Update connections
         }
     }
@@ -307,21 +313,17 @@ void BoardComponent::mouseUp (const juce::MouseEvent& e)
 }
 
 //==============================================================================
-juce::Point<int> BoardComponent::gridToPixel (int gx, int gy) const
+juce::Point<float> BoardComponent::snapToGrid (float px, float py) const
 {
-    return { gx * cellSize, getHeaderHeight() + gy * cellSize };
+    float gs = config.snapGridSize;
+    if (gs <= 0.0f) return { px, py };
+    return { std::round(px / gs) * gs, std::round(py / gs) * gs };
 }
 
-juce::Point<int> BoardComponent::pixelToGrid (int px, int py) const
+bool BoardComponent::isGridRectFree (float bx, float by, float bw, float bh, AudioGraphEngine::NodeID ignoreNodeId) const
 {
-    int gx = (int)std::floor(px / (float)cellSize);
-    int gy = (int)std::floor((py - getHeaderHeight()) / (float)cellSize);
-    return { gx, gy };
-}
-
-bool BoardComponent::isGridRectFree (int gx, int gy, int gw, int gh, AudioGraphEngine::NodeID ignoreNodeId) const
-{
-    if (gx < 0 || gy < 0 || gx + gw > config.cols || gy + gh > config.rows)
+    juce::Rectangle<float> rect(bx, by, bw, bh);
+    if (bx < 0.0f || by < 0.0f || rect.getRight() > getBoardWidth() || rect.getBottom() > getBoardHeight())
         return false;
 
     for (auto& inst : engine.getPedalInstances())
@@ -329,8 +331,9 @@ bool BoardComponent::isGridRectFree (int gx, int gy, int gw, int gh, AudioGraphE
         if (! inst.onBoard || inst.boardId != config.id || inst.pageIndex != config.activePage)
             continue;
         if (inst.nodeID == ignoreNodeId) continue;
-        if (gx < inst.gridX + inst.gridW && gx + gw > inst.gridX &&
-            gy < inst.gridY + inst.gridH && gy + gh > inst.gridY)
+        
+        juce::Rectangle<float> other(inst.boardX, inst.boardY, inst.boardW, inst.boardH);
+        if (rect.intersects(other))
             return false;
     }
     return true;
@@ -365,8 +368,7 @@ void BoardComponent::rebuildPedals()
             };
         }
 
-        auto pos = gridToPixel (inst.gridX, inst.gridY);
-        comp->setBounds (pos.x, pos.y, inst.gridW * cellSize, inst.gridH * cellSize);
+        comp->setBounds (inst.boardX, getHeaderHeight() + inst.boardY, inst.boardW, inst.boardH);
 
         addAndMakeVisible (comp.get());
         pedalComponents.push_back (std::move (comp));
@@ -402,15 +404,15 @@ void BoardComponent::itemDragMove (const SourceDetails& details)
     juce::StringArray tok;
     tok.addTokens (desc, ":", "");
     
-    int gw = 1, gh = 2;
+    float bw = 100.0f, bh = 200.0f;
     if (tok.size() >= 2 && tok[0] == "pedal")
     {
         for (auto& info : getFactoryPedals())
         {
             if (info.name == tok[1])
             {
-                gw = info.gridW;
-                gh = info.gridH;
+                bw = info.gridW * 100.0f;
+                bh = info.gridH * 100.0f;
                 break;
             }
         }
@@ -420,19 +422,19 @@ void BoardComponent::itemDragMove (const SourceDetails& details)
         auto nodeId = AudioGraphEngine::NodeID { static_cast<juce::uint32> (tok[1].getLargeIntValue()) };
         if (auto* inst = engine.getPedalInstance(nodeId))
         {
-            gw = inst->gridW;
-            gh = inst->gridH;
+            bw = inst->boardW;
+            bh = inst->boardH;
         }
     }
 
     auto localPos = details.localPosition;
-    auto gp = pixelToGrid (localPos.x, localPos.y);
+    auto snap = snapToGrid (localPos.x - bw / 2.0f, localPos.y - getHeaderHeight() - bh / 2.0f);
     
-    dragHoverGridX = gp.x;
-    dragHoverGridY = gp.y;
-    dragHoverGridW = gw;
-    dragHoverGridH = gh;
-    dragHoverValid = isGridRectFree (gp.x, gp.y, gw, gh);
+    dragHoverBoardX = snap.x;
+    dragHoverBoardY = snap.y;
+    dragHoverBoardW = bw;
+    dragHoverBoardH = bh;
+    dragHoverValid = isGridRectFree (snap.x, snap.y, bw, bh);
     
     repaint();
 }
@@ -451,11 +453,12 @@ void BoardComponent::itemDropped (const SourceDetails& details)
     if (tok.size() < 2) return;
 
     auto localPos = details.localPosition;
-    auto gp = pixelToGrid (localPos.x, localPos.y);
+    auto snap = snapToGrid (localPos.x - dragHoverBoardW / 2.0f, localPos.y - getHeaderHeight() - dragHoverBoardH / 2.0f);
 
     if (tok[0] == "pedal")
     {
         auto type = tok[1];
+        bool loaded = false;
         for (auto& info : getFactoryPedals())
         {
             if (info.name == type)
@@ -463,8 +466,8 @@ void BoardComponent::itemDropped (const SourceDetails& details)
                 auto processor = info.factory();
                 auto nodeId = engine.addPedal (std::move (processor),
                                                 config.id, config.activePage,
-                                                gp.x, gp.y,
-                                                info.gridW, info.gridH);
+                                                snap.x, snap.y,
+                                                info.gridW * 100.0f, info.gridH * 100.0f);
                                                 
                 if (auto* inst = engine.getPedalInstance (nodeId))
                 {
@@ -497,7 +500,41 @@ void BoardComponent::itemDropped (const SourceDetails& details)
                     }
                 }
                 engine.autoRoutePedal(nodeId);
+                loaded = true;
                 break;
+            }
+        }
+        
+        if (!loaded)
+        {
+            if (auto design = loadCustomPedalDesign (type))
+            {
+                juce::String jsonGraph;
+                if (!design->effectsGraph.isVoid())
+                    jsonGraph = juce::JSON::toString(design->effectsGraph);
+                    
+                auto processor = std::make_unique<GraphPedalProcessor>(design->name, jsonGraph);
+                
+                float bw = std::max(100.0f, design->chassisW);
+                float bh = std::max(100.0f, design->chassisH);
+
+                auto nodeId = engine.addPedal (std::move (processor),
+                                                config.id, config.activePage,
+                                                snap.x, snap.y,
+                                                bw, bh);
+                
+                if (auto* inst = engine.getPedalInstance (nodeId))
+                {
+                    inst->colour = design->chassisColour;
+                    inst->category = design->category;
+                    inst->design = design;
+                    
+                    int numKnobs = 0;
+                    for (const auto& c : design->controls)
+                        if (c.type == "knob") numKnobs++;
+                    inst->numKnobs = numKnobs;
+                }
+                engine.autoRoutePedal(nodeId);
             }
         }
     }
@@ -509,8 +546,8 @@ void BoardComponent::itemDropped (const SourceDetails& details)
             inst->onBoard = true;
             inst->boardId = config.id;
             inst->pageIndex = config.activePage;
-            inst->gridX = gp.x;
-            inst->gridY = gp.y;
+            inst->boardX = snap.x;
+            inst->boardY = snap.y;
         }
     }
     

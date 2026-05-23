@@ -36,8 +36,8 @@ void TuringRenderer::timerCallback()
     
     std::sort(boardPedals.begin(), boardPedals.end(), [](const PedalInstance* a, const PedalInstance* b) {
         if (a->pageIndex != b->pageIndex) return a->pageIndex < b->pageIndex;
-        if (a->gridY != b->gridY) return a->gridY < b->gridY;
-        return a->gridX < b->gridX;
+        if (std::abs(a->boardY - b->boardY) > 1.0f) return a->boardY < b->boardY;
+        return a->boardX < b->boardX;
     });
     
     if (turingBoard->turingPedalIndex >= boardPedals.size()) turingBoard->turingPedalIndex = 0;
@@ -68,8 +68,8 @@ void TuringRenderer::timerCallback()
     juce::Graphics g (img);
     g.fillAll (juce::Colours::black);
     
-    float pw = activePedal->gridW * 150.0f;
-    float ph = activePedal->gridH * 150.0f;
+    float pw = activePedal->boardW * 1.5f;
+    float ph = activePedal->boardH * 1.5f;
     
     float scale = juce::jmin (w / pw, h / ph) * 0.85f;
     pw *= scale;
@@ -80,7 +80,7 @@ void TuringRenderer::timerCallback()
     
     PedalPainter::paintDesign (g, bounds, activePedal->design.get(), 
                                activePedal->controlValues, activePedal->controlTexts, 
-                               activePedal->bypassed, 1.0f);
+                               {}, activePedal->bypassed, 1.0f);
                                
     g.setColour (juce::Colours::white);
     g.setFont (24.0f);

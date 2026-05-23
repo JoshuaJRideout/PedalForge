@@ -3,6 +3,10 @@
 #include "dsp/PedalDesign.h"
 #include "ui/PlayTabComponent.h"
 
+#if JucePlugin_Build_Standalone
+extern void OpenStandaloneAudioSettingsDialog();
+#endif
+
 //==============================================================================
 PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     : AudioProcessorEditor (proc),
@@ -27,6 +31,18 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
         addAndMakeVisible (*tab);
     }
     tabPlay.setToggleState (true, juce::dontSendNotification);
+
+   #if JucePlugin_Build_Standalone
+    btnSettings.addListener (this);
+    addAndMakeVisible (btnSettings);
+   #endif
+
+    btnTestSound.setClickingTogglesState (true);
+    btnTestSound.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFF10B981)); // beautiful active emerald green
+    btnTestSound.setColour (juce::TextButton::textColourOnId, juce::Colour (0xFFFFFFFF));
+    btnTestSound.setToggleState (processorRef.isTestSoundActive(), juce::dontSendNotification);
+    btnTestSound.addListener (this);
+    addAndMakeVisible (btnTestSound);
 
     // Components
     playTab = new PlayTabComponent (proc.getPlayGraphEngine(), inventory, proc.playMidiLearn);
@@ -78,7 +94,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     grid.onOpenInventory = [this]
     {
         inventory.onPedalClicked = [this] (const juce::String& itemID) {
-            grid.addPedalAtGrid (itemID, -1, -1);
+            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
             inventory.hide();
         };
         inventory.toggle();
@@ -157,9 +173,12 @@ void PedalForgeEditor::resized()
     // Toolbar
     auto toolbar = bounds.removeFromTop (toolbarHeight);
     titleLabel.setBounds (toolbar.removeFromLeft (140).reduced (12, 0));
-
-
-
+    
+   #if JucePlugin_Build_Standalone
+    btnSettings.setBounds (toolbar.removeFromLeft (80).reduced (4, 6));
+   #endif
+    btnTestSound.setBounds (toolbar.removeFromLeft (90).reduced (4, 6));
+   
     // Tabs (right-aligned)
     tabStore.setBounds   (toolbar.removeFromRight (80).reduced (4, 6));
     tabLibrary.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
@@ -188,6 +207,20 @@ void PedalForgeEditor::resized()
 //==============================================================================
 void PedalForgeEditor::buttonClicked (juce::Button* button)
 {
+   #if JucePlugin_Build_Standalone
+    if (button == &btnSettings)
+    {
+        OpenStandaloneAudioSettingsDialog();
+        return;
+    }
+   #endif
+
+    if (button == &btnTestSound)
+    {
+        processorRef.setTestSoundActive (btnTestSound.getToggleState());
+        return;
+    }
+
     // Only handle tab buttons
     if (button != &tabPlay && button != &tabBoard && button != &tabRoute && button != &tabPedal
         && button != &tabFX && button != &tabLibrary && button != &tabStore
@@ -216,6 +249,7 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     if (wasFX && activePedal != nullptr && activePedal->design != nullptr)
     {
         activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
+        activePedal->design->fxNotes = nodeGraphEditor.getNotes();
 
         // Rebuild processor so changes actually affect audio and parameters
         auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, activePedal->design->effectsGraph);
@@ -249,7 +283,10 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     nodeGraphEditor.setVisible (isFX);
     if (isFX && activePedal != nullptr && activePedal->design != nullptr)
+    {
         nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+        nodeGraphEditor.loadNotes (activePedal->design->fxNotes);
+    }
 
     // Re-wire graph pointer
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
@@ -264,7 +301,7 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     {
         inventory.setContext (InventoryOverlay::Context::Board);
         inventory.onPedalClicked = [this] (const juce::String& itemID) {
-            grid.addPedalAtGrid (itemID, -1, -1);
+            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
             inventory.hide();
         };
     }
@@ -273,7 +310,7 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
         inventory.setContext (InventoryOverlay::Context::Route);
         inventory.onPedalClicked = [this] (const juce::String& itemID) {
             // Add pedal to graph at arbitrary position
-            grid.addPedalAtGrid (itemID, -1, -1);
+            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
             inventory.hide();
             if (routingEditor) routingEditor->syncFromEngine();
         };
@@ -295,3 +332,4 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     repaint();
 }
+

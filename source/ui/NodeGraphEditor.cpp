@@ -42,20 +42,30 @@ NodeGraphEditor::~NodeGraphEditor() = default;
 
 void NodeGraphEditor::loadDesign (const juce::var& effectsGraphJSON)
 {
-    nodeVisuals.clear();
-    selectNode (-1);
     graph.fromJSON (effectsGraphJSON);
-
-    // Auto-layout nodes in a horizontal flow
-    float x = 80, y = 200;
-    for (const auto& [id, node] : graph.getNodes())
-    {
-        nodeVisuals[id] = { x, y, nodeW, computeNodeHeight (id), false };
-        x += nodeW + 60;
-        if (x > 900) { x = 80; y += 150; }
-    }
-
+    nodeVisuals.clear();
+    selectedNodeID = -1;
+    propertiesPanel.clearSelection();
     canvas.repaint();
+
+    // Reconstruct visuals with default positions if they weren't somehow saved
+    // (In the future, we could save node visual positions inside the DSPGraph JSON
+    // or PedalDesign. For now, we do a simple layout)
+    float x = 50, y = 100;
+    for (const auto& pair : graph.getNodes())
+    {
+        auto* n = pair.second.get();
+        nodeVisuals[pair.first] = { x, y, nodeW, computeNodeHeight(pair.first), false };
+        x += 200;
+        if (x > 800) { x = 50; y += 150; }
+    }
+}
+
+void NodeGraphEditor::loadNotes (const std::vector<StickyNote>& notes)
+{
+    fxNotes = notes;
+    notesOverlay.setNotes (fxNotes);
+    notesOverlay.setVisible (!fxNotes.empty());
 }
 
 void NodeGraphEditor::clearGraph()
@@ -970,6 +980,22 @@ NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
                 expressionError.setText (exprNode->getCompileError(), juce::dontSendNotification);
             }
         }
+        else if (auto* shaderNode = dynamic_cast<ShaderDisplayNode*>(currentNode))
+        {
+            bool ok = shaderNode->setExpression (expressionEditor.getText());
+            if (ok)
+            {
+                expressionError.setText ("", juce::dontSendNotification);
+                expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
+                expressionError.setText ("Compiled OK!", juce::dontSendNotification);
+                if (onParamChanged) onParamChanged();
+            }
+            else
+            {
+                expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
+                expressionError.setText (shaderNode->getCompileError(), juce::dontSendNotification);
+            }
+        }
     };
 }
 
@@ -1073,7 +1099,7 @@ void NodeGraphEditor::NodePropertiesPanel::showNode (int nodeID, DSPNode* node)
 {
     currentNodeID = nodeID;
     currentNode = node;
-    isExpressionNode = (node && node->getType() == "expression");
+    isExpressionNode = (node && (node->getType() == "expression" || node->getType() == "disp_shader"));
     rebuildSliders();
     setupExpressionEditor();
     bool canDelete = node != nullptr;
@@ -1102,6 +1128,11 @@ void NodeGraphEditor::NodePropertiesPanel::setupExpressionEditor()
         if (auto* exprNode = dynamic_cast<ExpressionNode*>(currentNode))
         {
             expressionEditor.setText (exprNode->getExpression(), false);
+            expressionError.setText ("", juce::dontSendNotification);
+        }
+        else if (auto* shaderNode = dynamic_cast<ShaderDisplayNode*>(currentNode))
+        {
+            expressionEditor.setText (shaderNode->getExpression(), false);
             expressionError.setText ("", juce::dontSendNotification);
         }
         expressionEditor.setVisible (true);

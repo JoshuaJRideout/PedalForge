@@ -15,15 +15,14 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
 
     canvas.onNodeSelected = [this] (int idx) { selectNode (idx); };
 
-    // Notes
-    notesOverlay.setNotes (routeNotes);
+    notesOverlay.setNotes (engine.routeNotes);
     addChildComponent (notesOverlay);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
         bool show = !notesOverlay.isNotesVisible();
         notesOverlay.setVisible (show);
-        if (show && routeNotes.empty())
+        if (show && engine.routeNotes.empty())
             notesOverlay.addNote (120, 80);
     };
 
@@ -66,6 +65,7 @@ void RoutingGraphEditor::syncFromEngine()
     connections.clear();
     selectedNodeIdx = -1;
     propertiesPanel.clearSelection();
+    notesOverlay.repaint();
 
     // -- I/O endpoint nodes --------------------------------------------------
     {
@@ -279,6 +279,8 @@ void RoutingGraphEditor::syncFromEngine()
 
 void RoutingGraphEditor::timerCallback()
 {
+    if (! isShowing()) return;
+
     auto* inNode = engine.getGraph().getNodeForId(engine.getAudioInputNodeID());
     auto* outNode = engine.getGraph().getNodeForId(engine.getAudioOutputNodeID());
     
@@ -294,6 +296,97 @@ void RoutingGraphEditor::timerCallback()
         lastKnownOutputChannels = currentOutChannels;
         syncFromEngine();
     }
+
+    // --- Signal Flow Animation ---
+    bool needsRepaint = false;
+
+    // Decay connection glow
+    for (auto& conn : connections)
+    {
+        if (conn.glowLevel > 0.0f)
+        {
+            conn.glowLevel = std::max(0.0f, conn.glowLevel - 0.15f);
+            needsRepaint = true;
+        }
+    }
+
+    // Decay port glow
+    for (auto& node : nodes)
+    {
+        for (auto& p : node.inputs)  if (p.glowLevel > 0.0f) { p.glowLevel = std::max(0.0f, p.glowLevel - 0.15f); needsRepaint = true; }
+        for (auto& p : node.outputs) if (p.glowLevel > 0.0f) { p.glowLevel = std::max(0.0f, p.glowLevel - 0.15f); needsRepaint = true; }
+    }
+
+    // Read atomics for outputs and apply new glow
+    for (int nIdx = 0; nIdx < (int)nodes.size(); ++nIdx)
+    {
+        auto& node = nodes[nIdx];
+        
+        float audioLevels[2] {0.0f, 0.0f};
+        bool midiActive = false;
+
+        if (node.isIONode && node.name == "Audio In")
+        {
+            audioLevels[0] = engine.mainInRMS[0].load();
+            audioLevels[1] = engine.mainInRMS[1].load();
+        }
+        else if (node.isIONode && node.isHwMidi && node.hwMidiIsInput)
+        {
+            for (auto& hw : engine.getHardwareMidiDevices())
+                if (hw.deviceName == node.hwMidiName && hw.isInput && hw.activity->exchange(false))
+                    midiActive = true;
+        }
+        else if (!node.isIONode && !node.isHwMidi)
+        {
+            if (auto* inst = engine.getPedalInstance(node.engineNodeId))
+            {
+                if (inst->meters)
+                {
+                    audioLevels[0] = inst->meters->outRMS[0].load();
+                    audioLevels[1] = inst->meters->outRMS[1].load();
+                    if (inst->meters->midiOut.exchange(false))
+                        midiActive = true;
+                }
+            }
+        }
+
+        // Apply audio levels to audio output ports
+        for (auto& port : node.outputs)
+        {
+            float targetLevel = 0.0f;
+            if (port.type == PortType::AudioStereo)
+                targetLevel = std::min(1.0f, audioLevels[port.engineChannel < 2 ? port.engineChannel : 0] * 3.0f);
+            else if (port.type == PortType::MIDI && midiActive)
+                targetLevel = 1.0f;
+
+            if (targetLevel > port.glowLevel)
+            {
+                port.glowLevel = targetLevel;
+                needsRepaint = true;
+            }
+        }
+    }
+
+    // Transfer port glow to connections
+    for (auto& conn : connections)
+    {
+        if (conn.sourceNodeIdx >= 0 && conn.sourceNodeIdx < (int)nodes.size())
+        {
+            auto& srcNode = nodes[conn.sourceNodeIdx];
+            if (conn.sourcePortIdx >= 0 && conn.sourcePortIdx < (int)srcNode.outputs.size())
+            {
+                float srcGlow = srcNode.outputs[conn.sourcePortIdx].glowLevel;
+                if (srcGlow > conn.glowLevel)
+                {
+                    conn.glowLevel = srcGlow;
+                    needsRepaint = true;
+                }
+            }
+        }
+    }
+
+    if (needsRepaint)
+        canvas.repaint();
 }
 
 //==============================================================================
@@ -495,12 +588,24 @@ void RoutingGraphEditor::RoutingCanvas::drawNode (juce::Graphics& g, int idx, co
     for (int i = 0; i < (int) node.inputs.size(); ++i)
     {
         auto pp = editor.getPortPosition (idx, false, i);
-        g.setColour (editor.getPortColour (node.inputs[(size_t) i].type));
+        auto& port = node.inputs[(size_t) i];
+        juce::Colour portColour = editor.getPortColour (port.type);
+        
+        if (port.glowLevel > 0.01f)
+        {
+            g.setColour (portColour.withAlpha (port.glowLevel * 0.5f));
+            g.fillEllipse (pp.x - portR - port.glowLevel * 3.0f, pp.y - portR - port.glowLevel * 3.0f, 
+                           (portR + port.glowLevel * 3.0f) * 2, (portR + port.glowLevel * 3.0f) * 2);
+            g.setColour (portColour.brighter (port.glowLevel * 0.8f));
+        }
+        else
+            g.setColour (portColour);
+            
         g.fillEllipse (pp.x - portR, pp.y - portR, portR * 2, portR * 2);
 
         g.setColour (PedalForgeLookAndFeel::textSecondary);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (node.inputs[(size_t) i].name,
+        g.drawText (port.name,
                     pp.x + portR + 4, pp.y - 7, 70, 14,
                     juce::Justification::centredLeft);
     }
@@ -509,12 +614,24 @@ void RoutingGraphEditor::RoutingCanvas::drawNode (juce::Graphics& g, int idx, co
     for (int i = 0; i < (int) node.outputs.size(); ++i)
     {
         auto pp = editor.getPortPosition (idx, true, i);
-        g.setColour (editor.getPortColour (node.outputs[(size_t) i].type));
+        auto& port = node.outputs[(size_t) i];
+        juce::Colour portColour = editor.getPortColour (port.type);
+        
+        if (port.glowLevel > 0.01f)
+        {
+            g.setColour (portColour.withAlpha (port.glowLevel * 0.5f));
+            g.fillEllipse (pp.x - portR - port.glowLevel * 3.0f, pp.y - portR - port.glowLevel * 3.0f, 
+                           (portR + port.glowLevel * 3.0f) * 2, (portR + port.glowLevel * 3.0f) * 2);
+            g.setColour (portColour.brighter (port.glowLevel * 0.8f));
+        }
+        else
+            g.setColour (portColour);
+            
         g.fillEllipse (pp.x - portR, pp.y - portR, portR * 2, portR * 2);
 
         g.setColour (PedalForgeLookAndFeel::textSecondary);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (node.outputs[(size_t) i].name,
+        g.drawText (port.name,
                     pp.x - portR - 74, pp.y - 7, 70, 14,
                     juce::Justification::centredRight);
     }
@@ -541,8 +658,23 @@ void RoutingGraphEditor::RoutingCanvas::drawConnection (juce::Graphics& g, const
                   end.x - cp, end.y,
                   end.x, end.y);
 
-    g.setColour (editor.getPortColour (type).withAlpha (0.8f));
-    g.strokePath (path, juce::PathStrokeType (2.5f));
+    juce::Colour baseColour = editor.getPortColour (type);
+    
+    if (conn.glowLevel > 0.01f)
+    {
+        // Draw glow halo
+        g.setColour (baseColour.withAlpha (conn.glowLevel * 0.5f));
+        g.strokePath (path, juce::PathStrokeType (2.5f + conn.glowLevel * 6.0f));
+        
+        // Draw bright core
+        g.setColour (baseColour.brighter (conn.glowLevel * 0.8f).withAlpha (0.8f + conn.glowLevel * 0.2f));
+        g.strokePath (path, juce::PathStrokeType (2.5f + conn.glowLevel * 1.5f));
+    }
+    else
+    {
+        g.setColour (baseColour.withAlpha (0.8f));
+        g.strokePath (path, juce::PathStrokeType (2.5f));
+    }
 }
 
 void RoutingGraphEditor::RoutingCanvas::drawWirePreview (juce::Graphics& g) const
@@ -639,15 +771,10 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    // Background click — start panning or deselect
-    if (e.mods.isMiddleButtonDown() || e.mods.isAltDown())
-    {
-        dragStartPan = { panX - e.x, panY - e.y };
-    }
-    else
-    {
-        if (onNodeSelected) onNodeSelected (-1);
-    }
+    // Background click — start panning and/or deselect
+    isPanning = true;
+    dragStartPan = { panX - e.x, panY - e.y };
+    if (onNodeSelected) onNodeSelected (-1);
 }
 
 void RoutingGraphEditor::RoutingCanvas::mouseDrag (const juce::MouseEvent& e)
@@ -671,7 +798,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseDrag (const juce::MouseEvent& e)
     }
 
     // Panning
-    if (e.mods.isMiddleButtonDown() || e.mods.isAltDown())
+    if (isPanning)
     {
         panX = dragStartPan.x + e.x;
         panY = dragStartPan.y + e.y;
@@ -731,6 +858,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
         }
 
         draggingWire = false;
+        isPanning = false;
         repaint();
     }
 
@@ -752,7 +880,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
         {
             for (auto& dev : editor.engine.getHardwareMidiDevices())
             {
-                if (dev.deviceName == n.hwMidiName && dev.isInput == n.hwMidiIsInput)
+                if (dev.engineNodeId == n.engineNodeId)
                 {
                     dev.routeX = n.x;
                     dev.routeY = n.y;
@@ -760,9 +888,8 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
                 }
             }
         }
-        else if (auto* board = editor.engine.getBoard(n.name.substring(0, n.name.indexOf(" (Pedalboard)"))))
+        else if (!n.isIONode && !n.isHwMidi && n.name.endsWith(" (Pedalboard)"))
         {
-            // The name is "Board Name (Pedalboard)", but engineNodeId uniquely identifies it
             for (auto& b : editor.engine.getBoards())
             {
                 if (b.engineNodeId == n.engineNodeId.uid)
@@ -781,6 +908,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
     }
 
     draggingNodeIdx = -1;
+    isPanning = false;
 }
 
 void RoutingGraphEditor::RoutingCanvas::mouseWheelMove (const juce::MouseEvent& e,
@@ -927,8 +1055,8 @@ void RoutingGraphEditor::addPedalToRoute (const juce::String& pedalName, float c
                 inst->colour    = info.colour;
                 inst->category  = info.category;
                 inst->numKnobs  = info.numKnobs;
-                inst->gridW     = info.gridW;
-                inst->gridH     = info.gridH;
+                inst->boardW    = info.gridW * 100.0f;
+                inst->boardH    = info.gridH * 100.0f;
                 inst->routeX    = snapToGrid (canvasX);
                 inst->routeY    = snapToGrid (canvasY);
 

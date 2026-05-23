@@ -13,6 +13,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
                   const PedalDesign* design,
                   const std::map<juce::String, float>& controlValues,
                   const std::map<juce::String, juce::String>& controlTexts,
+                  const std::map<juce::String, std::vector<float>>& controlData,
                   bool bypassed, float alpha)
 {
     if (bounds.getWidth() < 2 || bounds.getHeight() < 2)
@@ -44,12 +45,8 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
 
     auto chassisRect = juce::Rectangle<float> (offX, offY, drawW, drawH);
 
-    // Shadow
-    g.setColour (juce::Colours::black.withAlpha (0.4f * alpha));
-    float cornerR = juce::jmin (drawW, drawH) * 0.04f;
-    g.fillRoundedRectangle (chassisRect.translated (1.5f, 2.0f), cornerR);
-
     // Chassis body with colour
+    float cornerR = juce::jmax (4.0f, juce::jmin (drawW, drawH) * 0.06f);
     auto baseColour = design->chassisColour;
     auto bodyGrad = juce::ColourGradient (
         baseColour.brighter (0.18f), chassisRect.getX(), chassisRect.getY(),
@@ -72,13 +69,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
     g.setColour (baseColour.brighter (0.25f).withAlpha (0.2f * alpha));
     g.drawRoundedRectangle (chassisRect, cornerR, 0.75f);
 
-    // Brushed texture (skip if using custom image)
-    if (design->chassisImage.isEmpty())
-    {
-        g.setColour (juce::Colour (0x08FFFFFF));
-        for (float yy = chassisRect.getY() + 3; yy < chassisRect.getBottom() - 3; yy += 4.0f * sc)
-            g.drawHorizontalLine ((int) yy, chassisRect.getX() + 2, chassisRect.getRight() - 2);
-    }
+
 
     // Draw each control from the design
     for (const auto& ctrl : design->controls)
@@ -123,7 +114,17 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         else if (ctrl.type == "indicator")
             HardwareDrawing::drawIndicator (g, ctrlBounds, val, 0.6f, 0.85f, &styles);
         else if (ctrl.type == "oscilloscope")
-            HardwareDrawing::drawOscilloscope (g, ctrlBounds, nullptr, 0, &styles);
+        {
+            const float* waveData = nullptr;
+            int numSamples = 0;
+            auto dataIt = controlData.find (ctrl.controlID);
+            if (dataIt != controlData.end() && !dataIt->second.empty())
+            {
+                waveData = dataIt->second.data();
+                numSamples = (int)dataIt->second.size();
+            }
+            HardwareDrawing::drawOscilloscope (g, ctrlBounds, waveData, numSamples, &styles);
+        }
         else if (ctrl.type == "rgb_led")
             HardwareDrawing::drawRGBLED (g, ctrlBounds, val, val * 0.5f, 1.0f - val, &styles);
         else if (ctrl.type == "text_screen" || ctrl.type == "console")
@@ -142,7 +143,14 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             HardwareDrawing::drawTextScreen (g, ctrlBounds, lines, -1, &styles);
         }
         else if (ctrl.type == "pixel_display")
-            HardwareDrawing::drawPixelDisplay (g, ctrlBounds, nullptr, 32, 16, false, &styles);
+        {
+            const float* pxData = nullptr;
+            auto dataIt = controlData.find (ctrl.controlID);
+            if (dataIt != controlData.end() && !dataIt->second.empty())
+                pxData = dataIt->second.data();
+            // Default 32x16 if not specified
+            HardwareDrawing::drawPixelDisplay (g, ctrlBounds, pxData, 32, 16, false, &styles);
+        }
         else if (ctrl.type == "label")
         {
             juce::String txt = ctrl.label;

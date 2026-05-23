@@ -21,8 +21,8 @@ public:
 
         if (board == nullptr) return;
 
-        int bw = board->getConfig().cols * board->getCellSize();
-        int bh = 40 + board->getConfig().rows * board->getCellSize();
+        int bw = board->getConfig().cols * 100;
+        int bh = 40 + board->getConfig().rows * 100;
         
         int sw = getWidth();
         int sh = getHeight();
@@ -70,8 +70,8 @@ BoardWindow::BoardWindow (juce::String name, BoardComponent* boardToWrap, BoardC
     }
     else
     {
-        centreWithSize (board->getConfig().cols * board->getCellSize() + 40, 
-                        40 + board->getConfig().rows * board->getCellSize() + 40);
+        centreWithSize (board->getConfig().cols * 100 + 40, 
+                        40 + board->getConfig().rows * 100 + 40);
     }
     
     setVisible (true);

@@ -20,7 +20,7 @@ void BoardCanvas::rebuildBoards()
     for (auto& cfg : engine.getBoards())
     {
         auto comp = std::make_unique<BoardComponent> (const_cast<BoardConfig&>(cfg), engine, parentGrid->getMidiLearn(), parentGrid);
-        comp->setBounds (cfg.canvasX, cfg.canvasY, cfg.cols * comp->getCellSize(), 40 + cfg.rows * comp->getCellSize());
+        comp->setBounds (cfg.canvasX, cfg.canvasY, cfg.cols * 100, 40 + cfg.rows * 100);
         addAndMakeVisible (comp.get());
         boardComponents.push_back (std::move (comp));
     }

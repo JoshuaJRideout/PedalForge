@@ -7,6 +7,8 @@
 #include "preset/PresetManager.h"
 #include "midi/MidiLearn.h"
 
+#include "dsp/TestSoundGenerator.h"
+
 //==============================================================================
 class PedalForgeProcessor : public juce::AudioProcessor,
                              public juce::MidiInputCallback
@@ -62,6 +64,12 @@ public:
 
     bool isPlayModeActive = false;
 
+    // Test Sound state
+    TestSoundGenerator testSoundGen;
+    bool testSoundActive = false;
+    bool isTestSoundActive() const { return testSoundActive; }
+    void setTestSoundActive (bool active) { testSoundActive = active; const_cast<TestSoundGenerator&>(testSoundGen).setActive (active); }
+
     //==========================================================================
     // Hardware MIDI I/O — opened when the user enables devices in the Routing Tab
     std::vector<std::unique_ptr<juce::MidiInput>>  openMidiInputs;
@@ -71,14 +79,13 @@ public:
     juce::CriticalSection midiOutputLock;
 
     /** Called on the MIDI callback thread by each open MidiInput device. */
-    void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& msg) override
-    {
-        if (source != nullptr)
-        {
-            graphEngine.injectHardwareMidi (source->getName(), msg);
-            playGraphEngine.injectHardwareMidi (source->getName(), msg);
-        }
-    }
+    void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& msg) override;
+
+    //==========================================================================
+    // Auto-Map state — dynamically assigns CC numbers to parameter slots
+    std::map<int, int> autoMapCCSlots;     // CC number → parameter index
+    juce::uint32 autoMapLastFocusedNode = 0; // reset slots when focus changes
+    int autoMapNextSlot = 0;
 
     /** Opens/closes hardware MIDI devices based on what the engine has enabled. */
     void refreshHardwareMidiConnections();

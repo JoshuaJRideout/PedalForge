@@ -167,7 +167,7 @@ void InventoryOverlay::ItemGrid::GridCell::paint (juce::Graphics& g)
             inner.getCentreY() - ph * 0.5f, pw, ph);
         std::map<juce::String, float> dv;
         std::map<juce::String, juce::String> dt;
-        PedalPainter::paintDesign (g, pedalRect, item.pedalDesign.get(), dv, dt, false, 1.0f);
+        PedalPainter::paintDesign (g, pedalRect, item.pedalDesign.get(), dv, dt, {}, false, 1.0f);
     }
 
     // Name label
@@ -335,6 +335,15 @@ void InventoryOverlay::PreviewPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.drawText (currentItem->category, area.removeFromTop (18), juce::Justification::centredLeft);
 
+    // Tags
+    if (currentItem->tags.size() > 0)
+    {
+        area.removeFromTop (2);
+        g.setColour (PedalForgeLookAndFeel::textSecondary);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (currentItem->tags.joinIntoString ("  •  "), area.removeFromTop (14), juce::Justification::centredLeft);
+    }
+
     // Preview area
     area.removeFromTop (12);
     auto previewArea = area.removeFromTop (juce::jmin (area.getHeight() / 2, 200));
@@ -357,7 +366,7 @@ void InventoryOverlay::PreviewPanel::paint (juce::Graphics& g)
             pf.getCentreX() - pw * 0.5f, pf.getCentreY() - ph * 0.5f, pw, ph);
         std::map<juce::String, float> dv;
         std::map<juce::String, juce::String> dt;
-        PedalPainter::paintDesign (g, pedalRect, currentItem->pedalDesign.get(), dv, dt, false, 1.0f);
+        PedalPainter::paintDesign (g, pedalRect, currentItem->pedalDesign.get(), dv, dt, {}, false, 1.0f);
     }
 
     // Description
@@ -490,7 +499,10 @@ void InventoryOverlay::buildItemDatabase()
         item.isFactory = true;
         item.pedalInfo = info;
         if (info.designFactory)
+        {
             item.pedalDesign = info.designFactory();
+            item.tags = item.pedalDesign->tags;
+        }
         allItems.push_back (std::move (item));
     }
 
@@ -509,7 +521,10 @@ void InventoryOverlay::buildItemDatabase()
             item.displayName = design->name;
             item.category = design->category.isNotEmpty() ? design->category : "Custom";
             item.mainCategory = "Pedals";
-            item.description = "Custom user-designed pedal.";
+            item.tags = design->tags;
+            item.description = design->tags.size() > 0
+                ? "Custom pedal. Tags: " + design->tags.joinIntoString (", ")
+                : "Custom user-designed pedal.";
             item.isFactory = false;
             item.pedalDesign = design;
 
@@ -642,7 +657,15 @@ void InventoryOverlay::buildItemDatabase()
 
         
         {"led", "UI LED", "Displays", "Nodes", "A simple light on the pedal face."},
-        {"vu_meter", "UI VU Meter", "Displays", "Nodes", "Shows audio level on the pedal face."}
+        {"vu_meter", "UI VU Meter", "Displays", "Nodes", "Shows audio level on the pedal face."},
+        {"disp_7seg", "7-Segment Display", "Displays", "Nodes", "Digital numeric readout."},
+        {"disp_text", "Text Screen", "Displays", "Nodes", "Text-based screen."},
+        {"disp_console", "Console Display", "Displays", "Nodes", "Text log output."},
+        {"disp_tuner", "Tuner Display", "Displays", "Nodes", "Guitar tuner UI component."},
+        {"disp_indicator", "Indicator Light", "Displays", "Nodes", "Large status indicator."},
+        {"disp_scope", "Oscilloscope", "Displays", "Nodes", "Waveform analyzer display."},
+        {"disp_pixel", "Pixel Display", "Displays", "Nodes", "Custom 32x16 addressable pixel grid."},
+        {"disp_shader", "Shader Display", "Displays", "Nodes", "Code-driven math visualization grid."}
     };
 
     for (auto& n : nodes)
@@ -722,6 +745,14 @@ void InventoryOverlay::filterItems()
             bool matches = item.displayName.containsIgnoreCase (searchQuery)
                         || item.category.containsIgnoreCase (searchQuery)
                         || item.description.containsIgnoreCase (searchQuery);
+            if (! matches)
+            {
+                for (const auto& tag : item.tags)
+                {
+                    if (tag.containsIgnoreCase (searchQuery))
+                    { matches = true; break; }
+                }
+            }
             if (! matches) continue;
         }
 

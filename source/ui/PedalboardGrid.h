@@ -51,8 +51,8 @@ public:
     void mouseDown (const juce::MouseEvent& e) override;
 
     //==========================================================================
-    void addPedalAtGrid (const juce::String& pedalName, int gridX, int gridY);
-    void addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY);
+    void addPedalAtGrid (const juce::String& pedalName, float boardX, float boardY);
+    void addPedalCopy (const PedalInstance& srcInst, float boardX, float boardY);
     void removePedal (AudioGraphEngine::NodeID nodeId);
     void rebuildFromEngine();
     void snapPedalToGrid (PedalComponent& comp);
@@ -103,7 +103,8 @@ private:
     
     std::unique_ptr<PedalInstance> clipboardPedal;
 
-    PedalComponent* selectedComponent = nullptr;
+    juce::Component::SafePointer<PedalComponent> selectedComponent;
+    juce::uint32 lastFocusedNodeUID = 0;  // for engine→UI focus sync
 
     PedalDetailPanel detailPanel;
     juce::TextButton btnInventory { "+ Add Pedal (Tab)" };
@@ -189,9 +190,11 @@ private:
     ActivePedalsList activePedalsList { *this };
 
     // ── Notes ──
-    std::vector<StickyNote> boardNotes;
     NotesOverlay notesOverlay;
     juce::TextButton btnNotes { "Notes" };
+    
+    // ── Toolbar: Grid combo ──
+    juce::ComboBox gridCombo;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PedalboardGrid)
 };

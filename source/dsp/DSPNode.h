@@ -139,6 +139,11 @@ public:
     int getNodeID() const { return nodeID; }
     void setNodeID (int id) { nodeID = id; }
 
+    virtual bool isDisplayNode() const { return false; }
+    virtual juce::String getDisplayType() const { return ""; }
+    virtual float getDisplayValue() const { return 0.0f; }
+    virtual const std::vector<float>* getPixelData() const { return nullptr; }
+
     //==========================================================================
     const std::vector<NodePort>& getInputPorts()  const { return inputPorts; }
     const std::vector<NodePort>& getOutputPorts() const { return outputPorts; }

@@ -47,6 +47,7 @@ private:
         bool isOutput;
         int engineChannel = 0;      // maps to the AudioProcessorGraph channel index (audio only)
         juce::String routingPortId; // for MIDI/Expression ports — matches PedalDesign::RoutingPort::id
+        float glowLevel = 0.0f;
     };
 
     //==========================================================================
@@ -72,6 +73,7 @@ private:
     {
         int sourceNodeIdx = -1, sourcePortIdx = -1;
         int destNodeIdx = -1, destPortIdx = -1;
+        float glowLevel = 0.0f;
     };
 
     struct PortHit
@@ -110,6 +112,7 @@ private:
         int draggingNodeIdx = -1;
         juce::Point<float> nodeDragOffset;
         bool draggingWire = false;
+        bool isPanning = false;
         PortHit wireStart;
         float wireEndX = 0, wireEndY = 0;
 
@@ -171,7 +174,6 @@ private:
     void addPedalToRoute (const juce::String& pedalName, float canvasX, float canvasY);
 
     // ── Notes ──
-    std::vector<StickyNote> routeNotes;
     NotesOverlay notesOverlay;
     juce::TextButton btnNotes { "Notes" };
 

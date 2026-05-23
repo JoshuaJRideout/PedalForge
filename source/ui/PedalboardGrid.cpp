@@ -59,16 +59,52 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
     btnMaximizeRight.onClick = [this] { rightPanelMaximized = !rightPanelMaximized; resized(); };
 
     // Notes
-    notesOverlay.setNotes (boardNotes);
+    notesOverlay.setNotes (engine.boardNotes);
     addChildComponent (notesOverlay);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
         bool show = !notesOverlay.isNotesVisible();
         notesOverlay.setVisible (show);
-        if (show && boardNotes.empty())
+        if (show && engine.boardNotes.empty())
             notesOverlay.addNote (120, 80);
     };
+
+    // ── Toolbar: Grid combo ──
+    gridCombo.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
+    gridCombo.setColour (juce::ComboBox::textColourId, PedalForgeLookAndFeel::textPrimary);
+    gridCombo.setColour (juce::ComboBox::outlineColourId, PedalForgeLookAndFeel::gridLine);
+    gridCombo.addItem ("Off", 1);
+    gridCombo.addItem ("10mm", 2);
+    gridCombo.addItem ("20mm", 3);
+    gridCombo.addItem ("50mm", 4);
+    gridCombo.addItem ("100mm", 5);
+    
+    float initialSnap = 0.0f;
+    if (!engine.getBoards().empty()) initialSnap = engine.getBoards().front().snapGridSize;
+    
+    int s = 1;
+    if (initialSnap == 10.0f) s = 2;
+    else if (initialSnap == 20.0f) s = 3;
+    else if (initialSnap == 50.0f) s = 4;
+    else if (initialSnap == 100.0f) s = 5;
+    gridCombo.setSelectedId (s, juce::dontSendNotification);
+    
+    gridCombo.onChange = [this] {
+        int id = gridCombo.getSelectedId();
+        float size = 0.0f;
+        if (id == 1) size = 0.0f;
+        else if (id == 2) size = 10.0f;
+        else if (id == 3) size = 20.0f;
+        else if (id == 4) size = 50.0f;
+        else if (id == 5) size = 100.0f;
+        
+        for (auto& b : engine.getBoards())
+            b.snapGridSize = size;
+            
+        repaint();
+    };
+    addAndMakeVisible (gridCombo);
 
     startTimerHz (30);
 }
@@ -97,17 +133,33 @@ void PedalboardGrid::paint (juce::Graphics& g)
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float)getWidth());
+
+    // Toolbar labels
+    g.setColour (PedalForgeLookAndFeel::textMuted);
+    g.setFont (juce::FontOptions (10.0f));
+    g.drawText ("GRID", gridCombo.getX() - 32, gridCombo.getY(), 30, 24, juce::Justification::centredRight);
 }
 
 void PedalboardGrid::timerCallback()
 {
     bool needsRepaint = false;
 
-    // Iterate over all pedals
-    for (auto* comp : getChildren())
+    // Recursively collect all PedalComponent descendants
+    std::vector<PedalComponent*> allPedals;
+    std::function<void(juce::Component*)> collectPedals = [&](juce::Component* parent)
     {
-        if (auto* pedalComp = dynamic_cast<PedalComponent*> (comp))
+        for (auto* child : parent->getChildren())
         {
+            if (auto* pc = dynamic_cast<PedalComponent*> (child))
+                allPedals.push_back (pc);
+            else
+                collectPedals (child);
+        }
+    };
+    collectPedals (this);
+
+    for (auto* pedalComp : allPedals)
+    {
             auto& instance = pedalComp->getInstance();
             if (instance.design != nullptr)
             {
@@ -170,8 +222,8 @@ void PedalboardGrid::timerCallback()
                                     {
                                         if (ranged->getParameterID() == mapping.nodeParam)
                                         {
-                                            float val = ranged->convertFrom0to1 (ranged->getValue());
-                                            juce::String text = ranged->getText (ranged->getValue(), 32);
+                                            float val = ranged->getValue();
+                                            juce::String text = ranged->getText (val, 32);
 
                                             juce::String baseControlID = mapping.controlID;
                                             int lineIndex = -1;
@@ -217,7 +269,6 @@ void PedalboardGrid::timerCallback()
                     }
                 }
             }
-        }
     }
 
     if (needsRepaint)
@@ -225,6 +276,15 @@ void PedalboardGrid::timerCallback()
         repaint(); // Repaint the board to update components
         if (detailPanel.hasSelection())
             detailPanel.repaint(); // Update the detail panel too!
+    }
+
+    // Sync focused pedal from engine → UI (for track button navigation)
+    auto focusedId = engine.getFocusedPedal();
+    if (focusedId.uid != 0 && focusedId.uid != lastFocusedNodeUID)
+    {
+        lastFocusedNodeUID = focusedId.uid;
+        if (auto* inst = engine.getPedalInstance (focusedId))
+            selectPedalByInstance (inst);
     }
 }
 
@@ -236,6 +296,11 @@ void PedalboardGrid::resized()
     // Tab-specific toolbar area
     auto toolbar = area.removeFromTop (36);
     btnToggleLeft.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
+    
+    // Add grid combo layout like PedalDesigner
+    toolbar.removeFromLeft (32); // Space for GRID label
+    gridCombo.setBounds (toolbar.removeFromLeft (75).reduced (4, 6));
+    
     btnInventory.setBounds (toolbar.removeFromLeft (140).reduced (8, 6));
     btnNotes.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
 
@@ -293,13 +358,18 @@ void PedalboardGrid::selectPedal (PedalComponent* comp)
     if (selectedComponent == comp)
         return;
 
+    if (selectedComponent != nullptr)
+        selectedComponent->setSelected (false);
+
     selectedComponent = comp;
 
     if (selectedComponent != nullptr)
     {
+        selectedComponent->setSelected (true);
         selectedComponent->toFront (false);
-        detailPanel.showPedal (selectedComponent->getInstance(), engine);
+        detailPanel.showPedal (selectedComponent->getInstance(), engine, &midiLearn);
         showRightPanel = true; // Auto-open right panel when a pedal is selected
+        lastFocusedNodeUID = selectedComponent->getInstance().nodeID.uid;
     }
     else
     {
@@ -334,6 +404,9 @@ void PedalboardGrid::selectPedalByInstance (PedalInstance* inst)
 
 void PedalboardGrid::deselectAll()
 {
+    if (selectedComponent != nullptr)
+        selectedComponent->setSelected (false);
+
     selectedComponent = nullptr;
     detailPanel.clearSelection();
 
@@ -348,46 +421,55 @@ void PedalboardGrid::refreshSelectedPedal()
 {
     if (selectedComponent != nullptr)
     {
-        selectedComponent->getInstance().gridW = std::max(1, (int)std::round (selectedComponent->getInstance().design->chassisW / 100.0f));
-        selectedComponent->getInstance().gridH = std::max(1, (int)std::round (selectedComponent->getInstance().design->chassisH / 100.0f));
+        if (selectedComponent->getInstance().design != nullptr)
+        {
+            selectedComponent->getInstance().boardW = std::max(100.0f, selectedComponent->getInstance().design->chassisW);
+            selectedComponent->getInstance().boardH = std::max(100.0f, selectedComponent->getInstance().design->chassisH);
+        }
         
         selectedComponent->repaint();
-        detailPanel.showPedal (selectedComponent->getInstance(), engine);
+        detailPanel.showPedal (selectedComponent->getInstance(), engine, &midiLearn);
         resized();
         repaint();
     }
 }
 
-void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, int gridX, int gridY)
+void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX, float boardY)
 {
     auto& boards = engine.getBoards();
     if (boards.empty()) return;
     auto& config = boards.front(); // Use the first board for now
 
+    bool loaded = false;
     for (auto& info : getFactoryPedals())
     {
         if (info.name == pedalName)
         {
-            int placeX = gridX;
-            int placeY = gridY;
+            float placeX = boardX;
+            float placeY = boardY;
             
-            // Auto-place if coords are -1
-            if (placeX < 0 || placeY < 0)
+            float bw = info.gridW * 100.0f;
+            float bh = info.gridH * 100.0f;
+            
+            // Auto-place if coords are < 0
+            if (placeX < 0.0f || placeY < 0.0f)
             {
-                placeX = 0; placeY = 0;
+                placeX = 0.0f; placeY = 0.0f;
                 bool found = false;
-                for (int y = 0; y <= config.rows - info.gridH && !found; ++y)
+                for (float y = 0.0f; y <= config.rows * 100.0f - bh && !found; y += 100.0f)
                 {
-                    for (int x = 0; x <= config.cols - info.gridW && !found; ++x)
+                    for (float x = 0.0f; x <= config.cols * 100.0f - bw && !found; x += 100.0f)
                     {
                         // Check if rect is free
                         bool free = true;
+                        juce::Rectangle<float> rect(x, y, bw, bh);
                         for (auto& inst : engine.getPedalInstances())
                         {
                             if (!inst.onBoard || inst.boardId != config.id || inst.pageIndex != config.activePage)
                                 continue;
-                            if (x < inst.gridX + inst.gridW && x + info.gridW > inst.gridX &&
-                                y < inst.gridY + inst.gridH && y + info.gridH > inst.gridY)
+                            
+                            juce::Rectangle<float> other(inst.boardX, inst.boardY, inst.boardW, inst.boardH);
+                            if (rect.intersects(other))
                             {
                                 free = false;
                                 break;
@@ -407,7 +489,7 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, int gridX, i
             auto nodeId = engine.addPedal (std::move (processor),
                                            config.id, config.activePage,
                                            placeX, placeY,
-                                           info.gridW, info.gridH);
+                                           bw, bh);
                                             
             if (auto* inst = engine.getPedalInstance (nodeId))
             {
@@ -439,12 +521,80 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, int gridX, i
             }
             engine.autoRoutePedal(nodeId);
             rebuildFromEngine();
+            loaded = true;
             break;
+        }
+    }
+
+    if (!loaded)
+    {
+        if (auto design = loadCustomPedalDesign (pedalName))
+        {
+            float bw = std::max(100.0f, design->chassisW);
+            float bh = std::max(100.0f, design->chassisH);
+
+            float placeX = boardX;
+            float placeY = boardY;
+            
+            if (placeX < 0.0f || placeY < 0.0f)
+            {
+                placeX = 0.0f; placeY = 0.0f;
+                bool found = false;
+                for (float y = 0.0f; y <= config.rows * 100.0f - bh && !found; y += 100.0f)
+                {
+                    for (float x = 0.0f; x <= config.cols * 100.0f - bw && !found; x += 100.0f)
+                    {
+                        bool free = true;
+                        juce::Rectangle<float> rect(x, y, bw, bh);
+                        for (auto& inst : engine.getPedalInstances())
+                        {
+                            if (!inst.onBoard || inst.boardId != config.id || inst.pageIndex != config.activePage)
+                                continue;
+                            juce::Rectangle<float> other(inst.boardX, inst.boardY, inst.boardW, inst.boardH);
+                            if (rect.intersects(other))
+                            {
+                                free = false;
+                                break;
+                            }
+                        }
+                        if (free)
+                        {
+                            placeX = x;
+                            placeY = y;
+                            found = true;
+                        }
+                    }
+                }
+            }
+
+            juce::String jsonGraph;
+            if (!design->effectsGraph.isVoid())
+                jsonGraph = juce::JSON::toString(design->effectsGraph);
+                
+            auto processor = std::make_unique<GraphPedalProcessor>(design->name, jsonGraph);
+            auto nodeId = engine.addPedal (std::move (processor),
+                                           config.id, config.activePage,
+                                           placeX, placeY,
+                                           bw, bh);
+                                            
+            if (auto* inst = engine.getPedalInstance (nodeId))
+            {
+                inst->colour = design->chassisColour;
+                inst->category = design->category;
+                inst->design = design;
+
+                int numKnobs = 0;
+                for (const auto& c : design->controls)
+                    if (c.type == "knob") numKnobs++;
+                inst->numKnobs = numKnobs;
+            }
+            engine.autoRoutePedal(nodeId);
+            rebuildFromEngine();
         }
     }
 }
 
-void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, int gridX, int gridY)
+void PedalboardGrid::addPedalCopy (const PedalInstance& srcInst, float boardX, float boardY)
 {
     // Implementation not supported yet
 }
@@ -480,6 +630,7 @@ void PedalboardGrid::rebuildFromEngine()
     deselectAll();
 
     activePedalsList.refresh();
+    notesOverlay.repaint();
     if (boardCanvas)
     {
         boardCanvas->rebuildBoards();
@@ -565,8 +716,8 @@ PedalboardGrid::ActivePedalsList::PedalRow::PedalRow (const PedalInstance& inst,
       category (inst.category),
       colour (inst.colour),
       onBoard (inst.onBoard),
-      gridW (inst.gridW),
-      gridH (inst.gridH),
+      gridW ((int)std::max(1.0f, std::round(inst.boardW / 100.0f))),
+      gridH ((int)std::max(1.0f, std::round(inst.boardH / 100.0f))),
       grid (g) {}
 
 void PedalboardGrid::ActivePedalsList::PedalRow::paint (juce::Graphics& g)

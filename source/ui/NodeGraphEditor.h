@@ -28,6 +28,12 @@ public:
     /** Load a design's effects graph. */
     void loadDesign (const juce::var& effectsGraphJSON);
 
+    /** Load fxNotes from a PedalDesign */
+    void loadNotes (const std::vector<StickyNote>& notes);
+
+    /** Get current fxNotes to save back to PedalDesign */
+    std::vector<StickyNote> getNotes() const { return fxNotes; }
+
     /** Reset to default empty graph (AudioIn → AudioOut). */
     void clearGraph();
 

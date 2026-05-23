@@ -16,14 +16,7 @@ PedalComponent::PedalComponent (PedalInstance& inst, AudioGraphEngine& eng, Midi
 //==============================================================================
 juce::Rectangle<float> PedalComponent::getRenderBounds() const
 {
-    auto bounds = getLocalBounds().toFloat();
-    if (instance.design != nullptr)
-    {
-        float cw = instance.design->chassisW;
-        float ch = instance.design->chassisH;
-        return juce::Rectangle<float> (cw, ch).withCentre (bounds.getCentre());
-    }
-    return bounds;
+    return getLocalBounds().toFloat();
 }
 
 //==============================================================================
@@ -37,7 +30,7 @@ void PedalComponent::paint (juce::Graphics& g)
 
     // Use PedalPainter::paintDesign (which handles null designs by drawing a fallback outline)
     PedalPainter::paintDesign (g, bounds, instance.design.get(),
-                               instance.controlValues, instance.controlTexts, instance.bypassed, alpha);
+                               instance.controlValues, instance.controlTexts, instance.controlData, instance.bypassed, alpha);
 
     // ── Selection / drag overlays ──
     if (dragging)
@@ -50,7 +43,7 @@ void PedalComponent::paint (juce::Graphics& g)
     }
     else if (selected)
     {
-        g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.6f));
+        g.setColour (PedalForgeLookAndFeel::success.withAlpha (0.6f));
         float cornerR = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.08f;
         g.drawRoundedRectangle (bounds.reduced (bounds.getWidth() * 0.04f), cornerR, 2.5f);
     }
@@ -131,28 +124,27 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                 }
                 else
                 {
-                    if (ctrl.type == "footswitch" || ctrl.type == "switch" || ctrl.controlID.containsIgnoreCase("bypass"))
+                    if (ctrl.type == "footswitch" || ctrl.type == "switch")
                     {
-                        instance.bypassed = !instance.bypassed;
-                        
-                        if (auto* node = engine.getGraph().getNodeForId(instance.nodeID))
+                        // WYSIWYG: only toggle the explicitly mapped parameter
+                        juce::String mappedParamID;
+                        for (const auto& m : instance.design->mappings)
+                            if (m.controlID == ctrl.controlID) { mappedParamID = m.nodeParam; break; }
+
+                        if (mappedParamID.isNotEmpty())
                         {
-                            node->setBypassed(instance.bypassed);
-
-                            auto* proc = node->getProcessor();
-                            juce::String mappedParamID;
-                            for (const auto& m : instance.design->mappings)
-                                if (m.controlID == ctrl.controlID) { mappedParamID = m.nodeParam; break; }
-
-                            if (mappedParamID.isNotEmpty())
+                            if (auto* node = engine.getGraph().getNodeForId(instance.nodeID))
                             {
+                                auto* proc = node->getProcessor();
                                 for (auto* p : proc->getParameters())
                                 {
                                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                                     {
                                         if (ranged->getParameterID() == mappedParamID)
                                         {
-                                            ranged->setValueNotifyingHost(instance.bypassed ? 1.0f : 0.0f);
+                                            // Toggle: if > 0.5 → 0, else → 1
+                                            float newVal = ranged->getValue() > 0.5f ? 0.0f : 1.0f;
+                                            ranged->setValueNotifyingHost(newVal);
                                             break;
                                         }
                                     }
@@ -298,7 +290,22 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                                 {
                                     sp->instance.bypassed = ! sp->instance.bypassed;
                                     if (auto* node = sp->engine.getGraph().getNodeForId(sp->instance.nodeID))
-                                        node->setBypassed(sp->instance.bypassed);
+                                    {
+                                        if (auto* proc = node->getProcessor())
+                                        {
+                                            for (auto* p : proc->getParameters())
+                                            {
+                                                if (auto* bp = dynamic_cast<juce::AudioParameterBool*>(p))
+                                                {
+                                                    if (bp->getParameterID() == "bypass")
+                                                    {
+                                                        bp->setValueNotifyingHost(sp->instance.bypassed ? 1.0f : 0.0f);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     sp->repaint();
                                 }
                                 else if (result == 2 && sp->parentBoard != nullptr && sp->parentBoard->getParentGrid() != nullptr)
@@ -324,16 +331,30 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
 
     if (e.mods.isAltDown() && parentBoard != nullptr && parentBoard->getParentGrid() != nullptr)
     {
-        parentBoard->getParentGrid()->addPedalCopy (instance, instance.gridX + 1, instance.gridY + 1);
+        parentBoard->getParentGrid()->addPedalCopy (instance, instance.boardX + 100.0f, instance.boardY + 100.0f);
         dragging = false;
         return;
     }
 
-    // If we're on a board, prepare to drag the pedal
+
     if (parentBoard != nullptr)
     {
-        dragOffset = e.getPosition();
-        dragSnappedGrid = { instance.gridX, instance.gridY };
+        // Check if there is an active text editor first
+        if (auto* currentEditor = juce::Component::getCurrentlyFocusedComponent())
+        {
+            if (dynamic_cast<juce::TextEditor*>(currentEditor) != nullptr)
+            {
+                // Just clear focus so the user can continue playing
+                currentEditor->unfocusAllComponents();
+            }
+        }
+        
+        parentBoard->getParentGrid()->selectPedal (this);
+        dragging = true;
+        
+        auto mouseInParent = e.getEventRelativeTo (parentBoard).getPosition();
+        dragOffset = mouseInParent - getBounds().getPosition();
+        dragSnappedBoard = { instance.boardX, instance.boardY };
         dragValid = true;
         dragging = true;
         toFront (true);
@@ -389,35 +410,31 @@ void PedalComponent::mouseDrag (const juce::MouseEvent& e)
     int px = mouseInParent.x - dragOffset.x;
     int py = mouseInParent.y - dragOffset.y;
 
-    // Snap to the nearest grid cell
-    auto snapped = parentBoard->pixelToGrid (px + parentBoard->getCellSize() / 2,
-                                             py + parentBoard->getCellSize() / 2);
+    // Snap to the nearest board coordinate based on the grid config
+    auto snapped = parentBoard->snapToGrid (px, py - 40); // 40 = getHeaderHeight()
 
     // Check if the pedal is being dragged outside the grid bounds
-    bool offGrid = snapped.x < 0 || snapped.y < 0
-                || snapped.x + instance.gridW > parentBoard->getGridCols()
-                || snapped.y + instance.gridH > parentBoard->getGridRows();
+    bool offGrid = snapped.x < 0.0f || snapped.y < 0.0f
+                || snapped.x + instance.boardW > parentBoard->getBoardWidth()
+                || snapped.y + instance.boardH > parentBoard->getBoardHeight();
 
     if (offGrid)
     {
         // Let the component follow the mouse freely (no grid snapping)
         dragValid = false;
-        int cellSize = parentBoard->getCellSize();
-        setBounds (px, py, instance.gridW * cellSize, instance.gridH * cellSize);
+        setBounds (px, py, instance.boardW, instance.boardH);
     }
     else
     {
-        dragSnappedGrid = snapped;
+        dragSnappedBoard = snapped;
 
         // Check if this position is free (ignoring our own footprint)
         dragValid = parentBoard->isGridRectFree (snapped.x, snapped.y,
-                                                 instance.gridW, instance.gridH,
+                                                 instance.boardW, instance.boardH,
                                                  instance.nodeID);
 
-        // Move component to the snapped pixel position
-        auto pos = parentBoard->gridToPixel (snapped.x, snapped.y);
-        int cellSize = parentBoard->getCellSize();
-        setBounds (pos.x, pos.y, instance.gridW * cellSize, instance.gridH * cellSize);
+        // Move component to the snapped position
+        setBounds (snapped.x, 40 + snapped.y, instance.boardW, instance.boardH);
     }
 
     repaint();
@@ -442,48 +459,32 @@ void PedalComponent::mouseUp (const juce::MouseEvent& e)
         auto mouseInParent = e.getEventRelativeTo (parentBoard).getPosition();
         int px = mouseInParent.x - dragOffset.x;
         int py = mouseInParent.y - dragOffset.y;
-        auto snapped = parentBoard->pixelToGrid (px + parentBoard->getCellSize() / 2,
-                                                 py + parentBoard->getCellSize() / 2);
+        auto snapped = parentBoard->snapToGrid (px, py - 40);
 
-        bool offGrid = snapped.x < 0 || snapped.y < 0
-                    || snapped.x + instance.gridW > parentBoard->getGridCols()
-                    || snapped.y + instance.gridH > parentBoard->getGridRows();
+        bool offGrid = snapped.x < 0.0f || snapped.y < 0.0f
+                    || snapped.x + instance.boardW > parentBoard->getBoardWidth()
+                    || snapped.y + instance.boardH > parentBoard->getBoardHeight();
 
         if (offGrid)
         {
-            // Dragged off the board!
-            if (engine.hasConnections (instance.nodeID))
-            {
-                // Has routing connections → remove from board but keep in engine
-                instance.onBoard = false;
-                parentBoard->rebuildFromEngine();
-            }
-            else
-            {
-                // No connections → delete entirely
-                parentBoard->removePedal (instance.nodeID);
-            }
-            return;
+            // Just mark as invalid so it snaps back to its original valid position
+            dragValid = false;
         }
 
         if (dragValid)
         {
             // Commit the new position
-            instance.gridX = dragSnappedGrid.x;
-            instance.gridY = dragSnappedGrid.y;
+            instance.boardX = dragSnappedBoard.x;
+            instance.boardY = dragSnappedBoard.y;
 
-            auto pos = parentBoard->gridToPixel (instance.gridX, instance.gridY);
-            int cellSize = parentBoard->getCellSize();
-            setBounds (pos.x, pos.y,
-                       instance.gridW * cellSize, instance.gridH * cellSize);
+            setBounds (instance.boardX, 40 + instance.boardY,
+                       instance.boardW, instance.boardH);
         }
         else
         {
             // Invalid position — snap back to original
-            auto pos = parentBoard->gridToPixel (instance.gridX, instance.gridY);
-            int cellSize = parentBoard->getCellSize();
-            setBounds (pos.x, pos.y,
-                       instance.gridW * cellSize, instance.gridH * cellSize);
+            setBounds (instance.boardX, 40 + instance.boardY,
+                       instance.boardW, instance.boardH);
         }
     }
 

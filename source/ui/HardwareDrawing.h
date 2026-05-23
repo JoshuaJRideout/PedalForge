@@ -230,20 +230,18 @@ inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
         }
     }
 
-    // Body fill
-    g.setColour (baseColour);
-    float corner = juce::jmax(2.0f, area.getWidth() * 0.05f);
-    g.fillRoundedRectangle (area, corner);
-    // Edge bevel
-    g.setColour (baseColour.darker (0.3f));
-    float borderW = juce::jmax(1.0f, corner * 0.3f);
-    g.drawRoundedRectangle (area, corner, borderW);
-    // Brushed texture lines
-    g.setColour (juce::Colour (0x08FFFFFF));
-    float step = juce::jmax(2.0f, area.getHeight() * 0.02f);
-    for (float yy = area.getY() + step; yy < area.getBottom() - step; yy += step)
-        g.drawHorizontalLine ((int) yy, area.getX() + step, area.getRight() - step);
+    float corner = juce::jmax (4.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.06f);
 
+    // Body fill with beautiful vertical gradient (matches PedalPainter)
+    auto bodyGrad = juce::ColourGradient (
+        baseColour.brighter (0.18f), area.getX(), area.getY(),
+        baseColour.darker (0.30f), area.getX(), area.getBottom(), false);
+    g.setGradientFill (bodyGrad);
+    g.fillRoundedRectangle (area, corner);
+
+    // Premium edge bevel/highlight
+    g.setColour (baseColour.brighter (0.25f).withAlpha (0.2f));
+    g.drawRoundedRectangle (area, corner, 0.75f);
 }
 
 //==============================================================================

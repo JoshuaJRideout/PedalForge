@@ -103,8 +103,9 @@ public:
         }
     }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "display"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "display"; }
+    float getDisplayValue() const override { return displayValue; }
 
     float displayValue = 0.0f;
 };
@@ -155,8 +156,9 @@ public:
 
     void reset() override { peakLevel = 0; rmsLevel = 0; rmsSum = 0; rmsCount = 0; }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "vu_meter"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "vu_meter"; }
+    float getDisplayValue() const override { return peakLevel; }
 
     float peakLevel = 0.0f;
     float rmsLevel = 0.0f;
@@ -231,8 +233,9 @@ public:
 
     void reset() override { detectedFreq = 0; detectedCents = 0; lastSample = 0; sampleCounter = 0; lastCrossingSample = 0; }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "tuner"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "tuner"; }
+    float getDisplayValue() const override { return detectedNote; }
 
     float detectedFreq = 0.0f;
     float detectedCents = 0.0f;
@@ -266,8 +269,9 @@ public:
             displayValue = in[0][n - 1];
     }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "7seg"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "7seg"; }
+    float getDisplayValue() const override { return displayValue; }
 
     float displayValue = 0.0f;
 };
@@ -360,7 +364,7 @@ public:
         addParam ("time_div", "Time Scale", 0.1f, 50.0f, 1.0f); // ms per division
         addParam ("gain", "Vertical Gain", 0.1f, 10.0f, 1.0f);
         addParam ("trigger_level", "Trigger Level", -1.0f, 1.0f, 0.0f);
-        std::memset (waveform, 0, sizeof (waveform));
+        waveformData.resize (kBufferSize, 0.0f);
     }
 
     void process (const float** in, int numIn, float**, int, int n) override
@@ -395,7 +399,7 @@ public:
             // Capture samples into display buffer
             if (writePos < kBufferSize)
             {
-                waveform[writePos++] = sample;
+                waveformData[writePos++] = sample;
             }
             else
             {
@@ -410,16 +414,17 @@ public:
 
     void reset() override
     {
-        std::memset (waveform, 0, sizeof (waveform));
+        std::fill (waveformData.begin(), waveformData.end(), 0.0f);
         writePos = 0;
         triggered = false;
         displayReady = false;
     }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "oscilloscope"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "oscilloscope"; }
+    const std::vector<float>* getPixelData() const override { return &waveformData; }
 
-    float waveform[kBufferSize];
+    std::vector<float> waveformData;
     bool displayReady = false;
 
 private:
@@ -427,6 +432,104 @@ private:
     bool triggered = false;
     bool lastTrigState = false;
     float lastSample = 0.0f;
+};
+
+/**
+ * Shader Display — Uses ExpressionVM to compute pixels dynamically based on math.
+ * Variables: x, y (0..1), t (time), in1, in2, in3, in4
+ */
+class ShaderDisplayNode : public DSPNode
+{
+public:
+    static constexpr int kWidth = 32;
+    static constexpr int kHeight = 16;
+
+    ShaderDisplayNode() : DSPNode ("disp_shader", "Shader Display")
+    {
+        addInput ("in1", NodePort::Control);
+        addInput ("in2", NodePort::Control);
+        addInput ("in3", NodePort::Control);
+        addInput ("in4", NodePort::Control);
+        
+        pixelData.resize (kWidth * kHeight, 0.0f);
+
+        vm.clearVars();
+        var_x = vm.registerVar("x");
+        var_y = vm.registerVar("y");
+        var_t = vm.registerVar("t");
+        var_in1 = vm.registerVar("in1");
+        var_in2 = vm.registerVar("in2");
+        var_in3 = vm.registerVar("in3");
+        var_in4 = vm.registerVar("in4");
+
+        setExpression ("x * y + sin(t*10)");
+    }
+
+    bool setExpression (const juce::String& expr)
+    {
+        expression = expr;
+        bool ok = vm.compile (expr);
+        if (ok)
+            errorString.clear();
+        else
+            errorString = vm.getError();
+        return ok;
+    }
+
+    juce::String getExpression() const { return expression; }
+    juce::String getCompileError() const { return errorString; }
+
+    void setFilePath (const juce::String& path) override { setExpression (path); }
+    juce::String getFilePath() const override { return expression; }
+
+    void process (const float** in, int numIn, float**, int, int n) override
+    {
+        time += (float)n / (float)sr;
+        
+        if (!vm.isCompiled()) return;
+
+        float in1_val = (numIn > 0 && in[0]) ? in[0][n-1] : 0.0f;
+        float in2_val = (numIn > 1 && in[1]) ? in[1][n-1] : 0.0f;
+        float in3_val = (numIn > 2 && in[2]) ? in[2][n-1] : 0.0f;
+        float in4_val = (numIn > 3 && in[3]) ? in[3][n-1] : 0.0f;
+
+        vm.vars[var_t] = time;
+        vm.vars[var_in1] = in1_val;
+        vm.vars[var_in2] = in2_val;
+        vm.vars[var_in3] = in3_val;
+        vm.vars[var_in4] = in4_val;
+
+        for (int py = 0; py < kHeight; ++py)
+        {
+            float y_norm = (float)py / (float)(kHeight - 1);
+            vm.vars[var_y] = y_norm;
+            for (int px = 0; px < kWidth; ++px)
+            {
+                float x_norm = (float)px / (float)(kWidth - 1);
+                vm.vars[var_x] = x_norm;
+                pixelData[py * kWidth + px] = vm.evaluate();
+            }
+        }
+    }
+
+    void reset() override
+    {
+        time = 0.0f;
+        std::fill (pixelData.begin(), pixelData.end(), 0.0f);
+    }
+
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "pixel_display"; }
+    const std::vector<float>* getPixelData() const override { return &pixelData; }
+
+    std::vector<float> pixelData;
+    ExpressionVM vm;
+    juce::String expression;
+    juce::String errorString;
+    float time = 0.0f;
+
+private:
+    int var_x, var_y, var_t, var_in1, var_in2, var_in3, var_in4;
 };
 
 /**
@@ -448,6 +551,7 @@ public:
         addInput ("write", NodePort::Gate);    // rising edge writes pixel
         addInput ("clear", NodePort::Gate);    // rising edge clears screen
         addParam ("mode", "Mode (0=mono,1=color)", 0.0f, 1.0f, 0.0f);
+        pixelData.resize (kWidth * kHeight, 0.0f);
     }
 
     void process (const float** in, int numIn, float**, int, int n) override
@@ -457,7 +561,7 @@ public:
             // Clear
             bool clr = (numIn > 4 && in[4]) && in[4][i] > 0.5f;
             if (clr && !lastClear)
-                std::memset (pixels, 0, sizeof (pixels));
+                std::fill (pixelData.begin(), pixelData.end(), 0.0f);
             lastClear = clr;
 
             // Write
@@ -467,7 +571,7 @@ public:
                 int x = (numIn > 0 && in[0]) ? juce::jlimit (0, kWidth - 1, (int)(in[0][i] * (kWidth - 1))) : 0;
                 int y = (numIn > 1 && in[1]) ? juce::jlimit (0, kHeight - 1, (int)(in[1][i] * (kHeight - 1))) : 0;
                 float c = (numIn > 2 && in[2]) ? juce::jlimit (0.0f, 1.0f, in[2][i]) : 1.0f;
-                pixels[y][x] = c;
+                pixelData[y * kWidth + x] = c;
                 dirty = true;
             }
             lastWrite = wr;
@@ -476,14 +580,15 @@ public:
 
     void reset() override
     {
-        std::memset (pixels, 0, sizeof (pixels));
+        std::fill (pixelData.begin(), pixelData.end(), 0.0f);
         dirty = true;
     }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "pixel_display"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "pixel_display"; }
+    const std::vector<float>* getPixelData() const override { return &pixelData; }
 
-    float pixels[kHeight][kWidth] = {};
+    std::vector<float> pixelData;
     bool dirty = true;
 
 private:
@@ -512,8 +617,9 @@ public:
             currentValue = juce::jlimit (0.0f, 1.0f, in[0][n - 1]);
     }
 
-    bool isDisplayNode() const { return true; }
-    juce::String getDisplayType() const { return "indicator"; }
+    bool isDisplayNode() const override { return true; }
+    juce::String getDisplayType() const override { return "indicator"; }
+    float getDisplayValue() const override { return currentValue; }
 
     float currentValue = 0.0f;
     // UI reads currentValue, compares to thresholds, and picks green/yellow/red

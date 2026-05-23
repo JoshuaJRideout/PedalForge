@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/DSPGraph.h"
+#include "../engine/PedalInstance.h"
 
 //==============================================================================
 /**
@@ -110,6 +111,9 @@ public:
         return true;
     }
 
+    std::shared_ptr<PedalMeters> meters;
+    void setMeters (std::shared_ptr<PedalMeters> m) { meters = m; }
+
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
     {
         // Sync JUCE parameter values → graph NodeParam atomics
@@ -172,6 +176,20 @@ public:
                 if (readL != writeCh)
                     std::copy(readL, readL + buffer.getNumSamples(), writeCh);
             }
+        }
+
+        if (meters != nullptr)
+        {
+            int numSamples = buffer.getNumSamples();
+            if (numSamples > 0)
+            {
+                meters->outRMS[0].store (buffer.getRMSLevel(0, 0, numSamples));
+                if (numChans > 1)
+                    meters->outRMS[1].store (buffer.getRMSLevel(1, 0, numSamples));
+            }
+            
+            if (!midi.isEmpty())
+                meters->midiOut.store (true);
         }
     }
 
@@ -691,5 +709,226 @@ namespace GraphPedalFactory
         proc->rebuildParameters();
         return proc;
     }
-}
 
+    // ─── TUTORIAL ────────────────────────────────────────────────────────────────
+
+    /** Tutorial 1 — Hello Gain: The simplest possible pedal.
+        Input → Gain → Output */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialHelloGain()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Hello Gain");
+        auto& g = proc->getDSPGraph();
+        int inID   = g.addNode (std::make_unique<AudioInputNode>());   // 0
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>());  // 1
+        int gainID = g.addNode (std::make_unique<GainNode>());         // 2
+        g.getNode(gainID)->getParam("gain")->set (0.0f);
+        g.connect (inID, 0, gainID, 0);
+        g.connect (gainID, 0, outID, 0);
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 2 — Filter Sweep: Low-pass filter with cutoff & resonance.
+        Input → LowPass → Output */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialFilterSweep()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Filter Sweep");
+        auto& g = proc->getDSPGraph();
+        int inID  = g.addNode (std::make_unique<AudioInputNode>());    // 0
+        int outID = g.addNode (std::make_unique<AudioOutputNode>());   // 1
+        int lpID  = g.addNode (std::make_unique<LowPassNode>());       // 2
+        g.getNode(lpID)->getParam("freq")->set (1000.0f);
+        g.getNode(lpID)->getParam("q")->set (0.5f);
+        g.connect (inID, 0, lpID, 0);
+        g.connect (lpID, 0, outID, 0);
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 3 — Tremolo 101: LFO modulating volume.
+        Input → Multiply(audio × scaled-LFO) → Output
+        LFO → Add(+1) → Divide(/2) → Multiply input 1 */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialTremolo101()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Tremolo 101");
+        auto& g = proc->getDSPGraph();
+        int inID  = g.addNode (std::make_unique<AudioInputNode>());    // 0
+        int lfoID = g.addNode (std::make_unique<LFONode>());           // 1
+        int mulID = g.addNode (std::make_unique<MultiplyNode>());      // 2
+        int outID = g.addNode (std::make_unique<AudioOutputNode>());   // 3
+
+        g.getNode(lfoID)->getParam("rate")->set (5.0f);
+        g.getNode(lfoID)->getParam("depth")->set (1.0f);
+
+        // Scale bipolar LFO (-1..1) to unipolar (0..1)
+        int addID = g.addNode (std::make_unique<AddNode>());           // 4
+        g.getNode(addID)->getParam("value")->set (1.0f);
+        int divID = g.addNode (std::make_unique<DivideNode>());        // 5
+        g.getNode(divID)->getParam("value")->set (2.0f);
+
+        g.connect (lfoID, 0, addID, 0);
+        g.connect (addID, 0, divID, 0);
+        g.connect (inID, 0, mulID, 0);
+        g.connect (divID, 0, mulID, 1);
+        g.connect (mulID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 4 — Delay Lab: Parallel dry/wet with delay & feedback.
+        Input → Split → Delay → Mix → Output */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialDelayLab()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Delay Lab");
+        auto& g = proc->getDSPGraph();
+        int inID    = g.addNode (std::make_unique<AudioInputNode>());  // 0
+        int splitID = g.addNode (std::make_unique<SplitNode>());       // 1
+        int delayID = g.addNode (std::make_unique<DelayNode>());       // 2
+        int mixID   = g.addNode (std::make_unique<MixNode>());         // 3
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>()); // 4
+
+        g.getNode(delayID)->getParam("time")->set (0.4f);
+        g.getNode(delayID)->getParam("feedback")->set (0.4f);
+        g.getNode(mixID)->getParam("mix")->set (0.3f);
+
+        g.connect (inID, 0, splitID, 0);
+        g.connect (splitID, 0, mixID, 0);      // dry path
+        g.connect (splitID, 1, delayID, 0);     // wet path
+        g.connect (delayID, 0, mixID, 1);
+        g.connect (mixID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 5 — Mini Synth: Basic MIDI synth voice.
+        MidiNote → Oscillator → VCA → AudioOutput
+        MidiNote gate → ADSR → VCA control */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialMiniSynth()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Mini Synth");
+        auto& g = proc->getDSPGraph();
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>());  // 0
+        int oscID  = g.addNode (std::make_unique<OscillatorNode>());   // 1
+        int vcaID  = g.addNode (std::make_unique<VCANode>());          // 2
+        int adsrID = g.addNode (std::make_unique<ADSRNode>());         // 3
+        int midiID = g.addNode (std::make_unique<MidiNoteNode>());     // 4
+
+        g.getNode(adsrID)->getParam("attack")->set (0.01f);
+        g.getNode(adsrID)->getParam("decay")->set (0.1f);
+        g.getNode(adsrID)->getParam("sustain")->set (0.7f);
+        g.getNode(adsrID)->getParam("release")->set (0.3f);
+
+        g.connect (midiID, 0, oscID, 1);   // pitch → osc frequency mod
+        g.connect (midiID, 1, adsrID, 0);  // gate → ADSR trigger
+        g.connect (oscID, 0, vcaID, 0);    // osc audio → VCA audio in
+        g.connect (adsrID, 0, vcaID, 1);   // envelope → VCA control in
+        g.connect (vcaID, 0, outID, 0);    // VCA → audio output
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 6 — Envelope Filter: Auto-wah filter modulated by guitar amplitude.
+        Input → EnvelopeFollower → Ranger → LowPass (freq_cv) */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialEnvelopeFilter()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Envelope Filter");
+        auto& g = proc->getDSPGraph();
+        int inID    = g.addNode (std::make_unique<AudioInputNode>());       // 0
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>());      // 1
+        int envID   = g.addNode (std::make_unique<EnvelopeFollowerNode>()); // 2
+        int rangeID = g.addNode (std::make_unique<RangerNode>());           // 3
+        int lpID    = g.addNode (std::make_unique<LowPassNode>());          // 4
+
+        g.getNode(envID)->getParam("attack")->set (10.0f);
+        g.getNode(envID)->getParam("release")->set (80.0f);
+        g.getNode(envID)->getParam("sensitivity")->set (1.5f);
+        g.getNode(rangeID)->getParam("in_min")->set (0.0f);
+        g.getNode(rangeID)->getParam("in_max")->set (1.0f);
+        g.getNode(rangeID)->getParam("out_min")->set (100.0f);
+        g.getNode(rangeID)->getParam("out_max")->set (5000.0f);
+        g.getNode(rangeID)->getParam("curve")->set (0.5f);
+        g.getNode(lpID)->getParam("q")->set (2.0f);
+
+        g.connect (inID, 0, lpID, 0);
+        g.connect (inID, 0, envID, 0);
+        g.connect (envID, 0, rangeID, 0);
+        g.connect (rangeID, 0, lpID, 1); // Modulate lowpass freq_cv
+        g.connect (lpID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 7 — Step Sequencer Filter: Cutoff sweep automatically cycling through BPM-synced steps.
+        Clock → Sequencer → Ranger → LowPass (freq_cv) */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialStepSequencer()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Step Sequencer Filter");
+        auto& g = proc->getDSPGraph();
+        int inID    = g.addNode (std::make_unique<AudioInputNode>());       // 0
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>());      // 1
+        int clockID = g.addNode (std::make_unique<ClockNode>());            // 2
+        int seqID   = g.addNode (std::make_unique<SequencerNode>());        // 3
+        int rangeID = g.addNode (std::make_unique<RangerNode>());           // 4
+        int lpID    = g.addNode (std::make_unique<LowPassNode>());          // 5
+
+        g.getNode(clockID)->getParam("bpm")->set (120.0f);
+        g.getNode(seqID)->getParam("steps")->set (4.0f);
+        g.getNode(seqID)->getParam("s1")->set (0.1f);
+        g.getNode(seqID)->getParam("s2")->set (0.6f);
+        g.getNode(seqID)->getParam("s3")->set (0.3f);
+        g.getNode(seqID)->getParam("s4")->set (0.9f);
+        g.getNode(rangeID)->getParam("in_min")->set (0.0f);
+        g.getNode(rangeID)->getParam("in_max")->set (1.0f);
+        g.getNode(rangeID)->getParam("out_min")->set (200.0f);
+        g.getNode(rangeID)->getParam("out_max")->set (6000.0f);
+        g.getNode(lpID)->getParam("q")->set (3.0f);
+
+        g.connect (clockID, 0, seqID, 0); // clock pulse out -> seq clock in
+        g.connect (seqID, 0, rangeID, 0);  // seq out -> ranger in
+        g.connect (rangeID, 0, lpID, 1);   // ranger out -> lowpass freq_cv
+        g.connect (inID, 0, lpID, 0);
+        g.connect (lpID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 8 — Pattern Slicer: Gated fuzz switching synced to clock, active only when playing.
+        EnvelopeFollower → Comparator + Clock → AND Gate → Mux selector (Dry/Fuzz paths) */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialPatternSlicer()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Pattern Slicer");
+        auto& g = proc->getDSPGraph();
+        int inID    = g.addNode (std::make_unique<AudioInputNode>());       // 0
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>());      // 1
+        int envID   = g.addNode (std::make_unique<EnvelopeFollowerNode>()); // 2
+        int compID  = g.addNode (std::make_unique<ComparatorNode>());       // 3
+        int clockID = g.addNode (std::make_unique<ClockNode>());            // 4
+        int andID   = g.addNode (std::make_unique<ANDGateNode>());          // 5
+        int fuzzID  = g.addNode (std::make_unique<SoftClipNode>());         // 6
+        int muxID   = g.addNode (std::make_unique<MuxNode>());              // 7
+
+        g.getNode(compID)->getParam("threshold")->set (0.15f);
+        g.getNode(compID)->getParam("mode")->set (0.0f); // 0 = a > b
+        g.getNode(clockID)->getParam("bpm")->set (135.0f);
+        g.getNode(fuzzID)->getParam("drive")->set (40.0f);
+        g.getNode(envID)->getParam("release")->set (100.0f);
+
+        g.connect (inID, 0, envID, 0);
+        g.connect (inID, 0, muxID, 0);   // Dry path to Mux Input A
+        g.connect (inID, 0, fuzzID, 0);  // Dry to Fuzz
+        g.connect (fuzzID, 0, muxID, 1); // Fuzz to Mux Input B
+        g.connect (envID, 0, compID, 0);
+        g.connect (compID, 0, andID, 0);
+        g.connect (clockID, 0, andID, 1);
+        g.connect (andID, 0, muxID, 2);  // AND Gate out -> Mux Selector
+        g.connect (muxID, 0, outID, 0);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+}

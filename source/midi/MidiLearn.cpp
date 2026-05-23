@@ -96,11 +96,31 @@ void MidiLearnManager::applyCC (int ccNumber, int /*channel*/, float value)
         
         auto& mapping = mapIt->second;
 
-        // Find the parameter in the graph and set it
+        // The stored paramId uses the format "nodeUID:parameterID" (e.g. "1027:3_gain")
+        // Parse the target node UID and actual parameter ID
+        auto fullId = it->second;
+        juce::AudioProcessorGraph::NodeID targetNodeId;
+        juce::String actualParamId;
+
+        if (fullId.contains (":"))
+        {
+            targetNodeId.uid = static_cast<juce::uint32> (fullId.upToFirstOccurrenceOf (":", false, false).getIntValue());
+            actualParamId = fullId.fromFirstOccurrenceOf (":", false, false);
+        }
+        else
+        {
+            // Legacy mapping without instance prefix — scan all pedals
+            actualParamId = fullId;
+        }
+
         auto& graphEngine = targetEngine;
 
         for (auto& instance : graphEngine.getPedalInstances())
         {
+            // If we have a target node, skip non-matching instances
+            if (targetNodeId.uid != 0 && instance.nodeID != targetNodeId)
+                continue;
+
             auto* node = graphEngine.getGraph().getNodeForId (instance.nodeID);
             if (node == nullptr) continue;
 
@@ -109,7 +129,7 @@ void MidiLearnManager::applyCC (int ccNumber, int /*channel*/, float value)
             {
                 if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
                 {
-                    if (rangedParam->getParameterID() == it->second)
+                    if (rangedParam->getParameterID() == actualParamId)
                     {
                         float currentVirtual = rangedParam->getValue();
                         

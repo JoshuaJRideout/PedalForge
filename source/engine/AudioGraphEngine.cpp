@@ -1,4 +1,5 @@
 #include "AudioGraphEngine.h"
+#include "../dsp/GraphPedalProcessor.h"
 #include "MidiRoutingNodes.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -117,6 +118,16 @@ void AudioGraphEngine::releaseResources()
 void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
                                       juce::MidiBuffer& midi)
 {
+    int numSamples = buffer.getNumSamples();
+    if (numSamples > 0)
+    {
+        mainInRMS[0].store (buffer.getRMSLevel(0, 0, numSamples));
+        if (buffer.getNumChannels() > 1)
+            mainInRMS[1].store (buffer.getRMSLevel(1, 0, numSamples));
+    }
+    if (!midi.isEmpty())
+        mainMidiIn.store (true);
+
     for (const auto meta : midi)
     {
         auto msg = meta.getMessage();
@@ -131,6 +142,18 @@ void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
                     cycleTuringPedal(-1);
                 else if (appMidiConfig.turingNextCC != -1 && cc == appMidiConfig.turingNextCC)
                     cycleTuringPedal(1);
+
+                // Global page navigation
+                if (appMidiConfig.pageLeftCC != -1 && cc == appMidiConfig.pageLeftCC)
+                    cyclePage(-1);
+                else if (appMidiConfig.pageRightCC != -1 && cc == appMidiConfig.pageRightCC)
+                    cyclePage(1);
+
+                // Global track navigation (pedal selection)
+                if (appMidiConfig.trackLeftCC != -1 && cc == appMidiConfig.trackLeftCC)
+                    cycleTrack(-1);
+                else if (appMidiConfig.trackRightCC != -1 && cc == appMidiConfig.trackRightCC)
+                    cycleTrack(1);
                     
                 // Check board-specific CCs
                 for (auto& board : boards)
@@ -139,7 +162,6 @@ void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
                     {
                         if (board.activePage > 0)
                             board.activePage--;
-                        // Note: To properly update UI, we probably want to dispatch an async message
                     }
                     else if (board.nextPageCC != -1 && cc == board.nextPageCC)
                     {
@@ -151,6 +173,13 @@ void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
     graph.processBlock (buffer, midi);
+    
+    if (numSamples > 0)
+    {
+        mainOutRMS[0].store (buffer.getRMSLevel(0, 0, numSamples));
+        if (buffer.getNumChannels() > 1)
+            mainOutRMS[1].store (buffer.getRMSLevel(1, 0, numSamples));
+    }
 }
 
 void AudioGraphEngine::cycleTuringPedal(int dir)
@@ -169,14 +198,72 @@ void AudioGraphEngine::cycleTuringPedal(int dir)
             // Sort by page, then Y, then X
             std::sort(boardPedals.begin(), boardPedals.end(), [](PedalInstance* a, PedalInstance* b) {
                 if (a->pageIndex != b->pageIndex) return a->pageIndex < b->pageIndex;
-                if (a->gridY != b->gridY) return a->gridY < b->gridY;
-                return a->gridX < b->gridX;
+                if (a->boardY != b->boardY) return a->boardY < b->boardY;
+                return a->boardX < b->boardX;
             });
             
             board.turingPedalIndex = (board.turingPedalIndex + dir) % (int)boardPedals.size();
             if (board.turingPedalIndex < 0) board.turingPedalIndex += (int)boardPedals.size();
         }
     }
+}
+
+//==============================================================================
+void AudioGraphEngine::cyclePage (int dir)
+{
+    for (auto& board : boards)
+    {
+        int newPage = board.activePage + dir;
+        if (newPage >= 0 && newPage < board.numPages)
+            board.activePage = newPage;
+    }
+}
+
+void AudioGraphEngine::cycleTrack (int dir)
+{
+    // Collect pedals on the active page of the first board
+    if (boards.empty()) return;
+    auto& board = boards.front();
+
+    std::vector<PedalInstance*> pagePedals;
+    for (auto& inst : instances)
+    {
+        if (inst.onBoard && inst.boardId == board.id && inst.pageIndex == board.activePage)
+            pagePedals.push_back (&inst);
+    }
+
+    if (pagePedals.empty()) return;
+
+    // Sort left-to-right, top-to-bottom
+    std::sort (pagePedals.begin(), pagePedals.end(),
+               [] (PedalInstance* a, PedalInstance* b) {
+                   if (std::abs (a->boardY - b->boardY) > 50.0f) return a->boardY < b->boardY;
+                   return a->boardX < b->boardX;
+               });
+
+    // Find the currently focused pedal in this list
+    auto focusedId = getFocusedPedal();
+    int currentIdx = -1;
+    for (int i = 0; i < (int) pagePedals.size(); ++i)
+    {
+        if (pagePedals[(size_t) i]->nodeID == focusedId)
+        {
+            currentIdx = i;
+            break;
+        }
+    }
+
+    // Cycle to next/prev
+    int newIdx;
+    if (currentIdx < 0)
+        newIdx = (dir > 0) ? 0 : (int) pagePedals.size() - 1;
+    else
+    {
+        newIdx = (currentIdx + dir) % (int) pagePedals.size();
+        if (newIdx < 0) newIdx += (int) pagePedals.size();
+    }
+
+    setFocusedPedal (pagePedals[(size_t) newIdx]->nodeID);
 }
 
 //==============================================================================
@@ -231,9 +318,10 @@ void AudioGraphEngine::connectPassthrough()
 AudioGraphEngine::NodeID AudioGraphEngine::addPedal (
     std::unique_ptr<juce::AudioProcessor> processor,
     const juce::String& boardId, int pageIndex,
-    int gridX, int gridY, int gridW, int gridH)
+    float boardX, float boardY, float boardW, float boardH)
 {
     auto nodeId = NodeID (nextNodeIndex++);
+    auto* gp = dynamic_cast<GraphPedalProcessor*>(processor.get());
     auto node = graph.addNode (std::move (processor), nodeId);
 
     if (node == nullptr)
@@ -243,11 +331,15 @@ AudioGraphEngine::NodeID AudioGraphEngine::addPedal (
     instance.nodeID = nodeId;
     instance.boardId = boardId;
     instance.pageIndex = pageIndex;
-    instance.gridX  = gridX;
-    instance.gridY  = gridY;
-    instance.gridW  = gridW;
-    instance.gridH  = gridH;
+    instance.boardX = boardX;
+    instance.boardY = boardY;
+    instance.boardW = boardW;
+    instance.boardH = boardH;
     instance.name   = node->getProcessor()->getName();
+    
+    instance.meters = std::make_shared<PedalMeters>();
+    if (gp != nullptr)
+        gp->setMeters (instance.meters);
 
     instances.push_back (instance);
 
@@ -266,6 +358,7 @@ AudioGraphEngine::NodeID AudioGraphEngine::addPedalOffBoard (
     std::unique_ptr<juce::AudioProcessor> processor)
 {
     auto nodeId = NodeID (nextNodeIndex++);
+    auto* gp = dynamic_cast<GraphPedalProcessor*>(processor.get());
     auto node = graph.addNode (std::move (processor), nodeId);
 
     if (node == nullptr)
@@ -273,12 +366,16 @@ AudioGraphEngine::NodeID AudioGraphEngine::addPedalOffBoard (
 
     PedalInstance instance;
     instance.nodeID  = nodeId;
-    instance.gridX   = 0;
-    instance.gridY   = 0;
-    instance.gridW   = 1;
-    instance.gridH   = 2;
+    instance.boardX  = 0.0f;
+    instance.boardY  = 0.0f;
+    instance.boardW  = 100.0f;
+    instance.boardH  = 200.0f;
     instance.onBoard = false;
     instance.name    = node->getProcessor()->getName();
+    
+    instance.meters = std::make_shared<PedalMeters>();
+    if (gp != nullptr)
+        gp->setMeters (instance.meters);
 
     instances.push_back (instance);
 
@@ -292,16 +389,16 @@ void AudioGraphEngine::autoRoutePedal (NodeID newNodeId)
 
     // Find the left neighbor
     PedalInstance* leftNeighbor = nullptr;
-    int maxLeftX = -1;
+    float maxLeftX = -9999.0f;
 
     for (auto& inst : instances)
     {
         if (inst.nodeID != newNodeId && inst.boardId == newInst->boardId && inst.onBoard)
         {
             // Simple heuristic: closest X coordinate that is to the left of us
-            if (inst.gridX <= newInst->gridX && inst.gridX > maxLeftX)
+            if (inst.boardX <= newInst->boardX && inst.boardX > maxLeftX)
             {
-                maxLeftX = inst.gridX;
+                maxLeftX = inst.boardX;
                 leftNeighbor = &inst;
             }
         }
@@ -496,6 +593,8 @@ bool AudioGraphEngine::refreshHardwareMidiDevices()
             { 
                 hmd.routeX = existing.routeX; 
                 hmd.routeY = existing.routeY; 
+                hmd.activity = existing.activity;
+                hmd.engineNodeId = existing.engineNodeId;
                 found = true;
                 break; 
             }
@@ -525,6 +624,8 @@ bool AudioGraphEngine::refreshHardwareMidiDevices()
             { 
                 hmd.routeX = existing.routeX; 
                 hmd.routeY = existing.routeY; 
+                hmd.activity = existing.activity;
+                hmd.engineNodeId = existing.engineNodeId;
                 found = true;
                 break; 
             }
@@ -583,6 +684,8 @@ bool AudioGraphEngine::refreshHardwareMidiDevices()
     }
 
     hwMidiDevices = std::move (newList);
+    if (changed && onBoardConnectionsChanged)
+        onBoardConnectionsChanged();
     return changed;
 }
 
@@ -596,6 +699,9 @@ void AudioGraphEngine::injectHardwareMidi (const juce::String& deviceName, const
             if (hwNode->getName() == deviceName)
             {
                 hwNode->pushMidiMessage(msg);
+                for (auto& hw : hwMidiDevices)
+                    if (hw.deviceName == deviceName && hw.isInput)
+                        hw.activity->store(true);
                 return;
             }
         }
@@ -611,6 +717,12 @@ void AudioGraphEngine::extractHardwareMidi (const juce::String& deviceName, juce
             if (hwNode->getName() == deviceName)
             {
                 hwNode->popCapturedMidi(dest);
+                if (!dest.isEmpty())
+                {
+                    for (auto& hw : hwMidiDevices)
+                        if (hw.deviceName == deviceName && !hw.isInput)
+                            hw.activity->store(true);
+                }
                 return;
             }
         }
@@ -637,10 +749,10 @@ juce::String AudioGraphEngine::serialise() const
         auto obj = std::make_unique<juce::DynamicObject>();
         obj->setProperty ("nodeID",   (int) inst.nodeID.uid);
         obj->setProperty ("name",     inst.name);
-        obj->setProperty ("gridX",    inst.gridX);
-        obj->setProperty ("gridY",    inst.gridY);
-        obj->setProperty ("gridW",    inst.gridW);
-        obj->setProperty ("gridH",    inst.gridH);
+        obj->setProperty ("boardX",   inst.boardX);
+        obj->setProperty ("boardY",   inst.boardY);
+        obj->setProperty ("boardW",   inst.boardW);
+        obj->setProperty ("boardH",   inst.boardH);
         obj->setProperty ("bypassed", inst.bypassed);
         pedalArray.add (juce::var (obj.release()));
     }
@@ -661,11 +773,60 @@ juce::String AudioGraphEngine::serialise() const
 
     root->setProperty ("connections", connArray);
 
+    root->setProperty ("boardNotes", StickyNoteData::toJSON (boardNotes));
+    root->setProperty ("routeNotes", StickyNoteData::toJSON (routeNotes));
+    root->setProperty ("playNotes", StickyNoteData::toJSON (playNotes));
+
+    // Serialise MIDI config
+    auto midiCfgObj = std::make_unique<juce::DynamicObject>();
+    midiCfgObj->setProperty ("turingPrevCC", appMidiConfig.turingPrevCC);
+    midiCfgObj->setProperty ("turingNextCC", appMidiConfig.turingNextCC);
+    midiCfgObj->setProperty ("playModeToggleCC", appMidiConfig.playModeToggleCC);
+    midiCfgObj->setProperty ("pageLeftCC", appMidiConfig.pageLeftCC);
+    midiCfgObj->setProperty ("pageRightCC", appMidiConfig.pageRightCC);
+    midiCfgObj->setProperty ("trackLeftCC", appMidiConfig.trackLeftCC);
+    midiCfgObj->setProperty ("trackRightCC", appMidiConfig.trackRightCC);
+    midiCfgObj->setProperty ("novationMode", (int) appMidiConfig.novationMode);
+    root->setProperty ("midiConfig", juce::var (midiCfgObj.release()));
+
     return juce::JSON::toString (juce::var (root.release()));
 }
 
 void AudioGraphEngine::deserialise (const juce::String& jsonState)
 {
     // TODO: Implement full deserialisation in Phase 1E
-    juce::ignoreUnused (jsonState);
+    auto parsed = juce::JSON::parse (jsonState);
+    if (auto* root = parsed.getDynamicObject())
+    {
+        if (root->hasProperty ("boardNotes"))
+            boardNotes = StickyNoteData::fromJSON (root->getProperty ("boardNotes"));
+        if (root->hasProperty ("routeNotes"))
+            routeNotes = StickyNoteData::fromJSON (root->getProperty ("routeNotes"));
+        if (root->hasProperty ("playNotes"))
+            playNotes = StickyNoteData::fromJSON (root->getProperty ("playNotes"));
+
+        // Deserialise MIDI config
+        if (root->hasProperty ("midiConfig"))
+        {
+            if (auto* midiCfgObj = root->getProperty ("midiConfig").getDynamicObject())
+            {
+                if (midiCfgObj->hasProperty ("turingPrevCC"))
+                    appMidiConfig.turingPrevCC = (int) midiCfgObj->getProperty ("turingPrevCC");
+                if (midiCfgObj->hasProperty ("turingNextCC"))
+                    appMidiConfig.turingNextCC = (int) midiCfgObj->getProperty ("turingNextCC");
+                if (midiCfgObj->hasProperty ("playModeToggleCC"))
+                    appMidiConfig.playModeToggleCC = (int) midiCfgObj->getProperty ("playModeToggleCC");
+                if (midiCfgObj->hasProperty ("pageLeftCC"))
+                    appMidiConfig.pageLeftCC = (int) midiCfgObj->getProperty ("pageLeftCC");
+                if (midiCfgObj->hasProperty ("pageRightCC"))
+                    appMidiConfig.pageRightCC = (int) midiCfgObj->getProperty ("pageRightCC");
+                if (midiCfgObj->hasProperty ("trackLeftCC"))
+                    appMidiConfig.trackLeftCC = (int) midiCfgObj->getProperty ("trackLeftCC");
+                if (midiCfgObj->hasProperty ("trackRightCC"))
+                    appMidiConfig.trackRightCC = (int) midiCfgObj->getProperty ("trackRightCC");
+                if (midiCfgObj->hasProperty ("novationMode"))
+                    appMidiConfig.novationMode = (AppMidiConfig::NovationMode) (int) midiCfgObj->getProperty ("novationMode");
+            }
+        }
+    }
 }

@@ -16,12 +16,24 @@ PedalDetailPanel::PedalDetailPanel()
     addAndMakeVisible (removeButton);
     addAndMakeVisible (saveDefaultButton);
     addAndMakeVisible (closeButton);
+    addAndMakeVisible (infoToggleButton);
+    addAndMakeVisible (infoLabel);
+    
+    infoToggleButton.addListener (this);
+    infoToggleButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF2A2A2A));
+    infoToggleButton.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::accent);
+    
+    infoLabel.setJustificationType (juce::Justification::topLeft);
+    infoLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+    infoLabel.setFont (juce::FontOptions (12.0f));
     
     removeButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF4A1F1F));
     removeButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
     
     saveDefaultButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF333333));
     saveDefaultButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    
+    startTimerHz (30);
 }
 
 PedalDetailPanel::~PedalDetailPanel()
@@ -37,7 +49,7 @@ juce::Rectangle<float> PedalDetailPanel::getPedalRect() const
     auto pedalArea = bounds.reduced (12, 0);
 
     // Reserve bottom for buttons
-    pedalArea.removeFromBottom (80);
+    pedalArea.removeFromBottom (infoExpanded ? 200 : 114);
     // Reserve top for close button and title
     pedalArea.removeFromTop (40);
 
@@ -85,7 +97,7 @@ void PedalDetailPanel::paint (juce::Graphics& g)
     //==========================================================================
     auto pedalRect = getPedalRect();
 
-    PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->controlTexts, selectedInstance->bypassed, 1.0f);
+    PedalPainter::paintDesign (g, pedalRect, selectedInstance->design.get(), selectedInstance->controlValues, selectedInstance->controlTexts, selectedInstance->controlData, selectedInstance->bypassed, 1.0f);
 
     // Draw the title of the pedal at the top
     g.setColour (PedalForgeLookAndFeel::textPrimary);
@@ -101,8 +113,21 @@ void PedalDetailPanel::resized()
     // Close button (top right)
     closeButton.setBounds (bounds.getRight() - 32, 8, 24, 24);
 
-    // Bypass + Edit + Remove buttons at bottom
-    auto bottom = bounds.removeFromBottom (114).reduced (12, 8);
+    auto bottom = bounds.removeFromBottom (infoExpanded ? 200 : 114).reduced (12, 8);
+    
+    infoToggleButton.setBounds (bottom.removeFromTop (24));
+    bottom.removeFromTop (6);
+    
+    if (infoExpanded)
+    {
+        infoLabel.setBounds (bottom.removeFromTop (80));
+        bottom.removeFromTop (6);
+    }
+    else
+    {
+        infoLabel.setBounds (0, 0, 0, 0);
+    }
+    
     bypassButton.setBounds (bottom.removeFromTop (32));
     bottom.removeFromTop (6);
     saveDefaultButton.setBounds (bottom.removeFromTop (28));
@@ -191,10 +216,15 @@ void PedalDetailPanel::resized()
 
 //==============================================================================
 void PedalDetailPanel::showPedal (PedalInstance& instance,
-                                    AudioGraphEngine& engine)
+                                    AudioGraphEngine& engine,
+                                    MidiLearnManager* midiLearn)
 {
     selectedInstance = &instance;
     engineRef = &engine;
+    midiLearnRef = midiLearn;
+
+    // Track focused pedal for auto-map
+    engine.setFocusedPedal (instance.nodeID);
 
     // Update bypass button
     bypassButton.setButtonText (instance.bypassed ? "ENABLE" : "BYPASS");
@@ -212,6 +242,7 @@ void PedalDetailPanel::clearSelection()
 {
     selectedInstance = nullptr;
     engineRef = nullptr;
+    midiLearnRef = nullptr;
     knobEntries.clear();
     repaint();
 }
@@ -451,7 +482,13 @@ void PedalDetailPanel::sliderValueChanged (juce::Slider* slider)
 
 void PedalDetailPanel::buttonClicked (juce::Button* button)
 {
-    if (button == &bypassButton && selectedInstance != nullptr)
+    if (button == &infoToggleButton)
+    {
+        infoExpanded = !infoExpanded;
+        resized();
+        repaint();
+    }
+    else if (button == &bypassButton && selectedInstance != nullptr)
     {
         selectedInstance->bypassed = ! selectedInstance->bypassed;
         bypassButton.setButtonText (selectedInstance->bypassed ? "ENABLE" : "BYPASS");
@@ -459,6 +496,29 @@ void PedalDetailPanel::buttonClicked (juce::Button* button)
                                 selectedInstance->bypassed
                                     ? PedalForgeLookAndFeel::success.darker (0.3f)
                                     : PedalForgeLookAndFeel::danger.darker (0.3f));
+
+        // Toggle the processor's bypass parameter so audio actually bypasses
+        if (engineRef != nullptr)
+        {
+            if (auto* node = engineRef->getGraph().getNodeForId(selectedInstance->nodeID))
+            {
+                if (auto* proc = node->getProcessor())
+                {
+                    for (auto* p : proc->getParameters())
+                    {
+                        if (auto* bp = dynamic_cast<juce::AudioParameterBool*>(p))
+                        {
+                            if (bp->getParameterID() == "bypass")
+                            {
+                                bp->setValueNotifyingHost(selectedInstance->bypassed ? 1.0f : 0.0f);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         repaint();
     }
     else if (button == &removeButton && selectedInstance != nullptr)
@@ -490,5 +550,46 @@ void PedalDetailPanel::buttonClicked (juce::Button* button)
             if (sp != nullptr)
                 sp->saveDefaultButton.setButtonText("Save as Default");
         });
+    }
+}
+
+void PedalDetailPanel::timerCallback()
+{
+    if (selectedInstance == nullptr || engineRef == nullptr)
+        return;
+        
+    if (infoExpanded)
+    {
+        juce::String infoText;
+        auto* node = engineRef->getGraph().getNodeForId (selectedInstance->nodeID);
+        if (node != nullptr)
+        {
+            if (auto* proc = node->getProcessor())
+            {
+                for (auto* param : proc->getParameters())
+                {
+                    if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param))
+                    {
+                        float val = ranged->convertFrom0to1 (ranged->getValue());
+                        juce::String text = ranged->getText (ranged->getValue(), 32);
+                        juce::String paramName = ranged->getName (32);
+                        
+                        juce::String line = paramName + ": " + text;
+                        
+                        if (midiLearnRef != nullptr)
+                        {
+                            int cc = midiLearnRef->getMappedCC (ranged->getParameterID());
+                            if (cc >= 0)
+                                line += " (MIDI CC #" + juce::String(cc) + ")";
+                        }
+                            
+                        infoText += line + "\n";
+                    }
+                }
+            }
+        }
+        
+        if (infoLabel.getText() != infoText)
+            infoLabel.setText (infoText, juce::dontSendNotification);
     }
 }

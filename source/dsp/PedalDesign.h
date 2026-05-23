@@ -2,6 +2,7 @@
 
 #include <juce_core/juce_core.h>
 #include <vector>
+#include "../engine/StickyNoteData.h"
 
 //==============================================================================
 /**
@@ -23,6 +24,7 @@ struct PedalDesign
     juce::String author = "User";
     juce::String description = "";
     juce::String category = "Custom";
+    juce::StringArray tags;       // free-form tags, e.g. {"drive", "beginner", "tutorial"}
     int version = 1;
     bool isFactory = false;       // true = read-only, can't overwrite
 
@@ -107,6 +109,11 @@ struct PedalDesign
     std::vector<Mapping> mappings;
 
     //==========================================================================
+    // Sticky Notes
+    std::vector<StickyNote> designNotes; // Notes on the Pedal Builder tab
+    std::vector<StickyNote> fxNotes;     // Notes on the Code/DSP tab
+
+    //==========================================================================
     // Serialization
 
     juce::var toJSON() const
@@ -116,6 +123,13 @@ struct PedalDesign
         root->setProperty ("author",      author);
         root->setProperty ("description", description);
         root->setProperty ("category",    category);
+
+        // Tags — stored as a JSON array of strings
+        juce::Array<juce::var> tagArr;
+        for (const auto& t : tags)
+            tagArr.add (t);
+        root->setProperty ("tags", tagArr);
+
         root->setProperty ("version",     version);
         root->setProperty ("isFactory",   isFactory);
         root->setProperty ("chassisW",  chassisW);
@@ -170,6 +184,9 @@ struct PedalDesign
             mapArr.add (juce::var (mo));
         }
         root->setProperty ("mappings", mapArr);
+
+        root->setProperty ("designNotes", StickyNoteData::toJSON (designNotes));
+        root->setProperty ("fxNotes", StickyNoteData::toJSON (fxNotes));
 
         // Routing ports
         juce::Array<juce::var> rpArr;
@@ -240,6 +257,14 @@ struct PedalDesign
             design.author      = root->getProperty ("author").toString();
             if (root->hasProperty("description")) design.description = root->getProperty ("description").toString();
             design.category    = root->getProperty ("category").toString();
+
+            // Tags
+            if (auto* tagArr = root->getProperty ("tags").getArray())
+            {
+                for (const auto& tv : *tagArr)
+                    design.tags.add (tv.toString());
+            }
+
             design.version     = (int) root->getProperty ("version");
             design.isFactory   = (bool) root->getProperty ("isFactory");
             design.chassisW    = (float)(double) root->getProperty ("chassisW");
@@ -296,6 +321,11 @@ struct PedalDesign
                     }
                 }
             }
+
+            if (root->hasProperty ("designNotes"))
+                design.designNotes = StickyNoteData::fromJSON (root->getProperty ("designNotes"));
+            if (root->hasProperty ("fxNotes"))
+                design.fxNotes = StickyNoteData::fromJSON (root->getProperty ("fxNotes"));
 
             // Routing ports
             if (auto* arr = root->getProperty ("routingPorts").getArray())

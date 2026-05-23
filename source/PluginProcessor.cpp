@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "dsp/PedalDesign.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 
 //==============================================================================
@@ -24,6 +25,21 @@ PedalForgeProcessor::~PedalForgeProcessor()
     // Close all open hardware MIDI connections
     openMidiInputs.clear();
     const juce::ScopedLock sl (midiOutputLock);
+    for (auto& mo : openMidiOutputs)
+    {
+        if (mo)
+        {
+            auto outName = mo->getName();
+            if (outName.containsIgnoreCase ("DAW")
+                && (outName.containsIgnoreCase ("LCXL3")
+                 || outName.containsIgnoreCase ("LC3")
+                 || outName.containsIgnoreCase ("Launch Control")))
+            {
+                static const juce::uint8 dawOff[] = { 0x00, 0x20, 0x29, 0x02, 0x15, 0x02, 0x00 };
+                mo->sendMessageNow (juce::MidiMessage::createSysExMessage (dawOff, sizeof (dawOff)));
+            }
+        }
+    }
     openMidiOutputs.clear();
 }
 
@@ -40,6 +56,8 @@ void PedalForgeProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     // Open hardware MIDI devices that the user has enabled in the Routing Tab
     refreshHardwareMidiConnections();
+    
+    testSoundGen.prepare (sampleRate);
 }
 
 void PedalForgeProcessor::releaseResources()
@@ -71,6 +89,8 @@ void PedalForgeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
 
+    testSoundGen.process (buffer);
+
     // In Standalone mode, the JUCE wrapper's Audio/MIDI settings dialog allows the user
     // to globally enable MIDI inputs. We completely ignore these to prevent double-notes,
     // because PedalForge handles per-device MIDI routing internally.
@@ -78,6 +98,16 @@ void PedalForgeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         midiMessages.clear();
 
     // (Global hardware MIDI mixing removed in favor of point-to-point Graph Nodes)
+
+    // Log host MIDI messages if present
+    for (const auto meta : midiMessages)
+    {
+        auto msg = meta.getMessage();
+        if (isPlayModeActive)
+            playGraphEngine.logMidiMessage (msg, "Host MIDI");
+        else
+            graphEngine.logMidiMessage (msg, "Host MIDI");
+    }
 
     // Process audio through the pedal graph and handle MIDI routing
     if (isPlayModeActive)
@@ -137,12 +167,157 @@ void PedalForgeProcessor::setStateInformation (const void* data, int sizeInBytes
                                           sizeInBytes);
     presetManager.restoreState (state);
 }
+//==============================================================================
+// MIDI Input Callback
+//==============================================================================
+void PedalForgeProcessor::handleIncomingMidiMessage (juce::MidiInput* source,
+                                                      const juce::MidiMessage& msg)
+{
+    if (source == nullptr) return;
+
+    juce::MidiBuffer singleMsgBuf;
+    singleMsgBuf.addEvent (msg, 0);
+
+    if (isPlayModeActive)
+        playMidiLearn.processMidi (singleMsgBuf);
+    else
+        midiLearn.processMidi (singleMsgBuf);
+
+    graphEngine.injectHardwareMidi (source->getName(), msg);
+    playGraphEngine.injectHardwareMidi (source->getName(), msg);
+
+    graphEngine.logMidiMessage (msg, source->getName());
+    playGraphEngine.logMidiMessage (msg, source->getName());
+
+    // ── Navigation CCs: Page & Track buttons ──
+    if (msg.isController())
+    {
+        int cc = msg.getControllerNumber();
+        int val = msg.getControllerValue();
+        auto& cfg = graphEngine.appMidiConfig;
+
+        if (val > 64) // button pressed
+        {
+            if (cfg.pageLeftCC  != -1 && cc == cfg.pageLeftCC)  { graphEngine.cyclePage (-1); return; }
+            if (cfg.pageRightCC != -1 && cc == cfg.pageRightCC) { graphEngine.cyclePage (1);  return; }
+            if (cfg.trackLeftCC  != -1 && cc == cfg.trackLeftCC)  { graphEngine.cycleTrack (-1); return; }
+            if (cfg.trackRightCC != -1 && cc == cfg.trackRightCC) { graphEngine.cycleTrack (1);  return; }
+        }
+    }
+
+    // ── Auto-Map (Focus Pedal) ──
+    if (graphEngine.appMidiConfig.novationMode == AppMidiConfig::NovationMode::AutoMap
+        && msg.isController())
+    {
+        auto focusedId = graphEngine.getFocusedPedal();
+        if (focusedId.uid == 0) return;
+
+        // Reset slot assignments when focus changes
+        if (focusedId.uid != autoMapLastFocusedNode)
+        {
+            autoMapCCSlots.clear();
+            autoMapNextSlot = 0;
+            autoMapLastFocusedNode = focusedId.uid;
+        }
+
+        // Find the focused pedal instance
+        const PedalInstance* inst = nullptr;
+        for (const auto& i : graphEngine.getPedalInstances())
+        {
+            if (i.nodeID == focusedId) { inst = &i; break; }
+        }
+        if (inst == nullptr || inst->design == nullptr) return;
+
+        // Build ordered list of mappable parameters (knobs/sliders with mappings)
+        // Only rebuild if needed — cache could be added later for performance
+        struct MappableParam
+        {
+            juce::String controlID;
+            juce::String paramID;  // JUCE AudioParameter ID (e.g. "3_gain")
+        };
+        std::vector<MappableParam> mappableParams;
+
+        for (const auto& ctrl : inst->design->controls)
+        {
+            if (ctrl.type != "knob" && ctrl.type != "slider" && ctrl.type != "fader")
+                continue;
+
+            // Find the mapping for this control
+            for (const auto& m : inst->design->mappings)
+            {
+                if (m.controlID == ctrl.controlID)
+                {
+                    mappableParams.push_back ({ ctrl.controlID, m.nodeParam });
+                    break;
+                }
+            }
+        }
+
+        if (mappableParams.empty()) return;
+
+        int cc = msg.getControllerNumber();
+        float value = msg.getControllerValue() / 127.0f;
+
+        // Assign this CC to a parameter slot if not already assigned
+        auto slotIt = autoMapCCSlots.find (cc);
+        int slotIndex = -1;
+
+        if (slotIt != autoMapCCSlots.end())
+        {
+            slotIndex = slotIt->second;
+        }
+        else if (autoMapNextSlot < (int) mappableParams.size())
+        {
+            slotIndex = autoMapNextSlot++;
+            autoMapCCSlots[cc] = slotIndex;
+        }
+
+        if (slotIndex < 0 || slotIndex >= (int) mappableParams.size())
+            return;
+
+        // Set the parameter value on the processor
+        auto& mp = mappableParams[(size_t) slotIndex];
+
+        if (auto* node = graphEngine.getGraph().getNodeForId (focusedId))
+        {
+            auto* proc = node->getProcessor();
+            for (auto* param : proc->getParameters())
+            {
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
+                {
+                    if (rp->getParameterID() == mp.paramID)
+                    {
+                        rp->setValueNotifyingHost (value);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
 
 //==============================================================================
 // Hardware MIDI Connection Management
 //==============================================================================
 void PedalForgeProcessor::refreshHardwareMidiConnections()
 {
+    // Helper: detect any Novation Launch Control variant
+    auto isNovationLC = [] (const juce::String& name) -> bool
+    {
+        return name.containsIgnoreCase ("Launch Control")
+            || name.containsIgnoreCase ("LCXL3")
+            || name.containsIgnoreCase ("LC3");
+    };
+
+    // Helper: detect if a port is a Novation DAW port (needs SysEx handshake)
+    auto isNovationDAWPort = [] (const juce::String& name) -> bool
+    {
+        return name.containsIgnoreCase ("DAW")
+            && (name.containsIgnoreCase ("LCXL3")
+             || name.containsIgnoreCase ("LC3")
+             || name.containsIgnoreCase ("Launch Control"));
+    };
+
     // Build sets of active device names by checking if their engineNodeId
     // appears in any board connection as a source or destination
     juce::StringArray activeInputs, activeOutputs;
@@ -159,10 +334,14 @@ void PedalForgeProcessor::refreshHardwareMidiConnections()
             }
         }
         
-        if (inUse)
+        // Always open: all inputs, Novation LC devices (for DAW mode handshake),
+        // and any device with an active routing connection
+        bool isNov = isNovationLC (dev.deviceName);
+        if (inUse || dev.isInput || isNov)
         {
             if (dev.isInput)  activeInputs.add  (dev.deviceName);
             else              activeOutputs.add (dev.deviceName);
+            DBG ("PedalForge: Active MIDI device: " + dev.deviceName + (dev.isInput ? " (input)" : " (output)") + (isNov ? " [Novation]" : ""));
         }
     }
 
@@ -205,7 +384,17 @@ void PedalForgeProcessor::refreshHardwareMidiConnections()
         openMidiOutputs.erase (
             std::remove_if (openMidiOutputs.begin(), openMidiOutputs.end(),
                 [&] (const std::unique_ptr<juce::MidiOutput>& mo) {
-                    return mo && !activeOutputs.contains (mo->getName());
+                    bool shouldRemove = mo && !activeOutputs.contains (mo->getName());
+                    if (shouldRemove)
+                    {
+                        // Send DAW mode off when disconnecting a Novation DAW port
+                        if (isNovationDAWPort (mo->getName()))
+                        {
+                            static const juce::uint8 dawOff[] = { 0x00, 0x20, 0x29, 0x02, 0x15, 0x02, 0x00 };
+                            mo->sendMessageNow (juce::MidiMessage::createSysExMessage (dawOff, sizeof (dawOff)));
+                        }
+                    }
+                    return shouldRemove;
                 }),
             openMidiOutputs.end());
 
@@ -222,7 +411,30 @@ void PedalForgeProcessor::refreshHardwareMidiConnections()
                     if (info.name == name)
                     {
                         if (auto mo = juce::MidiOutput::openDevice (info.identifier))
+                        {
+                            // Send DAW mode on when opening a Novation DAW port
+                            if (isNovationDAWPort (info.name))
+                            {
+                                DBG ("PedalForge: Enabling DAW mode on: " + info.name);
+
+                                // Method 1: Note message — works for all Novation MK3 controllers
+                                // Note On, channel 16 (0x9F), note 12 (0x0C), velocity 127 (0x7F)
+                                mo->sendMessageNow (juce::MidiMessage::noteOn (16, 12, (juce::uint8) 127));
+
+                                // Method 2: SysEx — LCXL3 (device ID 0x15)
+                                static const juce::uint8 dawOnXL[] = { 0x00, 0x20, 0x29, 0x02, 0x15, 0x02, 0x7F };
+                                mo->sendMessageNow (juce::MidiMessage::createSysExMessage (dawOnXL, sizeof (dawOnXL)));
+
+                                // Method 3: SysEx — LC3 (device ID 0x14)
+                                static const juce::uint8 dawOnLC[] = { 0x00, 0x20, 0x29, 0x02, 0x14, 0x02, 0x7F };
+                                mo->sendMessageNow (juce::MidiMessage::createSysExMessage (dawOnLC, sizeof (dawOnLC)));
+                            }
+                            else
+                            {
+                                DBG ("PedalForge: Opened MIDI output: " + info.name);
+                            }
                             openMidiOutputs.push_back (std::move (mo));
+                        }
                         break;
                     }
                 }

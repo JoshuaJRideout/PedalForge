@@ -5,6 +5,14 @@
 
 struct PedalDesign;  // forward declaration
 
+#include <atomic>
+
+struct PedalMeters
+{
+    std::atomic<float> outRMS[2] { {0.0f}, {0.0f} };
+    std::atomic<bool> midiOut { false };
+};
+
 //==============================================================================
 /**
  * Runtime state for a pedal instance on the board.
@@ -13,17 +21,19 @@ struct PedalDesign;  // forward declaration
 struct PedalInstance
 {
     juce::AudioProcessorGraph::NodeID nodeID;
+    
+    std::shared_ptr<PedalMeters> meters;
 
     juce::String name;
     juce::String category;      // e.g. "Overdrive", "Delay", "Reverb"
     juce::Colour colour;        // Pedal colour for UI
     int numKnobs = 3;           // Number of knobs to draw on the face
 
-    // Grid position and size
-    int gridX = 0;
-    int gridY = 0;
-    int gridW = 1;              // Default: 1 cell wide
-    int gridH = 2;              // Default: 2 cells tall
+    // Board position and size (in pixels)
+    float boardX = 0.0f;
+    float boardY = 0.0f;
+    float boardW = 100.0f;
+    float boardH = 200.0f;
 
     // State
     bool bypassed = false;
@@ -42,4 +52,5 @@ struct PedalInstance
     // Live control values for custom designs (controlID → value 0..1)
     std::map<juce::String, float> controlValues;
     std::map<juce::String, juce::String> controlTexts;
+    std::map<juce::String, std::vector<float>> controlData;
 };

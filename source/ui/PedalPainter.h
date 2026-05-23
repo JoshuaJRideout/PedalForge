@@ -25,5 +25,6 @@ namespace PedalPainter
                       const PedalDesign* design,
                       const std::map<juce::String, float>& controlValues,
                       const std::map<juce::String, juce::String>& controlTexts,
-                      bool bypassed, float alpha = 1.0f);
+                      const std::map<juce::String, std::vector<float>>& controlData,
+                      bool bypassed = false, float alpha = 1.0f);
 }

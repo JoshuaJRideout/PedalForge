@@ -7,6 +7,7 @@ struct BoardConfig
     juce::String name;
     int cols = 8;
     int rows = 4;
+    float snapGridSize = 100.0f; // 0 = off, else snap to N pixels
     int numPages = 1;
     int activePage = 0;
     int displayIndex = -1; // -1 = main window, >= 0 external monitors

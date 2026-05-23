@@ -175,6 +175,7 @@ public:
     juce::String pedalAuthor = "User";
     juce::String pedalDescription = "";
     juce::String pedalCategory = "Custom";
+    juce::StringArray pedalTags;
 
     void savePedalDesign()
     {
@@ -202,6 +203,7 @@ public:
         design.author = pedalAuthor;
         design.description = pedalDescription;
         design.category = pedalCategory;
+        design.tags = pedalTags;
         design.chassisW = chassisW;
         design.chassisH = chassisH;
         design.chassisColour = chassisColour;
@@ -1171,6 +1173,8 @@ public:
         setupEditor (hEditor);
         setupEditor (nameEditor);
         setupEditor (authorEditor);
+        setupEditor (categoryEditor);
+        setupEditor (tagsEditor);
         
         descEditor.setMultiLine (true);
         descEditor.setReturnKeyStartsNewLine (true);
@@ -1350,6 +1354,8 @@ public:
                 nameEditor.setVisible (false);
                 authorEditor.setVisible (false);
                 descEditor.setVisible (false);
+                categoryEditor.setVisible (false);
+                tagsEditor.setVisible (false);
 
                 bool isKnob = (hwPtr->type == "knob");
                 rotationEditor.setVisible (isKnob);
@@ -1377,6 +1383,11 @@ public:
             authorEditor.setText (canvas->pedalAuthor, juce::dontSendNotification);
             descEditor.setVisible (true);
             descEditor.setText (canvas->pedalDescription, juce::dontSendNotification);
+
+            categoryEditor.setVisible (true);
+            categoryEditor.setText (canvas->pedalCategory, juce::dontSendNotification);
+            tagsEditor.setVisible (true);
+            tagsEditor.setText (canvas->pedalTags.joinIntoString (", "), juce::dontSendNotification);
 
             paramCombo.setVisible (false);
             deleteButton.setVisible (false);
@@ -1409,6 +1420,8 @@ public:
             nameEditor.setVisible (false);
             authorEditor.setVisible (false);
             descEditor.setVisible (false);
+            categoryEditor.setVisible (false);
+            tagsEditor.setVisible (false);
             deleteButton.setVisible (true);
             rotationEditor.setVisible (false);
             sensitivityEditor.setVisible (false);
@@ -1525,7 +1538,16 @@ public:
             y = authorEditor.getBottom() + 12;
 
             g.drawText ("DESCRIPTION", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
-            y = descEditor.getBottom() + 16;
+            y = descEditor.getBottom() + 12;
+
+            g.drawText ("CATEGORY", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
+            y = categoryEditor.getBottom() + 12;
+
+            g.drawText ("TAGS", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
+            g.setColour (PedalForgeLookAndFeel::textSecondary.withAlpha (0.5f)); g.setFont (juce::FontOptions (9.0f));
+            g.drawText ("(comma separated)", m + 30, y, getWidth()-m*2-30, 16, juce::Justification::centredLeft);
+            g.setColour (PedalForgeLookAndFeel::textMuted); g.setFont (juce::FontOptions (11.0f));
+            y = tagsEditor.getBottom() + 16;
 
             g.drawText ("CUSTOM RENDERING", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
             y += 20;
@@ -1566,9 +1588,15 @@ public:
             authorEditor.setBounds (m, y, getWidth()-m*2, 28);
             
             y = authorEditor.getBottom() + 28;
-            descEditor.setBounds (m, y, getWidth()-m*2, 100);
+            descEditor.setBounds (m, y, getWidth()-m*2, 80);
             
-            y = descEditor.getBottom() + 36;
+            y = descEditor.getBottom() + 28;
+            categoryEditor.setBounds (m, y, getWidth()-m*2, 28);
+
+            y = categoryEditor.getBottom() + 28;
+            tagsEditor.setBounds (m, y, getWidth()-m*2, 28);
+
+            y = tagsEditor.getBottom() + 36;
             btnImageMain.setBounds (m, y, getWidth()-m*2, 24);
             y += 30;
             btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
@@ -1633,6 +1661,15 @@ public:
             else if (&editor == &nameEditor) { canvas->pedalName = nameEditor.getText(); }
             else if (&editor == &authorEditor) { canvas->pedalAuthor = authorEditor.getText(); }
             else if (&editor == &descEditor) { canvas->pedalDescription = descEditor.getText(); }
+            else if (&editor == &categoryEditor) { canvas->pedalCategory = categoryEditor.getText(); }
+            else if (&editor == &tagsEditor)
+            {
+                juce::StringArray parsed;
+                parsed.addTokens (tagsEditor.getText(), ",", "");
+                for (auto& t : parsed) t = t.trim();
+                parsed.removeEmptyStrings();
+                canvas->pedalTags = parsed;
+            }
             return;
         }
 
@@ -1732,7 +1769,7 @@ private:
     ChassisCanvas* canvas = nullptr;
     juce::TextEditor labelEditor;
     juce::TextEditor wEditor, hEditor;
-    juce::TextEditor nameEditor, authorEditor, descEditor;
+    juce::TextEditor nameEditor, authorEditor, descEditor, categoryEditor, tagsEditor;
     juce::ComboBox paramCombo, fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
@@ -2496,6 +2533,7 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         canvas->pedalAuthor = design.author;
         canvas->pedalDescription = design.description;
         canvas->pedalCategory = design.category;
+        canvas->pedalTags = design.tags;
         canvas->cachedEffectsGraph = design.effectsGraph;
 
         // Find matching preset index
@@ -2565,6 +2603,10 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         properties->showForIndices ();
     if (pagesPanel)
         pagesPanel->listBox.updateContent();
+
+    designNotes = design.designNotes;
+    notesOverlay.setNotes (designNotes);
+    notesOverlay.setVisible (!designNotes.empty());
 }
 
 void PedalDesignerComponent::clearDesign()
@@ -2587,12 +2629,19 @@ void PedalDesignerComponent::clearDesign()
         properties->showForIndices ();
     if (pagesPanel)
         pagesPanel->listBox.updateContent();
+
+    designNotes.clear();
+    notesOverlay.setVisible (false);
 }
 
 PedalDesign PedalDesignerComponent::getDesign() const
 {
     if (canvas)
-        return canvas->buildPedalDesign (pagesPanel ? &pagesPanel->pedalFaceHardware : nullptr);
+    {
+        PedalDesign design = canvas->buildPedalDesign (pagesPanel ? &pagesPanel->pedalFaceHardware : nullptr);
+        design.designNotes = designNotes;
+        return design;
+    }
     return PedalDesign();
 }
 

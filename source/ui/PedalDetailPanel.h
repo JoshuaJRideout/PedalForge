@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../engine/PedalInstance.h"
 #include "../engine/AudioGraphEngine.h"
+#include "../midi/MidiLearn.h"
 
 //==============================================================================
 /**
@@ -13,7 +14,8 @@
  */
 class PedalDetailPanel : public juce::Component,
                           public juce::Slider::Listener,
-                          public juce::Button::Listener
+                          public juce::Button::Listener,
+                          public juce::Timer
 {
 public:
     /** Listener for panel events. */
@@ -33,11 +35,12 @@ public:
 
     void sliderValueChanged (juce::Slider* slider) override;
     void buttonClicked (juce::Button* button) override;
+    void timerCallback() override;
 
     juce::Rectangle<float> getPedalRect() const;
 
     /** Show the detail panel for a specific pedal. */
-    void showPedal (PedalInstance& instance, AudioGraphEngine& engine);
+    void showPedal (PedalInstance& instance, AudioGraphEngine& engine, MidiLearnManager* midiLearn);
 
     /** Clear the panel (deselect). */
     void clearSelection();
@@ -71,6 +74,7 @@ private:
 
     PedalInstance* selectedInstance = nullptr;
     AudioGraphEngine* engineRef = nullptr;
+    MidiLearnManager* midiLearnRef = nullptr;
 
     std::vector<KnobEntry> knobEntries;
     std::vector<FileLoaderEntry> fileLoaders;
@@ -78,7 +82,11 @@ private:
     juce::TextButton bypassButton { "BYPASS" };
     juce::TextButton removeButton { "Remove" };
     juce::TextButton saveDefaultButton { "Save as Default" };
-    juce::TextButton closeButton  { "×" };
+    juce::TextButton closeButton  { "x" };
+    
+    juce::TextButton infoToggleButton { "Info & MIDI Learn" };
+    juce::Label infoLabel;
+    bool infoExpanded = false;
 
     juce::ListenerList<Listener> listeners;
 

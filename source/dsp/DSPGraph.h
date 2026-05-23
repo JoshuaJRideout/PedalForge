@@ -206,6 +206,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "disp_console") return std::make_unique<ConsoleScreenNode>();
     if (type == "disp_scope")   return std::make_unique<OscilloscopeNode>();
     if (type == "disp_pixel")   return std::make_unique<PixelDisplayNode>();
+    if (type == "disp_shader")  return std::make_unique<ShaderDisplayNode>();
     if (type == "disp_indicator") return std::make_unique<IndicatorNode>();
     if (type == "disp_sound")   return std::make_unique<SoundEmitterNode>();
     // I/O Peripherals

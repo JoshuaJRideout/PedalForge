@@ -3,17 +3,7 @@
 #include "LookAndFeel.h"
 #include <vector>
 
-//==============================================================================
-/**
- * A draggable, resizable sticky-note box for annotating designs.
- */
-struct StickyNote
-{
-    juce::String text;
-    juce::Rectangle<int> bounds { 100, 100, 200, 120 };
-    juce::Colour colour { 0xFFFFEB3B }; // warm yellow
-};
-
+#include "../engine/StickyNoteData.h"
 //==============================================================================
 /**
  * Overlay component that renders and manages sticky notes.
@@ -23,10 +13,53 @@ struct StickyNote
 class NotesOverlay : public juce::Component
 {
 public:
+    class CustomTextEditor : public juce::TextEditor
+    {
+    public:
+        std::function<void()> onFocusLostCallback;
+        
+        void focusLost (FocusChangeType cause) override
+        {
+            juce::TextEditor::focusLost (cause);
+            if (onFocusLostCallback)
+                onFocusLostCallback();
+        }
+    };
+
     NotesOverlay()
     {
         setInterceptsMouseClicks (false, true);
         setAlwaysOnTop (true);
+
+        addAndMakeVisible (activeEditor);
+        activeEditor.setVisible (false);
+        activeEditor.setMultiLine (true);
+        activeEditor.setReturnKeyStartsNewLine (true);
+        activeEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
+        activeEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+        activeEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+        activeEditor.setColour (juce::CaretComponent::caretColourId, juce::Colours::white);
+        activeEditor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
+        activeEditor.setIndents (2, 2);
+        activeEditor.setFont (juce::FontOptions (12.0f));
+
+        activeEditor.onTextChange = [this]() {
+            if (notes && selectedIndex >= 0 && selectedIndex < (int) notes->size())
+            {
+                (*notes)[selectedIndex].text = activeEditor.getText();
+                repaint();
+            }
+        };
+
+        activeEditor.onEscapeKey = [this]() {
+            activeEditor.setVisible (false);
+            repaint();
+        };
+
+        activeEditor.onFocusLostCallback = [this]() {
+            activeEditor.setVisible (false);
+            repaint();
+        };
     }
 
     void setNotes (std::vector<StickyNote>& notesRef) { notes = &notesRef; }
@@ -40,49 +73,50 @@ public:
             auto& note = (*notes)[i];
             auto r = note.bounds.toFloat();
 
-            // Shadow
-            g.setColour (juce::Colour (0x30000000));
-            g.fillRoundedRectangle (r.translated (2, 2), 6.0f);
+            // Background Card: simple clean dark box
+            g.setColour (PedalForgeLookAndFeel::bgDark.withAlpha (0.92f));
+            g.fillRoundedRectangle (r, 4.0f);
 
-            // Card
-            g.setColour (note.colour.withAlpha (0.92f));
-            g.fillRoundedRectangle (r, 6.0f);
+            // Clean white outline (subtle when not active, bright when selected/active)
+            bool isSel = (i == selectedIndex);
+            auto outlineColour = isSel ? juce::Colours::white.withAlpha (0.8f)
+                                       : juce::Colours::white.withAlpha (0.3f);
+            float thickness = isSel ? 1.5f : 1.0f;
+            g.setColour (outlineColour);
+            g.drawRoundedRectangle (r, 4.0f, thickness);
 
-            // Selection border
-            if (i == selectedIndex)
+            // Header Area (no background block, just a thin separator line)
+            auto header = r.removeFromTop (22);
+            g.setColour (juce::Colours::white.withAlpha (0.1f));
+            g.drawHorizontalLine ((int) header.getBottom(), note.bounds.getX(), note.bounds.getRight());
+
+            // Header text: small and elegant
+            g.setColour (PedalForgeLookAndFeel::textSecondary.withAlpha (0.6f));
+            g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+            g.drawText ("NOTE", header.reduced (8, 0), juce::Justification::centredLeft);
+
+            // Close button (drawn as clean vector lines)
+            auto closeArea = header.removeFromRight (24.0f).reduced (6.0f);
+            g.setColour (juce::Colours::white.withAlpha (isSel ? 0.7f : 0.4f));
+            float strokeThickness = 1.5f;
+            g.drawLine (closeArea.getX(), closeArea.getY(), closeArea.getRight(), closeArea.getBottom(), strokeThickness);
+            g.drawLine (closeArea.getRight(), closeArea.getY(), closeArea.getX(), closeArea.getBottom(), strokeThickness);
+
+            // Text Content (only paint if not actively being edited)
+            if (! (isSel && activeEditor.isVisible()))
             {
-                g.setColour (PedalForgeLookAndFeel::accent);
-                g.drawRoundedRectangle (r, 6.0f, 2.0f);
+                g.setColour (PedalForgeLookAndFeel::textPrimary.withAlpha (0.9f));
+                g.setFont (juce::FontOptions (12.0f));
+                auto textArea = note.bounds.toFloat().withTrimmedTop (22).reduced (8, 4);
+                g.drawFittedText (note.text, textArea.toNearestInt(), juce::Justification::topLeft, 100);
             }
 
-            // Header bar
-            auto header = r.removeFromTop (20);
-            g.setColour (note.colour.darker (0.15f));
-            g.fillRoundedRectangle (header.getX(), header.getY(), header.getWidth(), 20, 6.0f);
-            // Fix bottom corners of header
-            g.fillRect (header.getX(), header.getY() + 14, header.getWidth(), 6.0f);
-
-            // Title icon
-            g.setColour (juce::Colour (0x99000000));
-            g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
-            g.drawText ("NOTE", header.reduced (6, 0), juce::Justification::centredLeft);
-
-            // Close X
-            g.setFont (juce::FontOptions (12.0f).withStyle ("Bold"));
-            g.drawText ("X", header.reduced (4, 0), juce::Justification::centredRight);
-
-            // Text content
-            g.setColour (juce::Colour (0xDD000000));
-            g.setFont (juce::FontOptions (12.0f));
-            auto textArea = note.bounds.toFloat().withTrimmedTop (22).reduced (8, 4);
-            g.drawFittedText (note.text, textArea.toNearestInt(), juce::Justification::topLeft, 100);
-
-            // Resize handle (bottom-right corner)
-            g.setColour (note.colour.darker (0.3f));
+            // Resize handle (subtle diagonal lines)
+            g.setColour (juce::Colours::white.withAlpha (0.25f));
             float hx = note.bounds.getRight() - 10.0f;
             float hy = note.bounds.getBottom() - 10.0f;
-            g.drawLine (hx, hy + 8, hx + 8, hy, 1.5f);
-            g.drawLine (hx + 3, hy + 8, hx + 8, hy + 3, 1.5f);
+            g.drawLine (hx, hy + 8, hx + 8, hy, 1.0f);
+            g.drawLine (hx + 3, hy + 8, hx + 8, hy + 3, 1.0f);
         }
     }
 
@@ -91,6 +125,7 @@ public:
         if (!notes || !visible) return;
 
         auto pos = e.getPosition();
+        bool clickedOnAnyNote = false;
 
         // Check notes in reverse order (top-most first)
         for (int i = (int) notes->size() - 1; i >= 0; --i)
@@ -98,27 +133,25 @@ public:
             auto& note = (*notes)[i];
             if (note.bounds.contains (pos))
             {
+                clickedOnAnyNote = true;
                 selectedIndex = i;
 
-                // Close button
-                auto header = note.bounds.removeFromTop (20);
-                auto closeArea = juce::Rectangle<int> (note.bounds.getRight() - 20, note.bounds.getY(), 20, 20);
-                // Reconstruct bounds (removeFromTop mutated it)
-                note.bounds = (*notes)[i].bounds; // it's still valid since we have a ref
-                closeArea = juce::Rectangle<int> (note.bounds.getRight() - 20, note.bounds.getY(), 20, 20);
-
+                // Close button area
+                auto closeArea = juce::Rectangle<int> (note.bounds.getRight() - 24, note.bounds.getY(), 24, 22);
                 if (closeArea.contains (pos))
                 {
+                    activeEditor.setVisible (false);
                     notes->erase (notes->begin() + i);
                     selectedIndex = -1;
                     repaint();
                     return;
                 }
 
-                // Resize handle check
+                // Resize handle area
                 auto resizeArea = juce::Rectangle<int> (note.bounds.getRight() - 14, note.bounds.getBottom() - 14, 14, 14);
                 if (resizeArea.contains (pos))
                 {
+                    activeEditor.setVisible (false);
                     isResizing = true;
                     dragStart = pos;
                     originalBounds = note.bounds;
@@ -127,10 +160,11 @@ public:
                     return;
                 }
 
-                // Header drag
-                auto headerArea = juce::Rectangle<int> (note.bounds.getX(), note.bounds.getY(), note.bounds.getWidth(), 20);
+                // Header drag area
+                auto headerArea = juce::Rectangle<int> (note.bounds.getX(), note.bounds.getY(), note.bounds.getWidth(), 22);
                 if (headerArea.contains (pos))
                 {
+                    activeEditor.setVisible (false);
                     isDragging = true;
                     dragStart = pos;
                     originalBounds = note.bounds;
@@ -139,15 +173,19 @@ public:
                     return;
                 }
 
-                // Click in text area — open editor
+                // Click in text area — open editor directly inside the note
                 showEditor (i);
                 repaint();
                 return;
             }
         }
 
-        selectedIndex = -1;
-        repaint();
+        if (!clickedOnAnyNote)
+        {
+            activeEditor.setVisible (false);
+            selectedIndex = -1;
+            repaint();
+        }
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
@@ -159,6 +197,11 @@ public:
         if (isDragging)
         {
             note.bounds = originalBounds.translated (delta.x, delta.y);
+            if (activeEditor.isVisible())
+            {
+                auto textArea = note.bounds.withTrimmedTop (22).reduced (8, 4);
+                activeEditor.setBounds (textArea);
+            }
             repaint();
         }
         else if (isResizing)
@@ -166,6 +209,11 @@ public:
             int newW = juce::jmax (120, originalBounds.getWidth() + delta.x);
             int newH = juce::jmax (60, originalBounds.getHeight() + delta.y);
             note.bounds.setSize (newW, newH);
+            if (activeEditor.isVisible())
+            {
+                auto textArea = note.bounds.withTrimmedTop (22).reduced (8, 4);
+                activeEditor.setBounds (textArea);
+            }
             repaint();
         }
     }
@@ -188,7 +236,7 @@ public:
         return false;
     }
 
-    void setVisible (bool shouldBeVisible)
+    void setVisible (bool shouldBeVisible) override
     {
         visible = shouldBeVisible;
         juce::Component::setVisible (shouldBeVisible);
@@ -206,45 +254,6 @@ public:
         repaint();
     }
 
-    // Serialization helpers
-    static juce::var toJSON (const std::vector<StickyNote>& notes)
-    {
-        juce::Array<juce::var> arr;
-        for (auto& n : notes)
-        {
-            juce::DynamicObject::Ptr obj = new juce::DynamicObject();
-            obj->setProperty ("text", n.text);
-            obj->setProperty ("x", n.bounds.getX());
-            obj->setProperty ("y", n.bounds.getY());
-            obj->setProperty ("w", n.bounds.getWidth());
-            obj->setProperty ("h", n.bounds.getHeight());
-            obj->setProperty ("colour", (juce::int64) n.colour.getARGB());
-            arr.add (juce::var (obj.get()));
-        }
-        return arr;
-    }
-
-    static std::vector<StickyNote> fromJSON (const juce::var& json)
-    {
-        std::vector<StickyNote> result;
-        if (auto* arr = json.getArray())
-        {
-            for (auto& item : *arr)
-            {
-                if (auto* obj = item.getDynamicObject())
-                {
-                    StickyNote n;
-                    n.text = obj->getProperty ("text").toString();
-                    n.bounds = { (int) obj->getProperty ("x"), (int) obj->getProperty ("y"),
-                                 (int) obj->getProperty ("w"), (int) obj->getProperty ("h") };
-                    if (obj->hasProperty ("colour"))
-                        n.colour = juce::Colour ((juce::uint32)(juce::int64) obj->getProperty ("colour"));
-                    result.push_back (n);
-                }
-            }
-        }
-        return result;
-    }
 
 private:
     std::vector<StickyNote>* notes = nullptr;
@@ -254,27 +263,19 @@ private:
     bool isResizing = false;
     juce::Point<int> dragStart;
     juce::Rectangle<int> originalBounds;
+    CustomTextEditor activeEditor;
 
     void showEditor (int index)
     {
         if (!notes || index < 0 || index >= (int) notes->size()) return;
         auto& note = (*notes)[index];
 
-        auto* alert = new juce::AlertWindow ("Edit Note", "", juce::AlertWindow::NoIcon);
-        alert->addTextEditor ("text", note.text);
-        alert->getTextEditor ("text")->setMultiLine (true);
-        alert->getTextEditor ("text")->setReturnKeyStartsNewLine (true);
-        alert->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::escapeKey));
-
-        juce::Component::SafePointer<NotesOverlay> sp (this);
-        int noteIdx = index;
-        alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, noteIdx, alert] (int r) {
-            if (sp != nullptr && sp->notes && noteIdx < (int) sp->notes->size())
-            {
-                (*sp->notes)[noteIdx].text = alert->getTextEditorContents ("text");
-                sp->repaint();
-            }
-        }));
+        activeEditor.setText (note.text, juce::dontSendNotification);
+        
+        auto textArea = note.bounds.withTrimmedTop (22).reduced (8, 4);
+        activeEditor.setBounds (textArea);
+        activeEditor.setVisible (true);
+        activeEditor.grabKeyboardFocus();
     }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NotesOverlay)

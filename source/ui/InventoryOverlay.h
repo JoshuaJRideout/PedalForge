@@ -52,6 +52,7 @@ private:
         juce::String category;     // "Controls", "Lights", "Screens", etc.
         juce::String mainCategory; // "Pedals" or "Parts"
         juce::String description;  // shown in the right panel
+        juce::StringArray tags;    // free-form tags for search
         bool isFactory = true;
 
         // For pedal items

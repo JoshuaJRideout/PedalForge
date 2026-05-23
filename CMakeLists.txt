@@ -54,6 +54,7 @@ target_sources(PedalForge PRIVATE
     source/PluginProcessor.cpp
     source/PluginEditor.h
     source/PluginEditor.cpp
+    source/CustomStandaloneApp.cpp
 
     # Engine
     source/engine/AudioGraphEngine.h
@@ -167,6 +168,7 @@ target_compile_definitions(PedalForge PUBLIC
     NAM_SAMPLE_FLOAT=1
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_AU=1
+    JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1
 )
 
 # ─── Link libraries ───────────────────────────────────────────────

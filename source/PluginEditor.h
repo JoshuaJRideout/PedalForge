@@ -30,6 +30,7 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
+
 private:
     PedalForgeProcessor& processorRef;
 
@@ -46,6 +47,11 @@ private:
     juce::TextButton tabLibrary { "Library" };
     juce::TextButton tabStore   { "Store" };
     juce::TextButton tabMidi    { "MIDI" };
+
+   #if JucePlugin_Build_Standalone
+    juce::TextButton btnSettings { "Options" };
+   #endif
+    juce::TextButton btnTestSound { "Test Sound" };
 
     class PlayTabComponent* playTab = nullptr;
     PedalDesignerComponent pedalDesigner;

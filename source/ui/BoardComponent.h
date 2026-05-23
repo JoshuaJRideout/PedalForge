@@ -33,11 +33,12 @@ public:
     BoardConfig& getConfig() { return config; }
     PedalboardGrid* getParentGrid() { return parentGrid; }
     
-    juce::Point<int> gridToPixel (int gx, int gy) const;
-    juce::Point<int> pixelToGrid (int px, int py) const;
-    bool isGridRectFree (int gx, int gy, int gw, int gh, AudioGraphEngine::NodeID ignoreNodeId = {}) const;
+    juce::Point<float> snapToGrid (float px, float py) const;
+    bool isGridRectFree (float bx, float by, float bw, float bh, AudioGraphEngine::NodeID ignoreNodeId = {}) const;
 
-    int getCellSize() const { return cellSize; }
+    float getBoardWidth() const { return config.cols * 100.0f; }
+    float getBoardHeight() const { return config.rows * 100.0f; }
+    
     int getGridCols() const { return config.cols; }
     int getGridRows() const { return config.rows; }
     void rebuildFromEngine();
@@ -64,13 +65,11 @@ private:
     
     // Drag and drop preview
     bool isDragHovering = false;
-    int dragHoverGridX = 0;
-    int dragHoverGridY = 0;
-    int dragHoverGridW = 1;
-    int dragHoverGridH = 2;
+    float dragHoverBoardX = 0.0f;
+    float dragHoverBoardY = 0.0f;
+    float dragHoverBoardW = 100.0f;
+    float dragHoverBoardH = 200.0f;
     bool dragHoverValid = false;
-    
-    static constexpr int cellSize = 100;
     
     int getHeaderHeight() const;
 

@@ -59,7 +59,7 @@ private:
 
     // Drag state — snap-to-grid with validity feedback
     juce::Point<int> dragOffset;           // Mouse offset from component origin at drag start
-    juce::Point<int> dragSnappedGrid;      // Current snapped grid cell during drag
+    juce::Point<float> dragSnappedBoard;   // Current snapped board position during drag
     bool dragValid = false;                // Whether the current snapped position is a valid drop
     
     juce::String draggedKnobID;

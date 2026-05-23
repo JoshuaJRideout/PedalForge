@@ -44,6 +44,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Step Sequencer";
         d->category = "MIDI & CV";
+        d->tags = { "midi", "rhythm", "sequencer", "advanced" };
         d->chassisW = 280.0f;
         d->chassisH = 340.0f;
         d->chassisColour = juce::Colour(0xFF1A0533); // Deep Indigo
@@ -259,6 +260,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Clean Boost";
         d->category = "Drive";
+        d->tags = { "boost", "clean", "gain", "simple", "beginner" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF4ADE80);
@@ -285,6 +287,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Overdrive";
         d->category = "Drive";
+        d->tags = { "overdrive", "tube", "warm", "crunch" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFFFBBF24);
@@ -518,6 +521,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Delay";
         d->category = "Time";
+        d->tags = { "delay", "echo", "repeat" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF38BDF8);
@@ -550,6 +554,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Reverb";
         d->category = "Time";
+        d->tags = { "reverb", "space", "ambient" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF22D3EE);
@@ -580,6 +585,7 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Compressor";
         d->category = "Dynamics";
+        d->tags = { "compressor", "dynamics", "sustain" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF34D399);
@@ -970,6 +976,433 @@ namespace FactoryDesigns
         graph->setProperty("connections", conns);
         d->effectsGraph = juce::var(graph.release());
 
+        addStandardPorts (*d);
+        return d;
+    }
+
+    // ─── TUTORIAL ────────────────────────────────────────────────────────────────
+
+    /** Tutorial 1 — Hello Gain */
+    inline std::shared_ptr<PedalDesign> createTutorialHelloGain()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Hello Gain";
+        d->category = "Tutorial";
+        d->tags = { "beginner", "gain", "basics", "first-pedal" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF6EE7B7); // mint green
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "HELLO GAIN";
+        title.controlID = "lbl_title";
+        title.x = 10.0f; title.y = 8.0f;
+        title.width = 100.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Level knob
+        PedalDesign::Control knob;
+        knob.type = "knob";
+        knob.width = 45; knob.height = 45;
+        knob.x = d->chassisW / 2.0f - 22.5f;
+        knob.y = 50.0f;
+        knob.label = "Level";
+        knob.controlID = "knob_1";
+        d->controls.push_back(knob);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_gain"}); // node 2 = GainNode
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 2 — Filter Sweep */
+    inline std::shared_ptr<PedalDesign> createTutorialFilterSweep()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Filter Sweep";
+        d->category = "Tutorial";
+        d->tags = { "filter", "lowpass", "cutoff", "resonance", "beginner" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF93C5FD); // light blue
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "FILTER SWEEP";
+        title.controlID = "lbl_title";
+        title.x = 5.0f; title.y = 8.0f;
+        title.width = 110.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Cutoff knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 40; k1.height = 40;
+        k1.x = d->chassisW / 2.0f - 20.0f;
+        k1.y = 40.0f;
+        k1.label = "Cutoff";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Resonance knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 40; k2.height = 40;
+        k2.x = d->chassisW / 2.0f - 20.0f;
+        k2.y = 95.0f;
+        k2.label = "Reso";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_freq"});      // node 2 = LowPassNode
+        d->mappings.push_back({"knob_2", "2_q"});
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 3 — Tremolo 101 */
+    inline std::shared_ptr<PedalDesign> createTutorialTremolo101()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Tremolo 101";
+        d->category = "Tutorial";
+        d->tags = { "modulation", "lfo", "tremolo", "beginner" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFFFDA4AF); // salmon pink
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "TREMOLO 101";
+        title.controlID = "lbl_title";
+        title.x = 5.0f; title.y = 8.0f;
+        title.width = 110.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Rate knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 40; k1.height = 40;
+        k1.x = d->chassisW / 2.0f - 20.0f;
+        k1.y = 40.0f;
+        k1.label = "Rate";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Depth knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 40; k2.height = 40;
+        k2.x = d->chassisW / 2.0f - 20.0f;
+        k2.y = 95.0f;
+        k2.label = "Depth";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "1_rate"});  // node 1 = LFONode
+        d->mappings.push_back({"knob_2", "1_depth"});
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 4 — Delay Lab */
+    inline std::shared_ptr<PedalDesign> createTutorialDelayLab()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Delay Lab";
+        d->category = "Tutorial";
+        d->tags = { "delay", "parallel", "split", "mix", "signal-flow" };
+        d->chassisW = 140.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF7DD3FC); // sky blue
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "DELAY LAB";
+        title.controlID = "lbl_title";
+        title.x = 20.0f; title.y = 8.0f;
+        title.width = 100.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Time knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 35; k1.height = 35;
+        k1.x = d->chassisW / 2.0f - 17.5f;
+        k1.y = 30.0f;
+        k1.label = "Time";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Feedback knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 35; k2.height = 35;
+        k2.x = d->chassisW / 2.0f - 17.5f;
+        k2.y = 75.0f;
+        k2.label = "Fdbk";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        // Mix knob
+        PedalDesign::Control k3;
+        k3.type = "knob";
+        k3.width = 35; k3.height = 35;
+        k3.x = d->chassisW / 2.0f - 17.5f;
+        k3.y = 120.0f;
+        k3.label = "Mix";
+        k3.controlID = "knob_3";
+        d->controls.push_back(k3);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_time"});     // node 2 = DelayNode
+        d->mappings.push_back({"knob_2", "2_feedback"});
+        d->mappings.push_back({"knob_3", "3_mix"});      // node 3 = MixNode
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 5 — Mini Synth */
+    inline std::shared_ptr<PedalDesign> createTutorialMiniSynth()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Mini Synth";
+        d->category = "Tutorial";
+        d->tags = { "synth", "midi", "oscillator", "adsr", "envelope" };
+        d->chassisW = 160.0f;
+        d->chassisH = 220.0f;
+        d->chassisColour = juce::Colour(0xFFC084FC); // purple
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "MINI SYNTH";
+        title.controlID = "lbl_title";
+        title.x = 25.0f; title.y = 8.0f;
+        title.width = 110.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Attack knob
+        PedalDesign::Control kA;
+        kA.type = "knob";
+        kA.width = 35; kA.height = 35;
+        kA.x = 20.0f; kA.y = 40.0f;
+        kA.label = "Attack";
+        kA.controlID = "knob_1";
+        d->controls.push_back(kA);
+
+        // Decay knob
+        PedalDesign::Control kD;
+        kD.type = "knob";
+        kD.width = 35; kD.height = 35;
+        kD.x = 100.0f; kD.y = 40.0f;
+        kD.label = "Decay";
+        kD.controlID = "knob_2";
+        d->controls.push_back(kD);
+
+        // Sustain knob
+        PedalDesign::Control kS;
+        kS.type = "knob";
+        kS.width = 35; kS.height = 35;
+        kS.x = 20.0f; kS.y = 100.0f;
+        kS.label = "Sustain";
+        kS.controlID = "knob_3";
+        d->controls.push_back(kS);
+
+        // Release knob
+        PedalDesign::Control kR;
+        kR.type = "knob";
+        kR.width = 35; kR.height = 35;
+        kR.x = 100.0f; kR.y = 100.0f;
+        kR.label = "Release";
+        kR.controlID = "knob_4";
+        d->controls.push_back(kR);
+
+        // No bypass switch for synth — it generates audio, doesn't process it
+
+        d->mappings.push_back({"knob_1", "3_attack"});   // node 3 = ADSRNode
+        d->mappings.push_back({"knob_2", "3_decay"});
+        d->mappings.push_back({"knob_3", "3_sustain"});
+        d->mappings.push_back({"knob_4", "3_release"});
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 6 — Envelope Filter */
+    inline std::shared_ptr<PedalDesign> createTutorialEnvelopeFilter()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Envelope Filter";
+        d->category = "Tutorial";
+        d->tags = { "filter", "envelope", "modulation", "sensors", "auto-wah" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFFA7F3D0); // pastel mint/emerald
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "ENV FILTER";
+        title.controlID = "lbl_title";
+        title.x = 10.0f; title.y = 8.0f;
+        title.width = 100.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Sens knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 35; k1.height = 35;
+        k1.x = 20.0f; k1.y = 40.0f;
+        k1.label = "Sens";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Reso knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 35; k2.height = 35;
+        k2.x = 80.0f; k2.y = 40.0f;
+        k2.label = "Reso";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        // Range knob (Range maps to the Ranger's out_max parameter)
+        PedalDesign::Control k3;
+        k3.type = "knob";
+        k3.width = 35; k3.height = 35;
+        k3.x = d->chassisW / 2.0f - 17.5f;
+        k3.y = 95.0f;
+        k3.label = "Range";
+        k3.controlID = "knob_3";
+        d->controls.push_back(k3);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_sensitivity"}); // node 2 = EnvelopeFollower
+        d->mappings.push_back({"knob_2", "4_q"});           // node 4 = LowPassNode
+        d->mappings.push_back({"knob_3", "3_out_max"});     // node 3 = RangerNode
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 7 — Step Sequencer Filter */
+    inline std::shared_ptr<PedalDesign> createTutorialStepSequencer()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Step Sequencer Filter";
+        d->category = "Tutorial";
+        d->tags = { "filter", "sequencer", "clock", "rhythm", "timing" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF93C5FD); // pastel blue
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "STEP FILTER";
+        title.controlID = "lbl_title";
+        title.x = 10.0f; title.y = 8.0f;
+        title.width = 100.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Speed knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 35; k1.height = 35;
+        k1.x = 20.0f; k1.y = 60.0f;
+        k1.label = "Speed";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Reso knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 35; k2.height = 35;
+        k2.x = 80.0f; k2.y = 60.0f;
+        k2.label = "Reso";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_bpm"}); // node 2 = ClockNode
+        d->mappings.push_back({"knob_2", "5_q"});   // node 5 = LowPassNode
+        addStandardPorts (*d);
+        return d;
+    }
+
+    /** Tutorial 8 — Pattern Slicer */
+    inline std::shared_ptr<PedalDesign> createTutorialPatternSlicer()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Pattern Slicer";
+        d->category = "Tutorial";
+        d->tags = { "logic", "gating", "switching", "fuzz", "comparator" };
+        d->chassisW = 140.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFFFDE047); // pastel yellow
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "PATTERN SLICER";
+        title.controlID = "lbl_title";
+        title.x = 10.0f; title.y = 8.0f;
+        title.width = 120.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Speed knob
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 35; k1.height = 35;
+        k1.x = 20.0f; k1.y = 40.0f;
+        k1.label = "Speed";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Fuzz knob
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 35; k2.height = 35;
+        k2.x = 85.0f; k2.y = 40.0f;
+        k2.label = "Fuzz";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        // Sens knob
+        PedalDesign::Control k3;
+        k3.type = "knob";
+        k3.width = 35; k3.height = 35;
+        k3.x = d->chassisW / 2.0f - 17.5f;
+        k3.y = 95.0f;
+        k3.label = "Sens";
+        k3.controlID = "knob_3";
+        d->controls.push_back(k3);
+
+        addBypassAndLED(*d);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "4_bpm"});          // node 4 = ClockNode
+        d->mappings.push_back({"knob_2", "6_drive"});        // node 6 = SoftClipNode
+        d->mappings.push_back({"knob_3", "2_sensitivity"});  // node 2 = EnvelopeFollower
         addStandardPorts (*d);
         return d;
     }

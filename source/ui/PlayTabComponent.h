@@ -4,6 +4,7 @@
 #include "../engine/AudioGraphEngine.h"
 #include "PedalComponent.h"
 #include "InventoryOverlay.h"
+#include "NotesOverlay.h"
 
 class PlayTabComponent : public juce::Component, public juce::Timer
 {
@@ -55,6 +56,10 @@ private:
     
     int lastPedalCount = 0;
     int activeSlotIndex = -1;
+
+    // ── Notes ──
+    NotesOverlay notesOverlay;
+    juce::TextButton btnNotes { "Notes" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PlayTabComponent)
 };

@@ -44,7 +44,10 @@ void RouteOverlay::rebuild (int cs, int ox, int oy,
     std::vector<PedalBounds> pedals;
     for (auto& inst : engine.getPedalInstances())
     {
-        pedals.push_back ({ inst.gridX, inst.gridY, inst.gridW, inst.gridH });
+        pedals.push_back ({ (int)std::round(inst.boardX / 100.0f), 
+                            (int)std::round(inst.boardY / 100.0f), 
+                            (int)std::max(1.0f, std::round(inst.boardW / 100.0f)), 
+                            (int)std::max(1.0f, std::round(inst.boardH / 100.0f)) });
     }
 
     // Get the actual connections
@@ -69,10 +72,15 @@ void RouteOverlay::rebuild (int cs, int ox, int oy,
 
         if (auto* inst = engine.getPedalInstance (nodeId))
         {
+            int gx = (int)std::round(inst->boardX / 100.0f);
+            int gy = (int)std::round(inst->boardY / 100.0f);
+            int gw = (int)std::max(1.0f, std::round(inst->boardW / 100.0f));
+            int gh = (int)std::max(1.0f, std::round(inst->boardH / 100.0f));
+            
             if (isOutput)
-                return { inst->gridX + inst->gridW, inst->gridY + inst->gridH / 2 };
+                return { gx + gw, gy + gh / 2 };
             else
-                return { inst->gridX, inst->gridY + inst->gridH / 2 };
+                return { gx, gy + gh / 2 };
         }
         return { 0, 0 };
     };
@@ -117,7 +125,12 @@ void RouteOverlay::mouseDown (const juce::MouseEvent& e)
     // Check pedal outputs
     for (auto& inst : engine.getPedalInstances())
     {
-        if (gx == inst.gridX + inst.gridW && gy == inst.gridY + inst.gridH / 2)
+        int igx = (int)std::round(inst.boardX / 100.0f);
+        int igy = (int)std::round(inst.boardY / 100.0f);
+        int igw = (int)std::max(1.0f, std::round(inst.boardW / 100.0f));
+        int igh = (int)std::max(1.0f, std::round(inst.boardH / 100.0f));
+        
+        if (gx == igx + igw && gy == igy + igh / 2)
         {
             dragSourceNodeID = inst.nodeID;
             dragStartCell = { gx, gy };
@@ -136,7 +149,11 @@ void RouteOverlay::mouseDown (const juce::MouseEvent& e)
 
     for (auto& inst : engine.getPedalInstances())
     {
-        if (gx == inst.gridX && gy == inst.gridY + inst.gridH / 2)
+        int igx = (int)std::round(inst.boardX / 100.0f);
+        int igy = (int)std::round(inst.boardY / 100.0f);
+        int igh = (int)std::max(1.0f, std::round(inst.boardH / 100.0f));
+        
+        if (gx == igx && gy == igy + igh / 2)
         {
             // We clicked an input jack, disconnect it
             auto conns = engine.getGraph().getConnections();
@@ -188,7 +205,11 @@ void RouteOverlay::mouseUp (const juce::MouseEvent& e)
         // Check pedal inputs
         for (auto& inst : engine.getPedalInstances())
         {
-            if (gx == inst.gridX && gy == inst.gridY + inst.gridH / 2)
+            int igx = (int)std::round(inst.boardX / 100.0f);
+            int igy = (int)std::round(inst.boardY / 100.0f);
+            int igh = (int)std::max(1.0f, std::round(inst.boardH / 100.0f));
+            
+            if (gx == igx && gy == igy + igh / 2)
             {
                 destNodeID = inst.nodeID;
                 break;
@@ -216,7 +237,10 @@ void RouteOverlay::setDragRoute (Cell start, Cell end)
     std::vector<PedalBounds> pedals;
     for (auto& inst : engine.getPedalInstances())
     {
-        pedals.push_back ({ inst.gridX, inst.gridY, inst.gridW, inst.gridH });
+        pedals.push_back ({ (int)std::round(inst.boardX / 100.0f), 
+                            (int)std::round(inst.boardY / 100.0f), 
+                            (int)std::max(1.0f, std::round(inst.boardW / 100.0f)), 
+                            (int)std::max(1.0f, std::round(inst.boardH / 100.0f)) });
     }
 
     auto path = findPath (start, end, pedals, gridCols, gridRows);
@@ -241,7 +265,11 @@ bool RouteOverlay::isValidDropTarget (Cell end, juce::AudioProcessorGraph::NodeI
     // Pedal inputs
     for (auto& inst : engine.getPedalInstances())
     {
-        if (end.x == inst.gridX && end.y == inst.gridY + inst.gridH / 2)
+        int igx = (int)std::round(inst.boardX / 100.0f);
+        int igy = (int)std::round(inst.boardY / 100.0f);
+        int igh = (int)std::max(1.0f, std::round(inst.boardH / 100.0f));
+        
+        if (end.x == igx && end.y == igy + igh / 2)
             return inst.nodeID != sourceNode;
     }
 
@@ -323,8 +351,13 @@ void RouteOverlay::paint (juce::Graphics& g)
         // Pedal jacks
         for (auto& inst : engine.getPedalInstances())
         {
-            drawJack (inst.gridX, inst.gridY + inst.gridH / 2, true);             // Input
-            drawJack (inst.gridX + inst.gridW, inst.gridY + inst.gridH / 2, false); // Output
+            int igx = (int)std::round(inst.boardX / 100.0f);
+            int igy = (int)std::round(inst.boardY / 100.0f);
+            int igw = (int)std::max(1.0f, std::round(inst.boardW / 100.0f));
+            int igh = (int)std::max(1.0f, std::round(inst.boardH / 100.0f));
+            
+            drawJack (igx, igy + igh / 2, true);             // Input
+            drawJack (igx + igw, igy + igh / 2, false); // Output
         }
     }
 

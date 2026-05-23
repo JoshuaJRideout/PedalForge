@@ -42,7 +42,7 @@ void PedalPalette::PaletteItem::paint (juce::Graphics& g)
 
     std::map<juce::String, float> dummyValues;
     std::map<juce::String, juce::String> dummyTexts;
-    PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, dummyTexts, false, 1.0f);
+    PedalPainter::paintDesign (g, bounds, design.get(), dummyValues, dummyTexts, {}, false, 1.0f);
     
     // Draw the name of the pedal below
     g.setColour (PedalForgeLookAndFeel::textPrimary);
