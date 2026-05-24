@@ -13,6 +13,8 @@
 class NotesOverlay : public juce::Component
 {
 public:
+    static inline bool globallyVisible = true;
+
     class CustomTextEditor : public juce::TextEditor
     {
     public:
@@ -238,8 +240,8 @@ public:
 
     void setVisible (bool shouldBeVisible) override
     {
-        visible = shouldBeVisible;
-        juce::Component::setVisible (shouldBeVisible);
+        visible = shouldBeVisible && globallyVisible;
+        juce::Component::setVisible (visible);
         repaint();
     }
 

@@ -647,6 +647,7 @@ void InventoryOverlay::buildItemDatabase()
         {"clock", "Clock", "Timing", "Nodes", "Generates steady trigger pulses."},
         {"counter", "Counter", "Timing", "Nodes", "Counts trigger pulses."},
         {"sequencer", "Sequencer", "Timing", "Nodes", "8-step CV sequencer."},
+        {"grid_sequencer", "Grid Sequencer", "Timing", "Nodes", "8-track, 32-step rhythmic sequencer supporting MIDI and CV outputs."},
         {"env_follower", "Env Follower", "Timing", "Nodes", "Tracks the amplitude of an audio signal."},
         {"sample_hold", "Sample & Hold", "Timing", "Nodes", "Samples a value on trigger."},
 

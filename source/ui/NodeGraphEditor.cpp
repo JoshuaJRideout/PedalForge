@@ -5,7 +5,7 @@
 //==============================================================================
 // NodeGraphEditor
 //==============================================================================
-NodeGraphEditor::NodeGraphEditor() : canvas (*this)
+NodeGraphEditor::NodeGraphEditor() : canvas (*this), propertiesPanel (*this)
 {
     setWantsKeyboardFocus (true);
 
@@ -28,10 +28,15 @@ NodeGraphEditor::NodeGraphEditor() : canvas (*this)
     // Notes
     notesOverlay.setNotes (fxNotes);
     addChildComponent (notesOverlay);
+    btnNotes.setClickingTogglesState (true);
+    btnNotes.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFFF59E0B)); // beautiful active amber
+    btnNotes.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
-        bool show = !notesOverlay.isNotesVisible();
+        NotesOverlay::globallyVisible = btnNotes.getToggleState();
+        bool show = NotesOverlay::globallyVisible;
         notesOverlay.setVisible (show);
         if (show && fxNotes.empty())
             notesOverlay.addNote (120, 80);
@@ -48,16 +53,24 @@ void NodeGraphEditor::loadDesign (const juce::var& effectsGraphJSON)
     propertiesPanel.clearSelection();
     canvas.repaint();
 
-    // Reconstruct visuals with default positions if they weren't somehow saved
-    // (In the future, we could save node visual positions inside the DSPGraph JSON
-    // or PedalDesign. For now, we do a simple layout)
-    float x = 50, y = 100;
+    // Reconstruct visuals
+    float fallbackX = 50, fallbackY = 100;
     for (const auto& pair : graph.getNodes())
     {
         auto* n = pair.second.get();
+        float x = n->visualX;
+        float y = n->visualY;
+
+        // If coordinates are default/invalid (e.g. legacy), use fallback layout
+        if (x < 0.0f || y < 0.0f)
+        {
+            x = fallbackX;
+            y = fallbackY;
+            fallbackX += 200;
+            if (fallbackX > 800) { fallbackX = 50; fallbackY += 150; }
+        }
+
         nodeVisuals[pair.first] = { x, y, nodeW, computeNodeHeight(pair.first), false };
-        x += 200;
-        if (x > 800) { x = 50; y += 150; }
     }
 }
 
@@ -66,6 +79,16 @@ void NodeGraphEditor::loadNotes (const std::vector<StickyNote>& notes)
     fxNotes = notes;
     notesOverlay.setNotes (fxNotes);
     notesOverlay.setVisible (!fxNotes.empty());
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+}
+
+void NodeGraphEditor::visibilityChanged()
+{
+    if (isVisible())
+    {
+        btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+        notesOverlay.setVisible (!fxNotes.empty());
+    }
 }
 
 void NodeGraphEditor::clearGraph()
@@ -140,6 +163,7 @@ void NodeGraphEditor::deleteNode (int nodeID)
     if (nodeID < 0) return;
     auto* n = graph.getNode (nodeID);
     if (!n) return;
+    if (n->getType() == "audio_input" || n->getType() == "audio_output") return;
     graph.removeNode (nodeID);
     nodeVisuals.erase (nodeID);
     selectNode (-1);
@@ -154,7 +178,19 @@ float NodeGraphEditor::computeNodeHeight (int nodeID) const
     for (const auto& p : node->getInputPorts())
         if (!p.isParameterCV) standardInputs++;
     int np = juce::jmax (standardInputs, (int)node->getOutputPorts().size());
-    return headerH + juce::jmax (np, 1) * portSpacing + (int)node->getParams().size() * paramRowH + 10;
+    
+    int displayedParamsCount = 0;
+    for (const auto& param : node->getParams())
+    {
+        if (node->getType() == "grid_sequencer")
+        {
+            if (param.id != "bpm" && param.id != "run")
+                continue;
+        }
+        displayedParamsCount++;
+    }
+    
+    return headerH + juce::jmax (np, 1) * portSpacing + displayedParamsCount * paramRowH + 10;
 }
 
 juce::Point<float> NodeGraphEditor::getPortPosition (int nodeID, bool isOutput, int portIndex) const
@@ -173,11 +209,18 @@ juce::Point<float> NodeGraphEditor::getPortPosition (int nodeID, bool isOutput, 
     {
         juce::String paramID = port.name.upToLastOccurrenceOf ("_cv", false, false);
         int pIndex = 0;
+        int currentVisualIndex = 0;
         for (int i = 0; i < (int)node->getParams().size(); ++i) {
+            if (node->getType() == "grid_sequencer")
+            {
+                if (node->getParams()[i].id != "bpm" && node->getParams()[i].id != "run")
+                    continue;
+            }
             if (node->getParams()[i].id == paramID) {
-                pIndex = i;
+                pIndex = currentVisualIndex;
                 break;
             }
+            currentVisualIndex++;
         }
         
         int standardInputs = 0;
@@ -301,17 +344,14 @@ int NodeGraphEditor::GraphCanvas::hitTestConnection (juce::Point<float> cp) cons
     {
         auto s = editor.getPortPosition (conns[i].sourceNodeID, true, conns[i].sourcePort);
         auto d = editor.getPortPosition (conns[i].destNodeID, false, conns[i].destPort);
-        // Simple distance check to the midpoint + thickness
-        auto mid = (s + d) * 0.5f;
-        float len = s.getDistanceFrom (d);
-        // Check a few sample points along the bezier
-        for (float t = 0.1f; t <= 0.9f; t += 0.1f)
+        float dist = std::abs (d.x - s.x) * 0.5f;
+        // High-resolution check: 100 sample points along the Bezier curve
+        for (float t = 0.0f; t <= 1.0f; t += 0.01f)
         {
             float u = 1.0f - t;
-            float dist = std::abs (d.x - s.x) * 0.5f;
             float bx = u*u*u*s.x + 3*u*u*t*(s.x+dist) + 3*u*t*t*(d.x-dist) + t*t*t*d.x;
             float by = u*u*u*s.y + 3*u*u*t*s.y + 3*u*t*t*d.y + t*t*t*d.y;
-            if (cp.getDistanceFrom ({bx, by}) < 8.0f) return i;
+            if (cp.getDistanceFrom ({bx, by}) < 10.0f) return i;
         }
     }
     return -1;
@@ -419,6 +459,12 @@ void NodeGraphEditor::GraphCanvas::drawNode (juce::Graphics& g, int nodeID, DSPN
     g.setFont (juce::FontOptions (10.0f));
     for (const auto& param : node->getParams())
     {
+        if (node->getType() == "grid_sequencer")
+        {
+            if (param.id != "bpm" && param.id != "run")
+                continue;
+        }
+
         g.setColour (juce::Colours::white.withAlpha (0.5f));
         g.drawText (param.name, visual.x + 10, py, visual.width * 0.5f - 10, paramRowH, juce::Justification::centredLeft);
         g.setColour (juce::Colours::white.withAlpha (0.8f));
@@ -521,7 +567,7 @@ void NodeGraphEditor::GraphCanvas::paint (juce::Graphics& g)
     // Connections
     const auto& conns = editor.graph.getConnections();
     for (int i = 0; i < (int)conns.size(); ++i)
-        drawConnection (g, conns[i], false);
+        drawConnection (g, conns[i], hoveredConnectionIndex == i);
 
     drawWirePreview (g);
 
@@ -547,8 +593,6 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
     auto cp = screenToCanvas ((float)e.x, (float)e.y);
     draggingNodeID = -1;
 
-    if (e.mods.isPopupMenu()) { showAddNodeMenu (cp); return; }
-
     auto ph = hitTestPort (cp);
     if (ph.nodeID >= 0) { draggingWire = true; wireStart = ph; wireEndX = cp.x; wireEndY = cp.y; return; }
 
@@ -556,12 +600,34 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
     int ci = hitTestConnection (cp);
     if (ci >= 0)
     {
-        auto& c = editor.graph.getConnections()[ci];
-        editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
-        if (editor.onGraphChanged) editor.onGraphChanged();
-        repaint();
+        if (e.mods.isPopupMenu())
+        {
+            juce::PopupMenu menu;
+            menu.addItem (1, "Disconnect / Delete Wire");
+            int choice = menu.show();
+            if (choice == 1)
+            {
+                auto& c = editor.graph.getConnections()[ci];
+                editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
+                hoveredConnectionIndex = -1;
+                setMouseCursor (juce::MouseCursor::NormalCursor);
+                if (editor.onGraphChanged) editor.onGraphChanged();
+                repaint();
+            }
+        }
+        else
+        {
+            auto& c = editor.graph.getConnections()[ci];
+            editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
+            hoveredConnectionIndex = -1;
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+            if (editor.onGraphChanged) editor.onGraphChanged();
+            repaint();
+        }
         return;
     }
+
+    if (e.mods.isPopupMenu()) { showAddNodeMenu (cp); return; }
 
     int hit = hitTestNode (cp);
     if (hit >= 0)
@@ -603,6 +669,12 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
 
 void NodeGraphEditor::GraphCanvas::mouseDrag (const juce::MouseEvent& e)
 {
+    if (hoveredConnectionIndex != -1)
+    {
+        hoveredConnectionIndex = -1;
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+    }
+    
     auto cp = screenToCanvas ((float)e.x, (float)e.y);
     if (draggingWire) { wireEndX = cp.x; wireEndY = cp.y; repaint(); return; }
     if (draggingNodeID >= 0)
@@ -645,6 +717,7 @@ void NodeGraphEditor::GraphCanvas::mouseUp (const juce::MouseEvent& e)
         auto& vis = editor.nodeVisuals[draggingNodeID];
         vis.x = NodeGraphEditor::snapToGrid (vis.x);
         vis.y = NodeGraphEditor::snapToGrid (vis.y);
+        if (editor.onGraphChanged) editor.onGraphChanged();
         repaint();
     }
     draggingNodeID = -1;
@@ -654,6 +727,38 @@ void NodeGraphEditor::GraphCanvas::mouseWheelMove (const juce::MouseEvent&, cons
 {
     float z = 1.0f + w.deltaY * 2.0f;
     if (z > 0) { scale = juce::jlimit (0.2f, 4.0f, scale * z); repaint(); }
+}
+
+void NodeGraphEditor::GraphCanvas::mouseMove (const juce::MouseEvent& e)
+{
+    auto cp = screenToCanvas ((float)e.x, (float)e.y);
+    int newHoveredIdx = hitTestConnection (cp);
+
+    // Disable connection hover highlight if mouse is currently over a node or port
+    if (hitTestPort (cp).nodeID >= 0 || hitTestNode (cp) >= 0)
+        newHoveredIdx = -1;
+
+    if (newHoveredIdx != hoveredConnectionIndex)
+    {
+        hoveredConnectionIndex = newHoveredIdx;
+
+        if (hoveredConnectionIndex >= 0)
+            setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        else
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+
+        repaint();
+    }
+}
+
+void NodeGraphEditor::GraphCanvas::mouseExit (const juce::MouseEvent&)
+{
+    if (hoveredConnectionIndex != -1)
+    {
+        hoveredConnectionIndex = -1;
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        repaint();
+    }
 }
 
 bool NodeGraphEditor::GraphCanvas::keyPressed (const juce::KeyPress& key)
@@ -744,8 +849,6 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
     juce::PopupMenu nodesMenu;
     
     juce::PopupMenu io; 
-    io.addItem(4, "Audio Input"); io.addItem(5, "Audio Output"); 
-    io.addSeparator();
     io.addItem(6, "MIDI Input"); io.addItem(7, "MIDI Output");
     io.addSeparator();
     io.addItem(350, "Expression Pedal"); io.addItem(351, "Footswitch");
@@ -809,12 +912,13 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
 
     juce::PopupMenu ti;
     ti.addItem(120,"Clock / Timer"); ti.addItem(121,"Counter"); ti.addItem(122,"Sequencer (8-step)");
+    ti.addItem(125,"Grid Sequencer (8-track)");
     ti.addSeparator();
     ti.addItem(123,"Envelope Follower"); ti.addItem(124,"Sample & Hold");
     nodesMenu.addSubMenu("Timing / Sensors",ti);
 
     juce::PopupMenu sc;
-    sc.addItem(130,"Expression (E2)");
+    sc.addItem(130,"Expression");
     nodesMenu.addSubMenu("Scripting",sc);
 
     juce::PopupMenu miRx;
@@ -903,6 +1007,7 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             case 117: t="abs"; break; case 118: t="negate"; break;
             // Timing
             case 120: t="clock"; break; case 121: t="counter"; break; case 122: t="sequencer"; break;
+            case 125: t="grid_sequencer"; break;
             case 123: t="env_follower"; break; case 124: t="sample_hold"; break;
             // Scripting
             case 130: t="expression"; break;
@@ -934,7 +1039,8 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
 //==============================================================================
 // NodePropertiesPanel
 //==============================================================================
-NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
+NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel (NodeGraphEditor& owner)
+    : editor (owner)
 {
     deleteButton.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::danger.withAlpha (0.3f));
     deleteButton.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::danger);
@@ -946,57 +1052,15 @@ NodeGraphEditor::NodePropertiesPanel::NodePropertiesPanel()
     viewport.setScrollBarThickness (6);
     addAndMakeVisible (viewport);
 
-    // Expression editor setup
-    expressionEditor.setMultiLine (true, true);
-    expressionEditor.setReturnKeyStartsNewLine (true);
-    expressionEditor.setFont (juce::FontOptions (13.0f));
-    expressionEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xFF12121F));
-    expressionEditor.setColour (juce::TextEditor::textColourId, juce::Colour (0xFFE0E0FF));
-    expressionEditor.setColour (juce::TextEditor::outlineColourId, juce::Colour (0xFF2DD4BF));
-    expressionEditor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colour (0xFFE879F9));
-    expressionEditor.setColour (juce::CaretComponent::caretColourId, juce::Colour (0xFFE879F9));
-    expressionEditor.setScrollbarsShown (true);
-    addChildComponent (expressionEditor);
+    // Code editor setup
+    expressionEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, &luaTokeniser);
+    addChildComponent (*expressionEditor);
 
     expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
     expressionError.setFont (juce::FontOptions (11.0f));
     addChildComponent (expressionError);
 
-    expressionEditor.onTextChange = [this]
-    {
-        if (auto* exprNode = dynamic_cast<ExpressionNode*>(currentNode))
-        {
-            bool ok = exprNode->setExpression (expressionEditor.getText());
-            if (ok)
-            {
-                expressionError.setText ("", juce::dontSendNotification);
-                expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
-                expressionError.setText ("Compiled OK!", juce::dontSendNotification);
-                if (onParamChanged) onParamChanged();
-            }
-            else
-            {
-                expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
-                expressionError.setText (exprNode->getCompileError(), juce::dontSendNotification);
-            }
-        }
-        else if (auto* shaderNode = dynamic_cast<ShaderDisplayNode*>(currentNode))
-        {
-            bool ok = shaderNode->setExpression (expressionEditor.getText());
-            if (ok)
-            {
-                expressionError.setText ("", juce::dontSendNotification);
-                expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
-                expressionError.setText ("Compiled OK!", juce::dontSendNotification);
-                if (onParamChanged) onParamChanged();
-            }
-            else
-            {
-                expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
-                expressionError.setText (shaderNode->getCompileError(), juce::dontSendNotification);
-            }
-        }
-    };
+    codeDocument.addListener (this);
 }
 
 void NodeGraphEditor::NodePropertiesPanel::paint (juce::Graphics& g)
@@ -1084,7 +1148,8 @@ void NodeGraphEditor::NodePropertiesPanel::resized()
         // Expression code editor takes the top portion
         auto exprArea = area.withTrimmedTop (150).withTrimmedBottom (60);
         int editorH = juce::jmin (exprArea.getHeight() / 2, 180);
-        expressionEditor.setBounds (exprArea.removeFromTop (editorH).reduced (8, 0));
+        if (expressionEditor != nullptr)
+            expressionEditor->setBounds (exprArea.removeFromTop (editorH).reduced (8, 0));
         auto btnRow = exprArea.removeFromTop (30).reduced (8, 3);
         expressionError.setBounds (btnRow);
         viewport.setBounds (exprArea.withTrimmedBottom (0));
@@ -1106,42 +1171,151 @@ void NodeGraphEditor::NodePropertiesPanel::showNode (int nodeID, DSPNode* node)
     deleteButton.setVisible (canDelete);
     repaint();
     resized();
+    
+    if (node != nullptr)
+        startTimerHz (20);
+    else
+        stopTimer();
 }
 
 void NodeGraphEditor::NodePropertiesPanel::clearSelection()
 {
+    stopTimer();
     currentNodeID = -1;
     currentNode = nullptr;
     isExpressionNode = false;
+    selectedTrackIndex = 0;
     paramSliders.clear();
+    fileLoaders.clear();
+    fileLabels.clear();
+    customComponents.clear();
     deleteButton.setVisible (false);
-    expressionEditor.setVisible (false);
-    expressionError.setVisible (false);
+    if (expressionEditor != nullptr)
+        expressionEditor->setVisible (false);
     expressionError.setVisible (false);
     repaint();
+}
+
+void NodeGraphEditor::NodePropertiesPanel::timerCallback()
+{
+    if (currentNode != nullptr)
+    {
+        for (auto& ps : paramSliders)
+        {
+            if (ps.param != nullptr && ps.slider != nullptr)
+            {
+                float val = ps.param->get();
+                if (std::abs (ps.slider->getValue() - val) > 0.001f)
+                {
+                    ps.slider->setValue (val, juce::dontSendNotification);
+                }
+            }
+        }
+
+        // Try to fetch the corresponding node from the active engine graph
+        DSPNode* engineNode = nullptr;
+        if (editor.getEngineDSPGraph != nullptr)
+        {
+            if (auto* engineGraph = editor.getEngineDSPGraph())
+            {
+                engineNode = engineGraph->getNode (currentNodeID);
+            }
+        }
+
+        DSPNode* sourceNode = (engineNode != nullptr) ? engineNode : currentNode;
+
+        for (auto& dpl : debugPortLabels)
+        {
+            if (dpl.valueLabel != nullptr)
+            {
+                float val = 0.0f;
+                if (dpl.isInput)
+                {
+                    if (dpl.portIndex >= 0 && dpl.portIndex < (int) sourceNode->lastInputValues.size())
+                        val = sourceNode->lastInputValues[(size_t) dpl.portIndex];
+                }
+                else
+                {
+                    if (dpl.portIndex >= 0 && dpl.portIndex < (int) sourceNode->lastOutputValues.size())
+                        val = sourceNode->lastOutputValues[(size_t) dpl.portIndex];
+                }
+                
+                dpl.valueLabel->setText (juce::String (val, 2), juce::dontSendNotification);
+            }
+        }
+    }
 }
 
 void NodeGraphEditor::NodePropertiesPanel::setupExpressionEditor()
 {
     if (isExpressionNode)
     {
+        codeDocument.removeListener (this);
         if (auto* exprNode = dynamic_cast<ExpressionNode*>(currentNode))
         {
-            expressionEditor.setText (exprNode->getExpression(), false);
+            codeDocument.replaceAllContent (exprNode->getExpression());
             expressionError.setText ("", juce::dontSendNotification);
         }
         else if (auto* shaderNode = dynamic_cast<ShaderDisplayNode*>(currentNode))
         {
-            expressionEditor.setText (shaderNode->getExpression(), false);
+            codeDocument.replaceAllContent (shaderNode->getExpression());
             expressionError.setText ("", juce::dontSendNotification);
         }
-        expressionEditor.setVisible (true);
+        codeDocument.addListener (this);
+        
+        if (expressionEditor != nullptr)
+            expressionEditor->setVisible (true);
         expressionError.setVisible (true);
     }
     else
     {
-        expressionEditor.setVisible (false);
+        if (expressionEditor != nullptr)
+            expressionEditor->setVisible (false);
         expressionError.setVisible (false);
+    }
+}
+
+void NodeGraphEditor::NodePropertiesPanel::handleExpressionTextChanged()
+{
+    if (currentNode == nullptr) return;
+    
+    juce::String text = codeDocument.getAllContent();
+    
+    if (auto* exprNode = dynamic_cast<ExpressionNode*>(currentNode))
+    {
+        if (exprNode->getExpression() != text)
+        {
+            bool ok = exprNode->setExpression (text);
+            if (ok)
+            {
+                expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
+                expressionError.setText ("Compiled OK!", juce::dontSendNotification);
+                if (onParamChanged) onParamChanged();
+            }
+            else
+            {
+                expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
+                expressionError.setText (exprNode->getCompileError(), juce::dontSendNotification);
+            }
+        }
+    }
+    else if (auto* shaderNode = dynamic_cast<ShaderDisplayNode*>(currentNode))
+    {
+        if (shaderNode->getExpression() != text)
+        {
+            bool ok = shaderNode->setExpression (text);
+            if (ok)
+            {
+                expressionError.setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80));
+                expressionError.setText ("Compiled OK!", juce::dontSendNotification);
+                if (onParamChanged) onParamChanged();
+            }
+            else
+            {
+                expressionError.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::danger);
+                expressionError.setText (shaderNode->getCompileError(), juce::dontSendNotification);
+            }
+        }
     }
 }
 
@@ -1150,6 +1324,7 @@ void NodeGraphEditor::NodePropertiesPanel::rebuildSliders()
     paramSliders.clear();
     fileLoaders.clear();
     fileLabels.clear();
+    customComponents.clear();
     contentArea.removeAllChildren();
     if (!currentNode) { contentArea.setSize (0, 0); return; }
 
@@ -1188,8 +1363,49 @@ void NodeGraphEditor::NodePropertiesPanel::rebuildSliders()
         y += 54;
     }
 
+    if (currentNode->getType() == "grid_sequencer")
+    {
+        auto* trackLbl = new juce::Label();
+        trackLbl->setText ("Select Track:", juce::dontSendNotification);
+        trackLbl->setFont (juce::FontOptions (11.0f).withStyle ("Bold"));
+        trackLbl->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+        trackLbl->setBounds (12, y, w, 16);
+        contentArea.addAndMakeVisible (trackLbl);
+        customComponents.add (trackLbl);
+        y += 18;
+
+        auto* cb = new juce::ComboBox();
+        for (int i = 0; i < 8; ++i)
+            cb->addItem ("Track " + juce::String (i + 1), i + 1);
+        cb->setSelectedId (selectedTrackIndex + 1, juce::dontSendNotification);
+        cb->setBounds (12, y, w, 24);
+        cb->onChange = [this, cb] {
+            selectedTrackIndex = cb->getSelectedId() - 1;
+            rebuildSliders();
+        };
+        contentArea.addAndMakeVisible (cb);
+        customComponents.add (cb);
+        y += 34;
+    }
+
     for (auto& param : currentNode->getParams())
     {
+        // Special filtering for Grid Sequencer parameters to prevent properties panel bloat
+        if (currentNode->getType() == "grid_sequencer")
+        {
+            // Skip individual step parameters entirely (user edits these via visual step grid)
+            bool isStepParam = param.id.contains ("_s") && !param.id.contains ("_swing");
+            if (isStepParam) continue;
+
+            // Only show the currently selected track's parameters, plus global parameters (bpm, run)
+            if (param.id.startsWith ("tr"))
+            {
+                juce::String trackPrefix = "tr" + juce::String (selectedTrackIndex) + "_";
+                if (!param.id.startsWith (trackPrefix))
+                    continue;
+            }
+        }
+
         ParamSlider ps;
         ps.param = &param;
 
@@ -1212,6 +1428,101 @@ void NodeGraphEditor::NodePropertiesPanel::rebuildSliders()
         y += 30;
 
         paramSliders.push_back (std::move (ps));
+    }
+
+    // ── Live Debugger Section ──────────────────────────────────────────
+    debugPortLabels.clear();
+
+    if (!currentNode->getInputPorts().empty() || !currentNode->getOutputPorts().empty())
+    {
+        y += 10;
+        auto* headerLabel = new juce::Label();
+        headerLabel->setText ("LIVE DEBUGGER", juce::dontSendNotification);
+        headerLabel->setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+        headerLabel->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textPrimary.withAlpha (0.6f));
+        headerLabel->setBounds (12, y, w, 16);
+        contentArea.addAndMakeVisible (headerLabel);
+        fileLabels.add (headerLabel); // Add to fileLabels for automatic cleanup
+        y += 20;
+
+        // Render Inputs
+        if (!currentNode->getInputPorts().empty())
+        {
+            auto* subLabel = new juce::Label();
+            subLabel->setText ("Inputs:", juce::dontSendNotification);
+            subLabel->setFont (juce::FontOptions (10.0f).withStyle ("Italic"));
+            subLabel->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+            subLabel->setBounds (12, y, w, 14);
+            contentArea.addAndMakeVisible (subLabel);
+            fileLabels.add (subLabel);
+            y += 16;
+
+            for (int i = 0; i < (int) currentNode->getInputPorts().size(); ++i)
+            {
+                auto& port = currentNode->getInputPorts()[(size_t) i];
+                DebugPortLabel dpl;
+                dpl.isInput = true;
+                dpl.portIndex = i;
+
+                dpl.nameLabel = std::make_unique<juce::Label>();
+                dpl.nameLabel->setText ("  " + port.name, juce::dontSendNotification);
+                dpl.nameLabel->setFont (juce::FontOptions (11.0f));
+                dpl.nameLabel->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+                dpl.nameLabel->setBounds (12, y, w - 80, 16);
+                contentArea.addAndMakeVisible (*dpl.nameLabel);
+
+                dpl.valueLabel = std::make_unique<juce::Label>();
+                dpl.valueLabel->setText ("0.00", juce::dontSendNotification);
+                dpl.valueLabel->setFont (juce::FontOptions (11.0f).withStyle ("Bold"));
+                dpl.valueLabel->setColour (juce::Label::textColourId, juce::Colour (0xFF4ADE80)); // beautiful bright green
+                dpl.valueLabel->setBounds (w - 70, y, 70, 16);
+                dpl.valueLabel->setJustificationType (juce::Justification::centredRight);
+                contentArea.addAndMakeVisible (*dpl.valueLabel);
+
+                y += 18;
+                debugPortLabels.push_back (std::move (dpl));
+            }
+        }
+
+        // Render Outputs
+        if (!currentNode->getOutputPorts().empty())
+        {
+            y += 5;
+            auto* subLabel = new juce::Label();
+            subLabel->setText ("Outputs:", juce::dontSendNotification);
+            subLabel->setFont (juce::FontOptions (10.0f).withStyle ("Italic"));
+            subLabel->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+            subLabel->setBounds (12, y, w, 14);
+            contentArea.addAndMakeVisible (subLabel);
+            fileLabels.add (subLabel);
+            y += 16;
+
+            for (int i = 0; i < (int) currentNode->getOutputPorts().size(); ++i)
+            {
+                auto& port = currentNode->getOutputPorts()[(size_t) i];
+                DebugPortLabel dpl;
+                dpl.isInput = false;
+                dpl.portIndex = i;
+
+                dpl.nameLabel = std::make_unique<juce::Label>();
+                dpl.nameLabel->setText ("  " + port.name, juce::dontSendNotification);
+                dpl.nameLabel->setFont (juce::FontOptions (11.0f));
+                dpl.nameLabel->setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
+                dpl.nameLabel->setBounds (12, y, w - 80, 16);
+                contentArea.addAndMakeVisible (*dpl.nameLabel);
+
+                dpl.valueLabel = std::make_unique<juce::Label>();
+                dpl.valueLabel->setText ("0.00", juce::dontSendNotification);
+                dpl.valueLabel->setFont (juce::FontOptions (11.0f).withStyle ("Bold"));
+                dpl.valueLabel->setColour (juce::Label::textColourId, juce::Colour (0xFF38BDF8)); // beautiful bright blue
+                dpl.valueLabel->setBounds (w - 70, y, 70, 16);
+                dpl.valueLabel->setJustificationType (juce::Justification::centredRight);
+                contentArea.addAndMakeVisible (*dpl.valueLabel);
+
+                y += 18;
+                debugPortLabels.push_back (std::move (dpl));
+            }
+        }
     }
 
     contentArea.setSize (viewport.getWidth(), y + 10);

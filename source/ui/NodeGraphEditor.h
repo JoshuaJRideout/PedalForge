@@ -23,7 +23,18 @@ public:
     void resized() override;
 
     /** Get the graph (for serialization / wiring to PedalDesign). */
-    DSPGraph& getGraph() { return graph; }
+    DSPGraph& getGraph()
+    {
+        for (const auto& pair : nodeVisuals)
+        {
+            if (auto* node = graph.getNode (pair.first))
+            {
+                node->visualX = pair.second.x;
+                node->visualY = pair.second.y;
+            }
+        }
+        return graph;
+    }
 
     /** Load a design's effects graph. */
     void loadDesign (const juce::var& effectsGraphJSON);
@@ -36,8 +47,10 @@ public:
 
     /** Reset to default empty graph (AudioIn → AudioOut). */
     void clearGraph();
+    void visibilityChanged() override;
 
     std::function<void()> onGraphChanged;
+    std::function<DSPGraph*()> getEngineDSPGraph;
 
 private:
     //==========================================================================
@@ -70,6 +83,8 @@ private:
         void mouseDrag (const juce::MouseEvent& e) override;
         void mouseUp (const juce::MouseEvent& e) override;
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override;
+        void mouseMove (const juce::MouseEvent& e) override;
+        void mouseExit (const juce::MouseEvent& e) override;
         bool keyPressed (const juce::KeyPress& key) override;
 
         bool isInterestedInDragSource (const juce::DragAndDropTarget::SourceDetails& dragSourceDetails) override;
@@ -88,6 +103,7 @@ private:
         bool draggingWire = false;
         PortHit wireStart;
         float wireEndX = 0, wireEndY = 0;
+        int hoveredConnectionIndex = -1;
 
         juce::Point<float> screenToCanvas (float sx, float sy) const;
         PortHit hitTestPort (juce::Point<float> cp) const;
@@ -104,21 +120,28 @@ private:
     //==========================================================================
     /** Right panel showing properties of the selected node. */
     class NodePropertiesPanel : public juce::Component,
-                                 public juce::Slider::Listener
+                                 public juce::Slider::Listener,
+                                 public juce::Timer,
+                                 public juce::CodeDocument::Listener
     {
     public:
-        NodePropertiesPanel();
+        NodePropertiesPanel (NodeGraphEditor& owner);
         void paint (juce::Graphics& g) override;
         void resized() override;
         void sliderValueChanged (juce::Slider* slider) override;
+        void timerCallback() override;
 
         void showNode (int nodeID, DSPNode* node);
         void clearSelection();
+
+        void codeDocumentTextInserted (const juce::String&, int) override { handleExpressionTextChanged(); }
+        void codeDocumentTextDeleted (int, int) override { handleExpressionTextChanged(); }
 
         std::function<void(int)> onDeleteNode;
         std::function<void()> onParamChanged;
 
     private:
+        NodeGraphEditor& editor;
         int currentNodeID = -1;
         DSPNode* currentNode = nullptr;
 
@@ -130,21 +153,36 @@ private:
         };
 
         std::vector<ParamSlider> paramSliders;
+
+        struct DebugPortLabel
+        {
+            std::unique_ptr<juce::Label> nameLabel;
+            std::unique_ptr<juce::Label> valueLabel;
+            bool isInput = false;
+            int portIndex = 0;
+        };
+        std::vector<DebugPortLabel> debugPortLabels;
+
         juce::TextButton deleteButton { "Delete Node" };
         juce::Viewport viewport;
         juce::Component contentArea;
 
         // Expression editor (visible only for ExpressionNode)
-        juce::TextEditor expressionEditor;
+        juce::CodeDocument codeDocument;
+        juce::LuaTokeniser luaTokeniser;
+        std::unique_ptr<juce::CodeEditorComponent> expressionEditor;
         juce::Label expressionError;
         bool isExpressionNode = false;
+        int selectedTrackIndex = 0;
 
         juce::OwnedArray<juce::TextButton> fileLoaders;
         juce::OwnedArray<juce::Label> fileLabels;
+        juce::OwnedArray<juce::Component> customComponents;
         std::unique_ptr<juce::FileChooser> fileChooser;
 
         void rebuildSliders();
         void setupExpressionEditor();
+        void handleExpressionTextChanged();
     };
 
     //==========================================================================

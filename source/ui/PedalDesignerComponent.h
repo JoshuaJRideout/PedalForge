@@ -33,6 +33,7 @@ public:
 
     /** ChangeListener callback for colour picker. */
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
+    void visibilityChanged() override;
 
 private:
 

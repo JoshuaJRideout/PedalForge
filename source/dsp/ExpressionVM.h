@@ -1,14 +1,16 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 #include <string>
 #include <cmath>
 #include <map>
+#include <functional>
 
 //==============================================================================
 /**
- * ExpressionVM — A lightweight bytecode virtual machine for audio DSP.
+ * ExpressionVM — A lightweight bytecode virtual machine for audio DSP and interactive UIs.
  */
 class ExpressionVM
 {
@@ -30,8 +32,32 @@ public:
         OP_MIN, OP_MAX,
         // 3-arg functions
         OP_CLAMP, OP_LERP,
+        
+        // Custom UI & Logic Extension Opcodes
+        OP_COND,          // 3-arg cond(test, if_true, if_false)
+        OP_DRAW_RECT,     // 5-arg rect(x, y, w, h, color)
+        OP_FILL_RECT,     // 5-arg rectFill(x, y, w, h, color)
+        OP_DRAW_CIRCLE,   // 4-arg circle(x, y, r, color)
+        OP_FILL_CIRCLE,   // 4-arg circleFill(x, y, r, color)
+        OP_DRAW_LINE,     // 6-arg line(x1, y1, x2, y2, thickness, color)
+        OP_DRAW_TEXT,     // 5-arg text(val, x, y, size, color)
+        OP_DRAW_IMAGE,    // 5-arg image(imgIdx, x, y, w, h)
+        OP_GET_PARAM,     // 1-arg getParam(idx)
+        OP_SET_PARAM,     // 2-arg setParam(idx, val)
+        
+        // Comparison & Logic Opcodes
+        OP_GT, OP_GE, OP_LT, OP_LE, OP_EQ, OP_NE,
+        OP_AND, OP_OR, OP_NOT,
+        
         OP_END
     };
+
+    //==========================================================================
+    // UI Hooks / Bindings
+    juce::Graphics* currentGraphics = nullptr;
+    std::function<void(juce::Graphics&, float, float, float, float, float)> drawImageCallback;
+    std::function<float(int)> getParamCallback;
+    std::function<void(int, float)> setParamCallback;
 
     //==========================================================================
     std::vector<float> vars;
@@ -79,8 +105,26 @@ public:
 
         while (pos < src.size())
         {
+            // Skip empty statements (consecutive newlines, semicolons, or general whitespace)
+            while (pos < src.size() && (src[pos] == ';' || src[pos] == '\n' || src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\r'))
+            {
+                if (src[pos] == ';' || src[pos] == '\n')
+                {
+                    pos++;
+                    skipWhitespace();
+                }
+                else
+                {
+                    skipWhitespace();
+                }
+            }
+
+            if (pos >= src.size())
+                break;
+
             if (! parseStatement())
                 return false;
+
             skipWhitespace();
             if (pos < src.size() && (src[pos] == ';' || src[pos] == '\n'))
                 pos++;
@@ -134,6 +178,139 @@ public:
                 case OP_MAX:   { float b = stack[--sp]; stack[sp-1] = std::max(stack[sp-1], b); } break;
                 case OP_CLAMP: { float hi = stack[--sp]; float lo = stack[--sp]; stack[sp-1] = juce::jlimit(lo, hi, stack[sp-1]); } break;
                 case OP_LERP:  { float t = stack[--sp]; float b = stack[--sp]; float a = stack[--sp]; stack[sp++] = a + (b-a)*t; } break;
+
+                // ─── UI & logic Opcodes ──────────────────────────────────────
+                case OP_COND: {
+                    float b = stack[--sp];
+                    float a = stack[--sp];
+                    stack[sp-1] = (stack[sp-1] > 0.5f) ? a : b;
+                } break;
+
+                case OP_DRAW_RECT: {
+                    float color = stack[--sp];
+                    float h = stack[--sp];
+                    float w = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->drawRoundedRectangle (x, y, w, h, 4.0f, 1.2f);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_FILL_RECT: {
+                    float color = stack[--sp];
+                    float h = stack[--sp];
+                    float w = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->fillRoundedRectangle (x, y, w, h, 4.0f);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_DRAW_CIRCLE: {
+                    float color = stack[--sp];
+                    float r = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->drawEllipse (x - r, y - r, r * 2.0f, r * 2.0f, 1.2f);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_FILL_CIRCLE: {
+                    float color = stack[--sp];
+                    float r = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->fillEllipse (x - r, y - r, r * 2.0f, r * 2.0f);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_DRAW_LINE: {
+                    float color = stack[--sp];
+                    float thick = stack[--sp];
+                    float y2 = stack[--sp];
+                    float x2 = stack[--sp];
+                    float y1 = stack[--sp];
+                    float x1 = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->drawLine (x1, y1, x2, y2, thick);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_DRAW_TEXT: {
+                    float color = stack[--sp];
+                    float size = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    float val = stack[--sp];
+                    if (currentGraphics)
+                    {
+                        currentGraphics->setColour (juce::Colour ((uint32_t)color | 0xFF000000));
+                        currentGraphics->setFont (juce::FontOptions ("Sans", size, juce::Font::plain));
+                        juce::String txt = (val == (int)val) ? juce::String((int)val) : juce::String(val, 2);
+                        currentGraphics->drawText (txt, (int)x, (int)y, 250, (int)size + 6, juce::Justification::topLeft);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_DRAW_IMAGE: {
+                    float h = stack[--sp];
+                    float w = stack[--sp];
+                    float y = stack[--sp];
+                    float x = stack[--sp];
+                    float imgIdx = stack[--sp];
+                    if (currentGraphics && drawImageCallback)
+                    {
+                        drawImageCallback (*currentGraphics, imgIdx, x, y, w, h);
+                    }
+                    stack[sp++] = 0.0f;
+                } break;
+
+                case OP_GET_PARAM: {
+                    float paramIdx = stack[sp-1];
+                    if (getParamCallback)
+                        stack[sp-1] = getParamCallback ((int)paramIdx);
+                    else
+                        stack[sp-1] = 0.0f;
+                } break;
+
+                case OP_SET_PARAM: {
+                    float value = stack[--sp];
+                    float paramIdx = stack[sp-1];
+                    if (setParamCallback)
+                        setParamCallback ((int)paramIdx, value);
+                    stack[sp-1] = value;
+                } break;
+                
+                // ─── Comparison & Logic Opcodes ─────────────────────────────
+                case OP_GT: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] > b) ? 1.0f : 0.0f; } break;
+                case OP_GE: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] >= b) ? 1.0f : 0.0f; } break;
+                case OP_LT: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] < b) ? 1.0f : 0.0f; } break;
+                case OP_LE: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] <= b) ? 1.0f : 0.0f; } break;
+                case OP_EQ: { float b = stack[--sp]; stack[sp-1] = (std::abs(stack[sp-1] - b) < 1e-5f) ? 1.0f : 0.0f; } break;
+                case OP_NE: { float b = stack[--sp]; stack[sp-1] = (std::abs(stack[sp-1] - b) >= 1e-5f) ? 1.0f : 0.0f; } break;
+                case OP_AND: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] > 0.5f && b > 0.5f) ? 1.0f : 0.0f; } break;
+                case OP_OR: { float b = stack[--sp]; stack[sp-1] = (stack[sp-1] > 0.5f || b > 0.5f) ? 1.0f : 0.0f; } break;
+                case OP_NOT: { stack[sp-1] = (stack[sp-1] <= 0.5f) ? 1.0f : 0.0f; } break;
+
                 case OP_END: goto done;
             }
             if (sp > 60) sp = 60; // safety
@@ -165,8 +342,35 @@ private:
 
     void skipWhitespace()
     {
-        while (pos < src.size() && (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\r'))
-            pos++;
+        while (pos < src.size())
+        {
+            if (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\r')
+            {
+                pos++;
+            }
+            else if (src[pos] == '-' && pos + 1 < src.size() && src[pos + 1] == '-')
+            {
+                pos += 2;
+                while (pos < src.size() && src[pos] != '\n')
+                    pos++;
+            }
+            else if (src[pos] == '/' && pos + 1 < src.size() && src[pos + 1] == '/')
+            {
+                pos += 2;
+                while (pos < src.size() && src[pos] != '\n')
+                    pos++;
+            }
+            else if (src[pos] == '#')
+            {
+                pos++;
+                while (pos < src.size() && src[pos] != '\n')
+                    pos++;
+            }
+            else
+            {
+                break;
+            }
+        }
     }
 
     bool match (char c)
@@ -235,14 +439,50 @@ private:
         if (name == "lerp")  return OP_LERP;
         if (name == "mod")   return OP_MOD;
         if (name == "pow")   return OP_POW;
+        
+        // Custom UI Extensions
+        if (name == "cond")       return OP_COND;
+        if (name == "rect")       return OP_DRAW_RECT;
+        if (name == "rectFill")   return OP_FILL_RECT;
+        if (name == "circle")     return OP_DRAW_CIRCLE;
+        if (name == "circleFill") return OP_FILL_CIRCLE;
+        if (name == "line")       return OP_DRAW_LINE;
+        if (name == "text")       return OP_DRAW_TEXT;
+        if (name == "image")      return OP_DRAW_IMAGE;
+        if (name == "getParam")   return OP_GET_PARAM;
+        if (name == "setParam")   return OP_SET_PARAM;
+        
+        // Comparison & Logic Extensions
+        if (name == "gt")  return OP_GT;
+        if (name == "ge")  return OP_GE;
+        if (name == "lt")  return OP_LT;
+        if (name == "le")  return OP_LE;
+        if (name == "eq")  return OP_EQ;
+        if (name == "ne")  return OP_NE;
+        if (name == "and") return OP_AND;
+        if (name == "or")  return OP_OR;
+        if (name == "not") return OP_NOT;
+        
         return -1;
     }
 
     int funcArgCount (int opcode)
     {
         switch (opcode) {
+            case OP_DRAW_RECT: case OP_FILL_RECT: case OP_DRAW_IMAGE: case OP_DRAW_TEXT: return 5;
+            case OP_DRAW_CIRCLE: case OP_FILL_CIRCLE: return 4;
+            case OP_DRAW_LINE: return 6;
+            case OP_COND: return 3;
+            case OP_GET_PARAM: return 1;
+            case OP_SET_PARAM: return 2;
             case OP_CLAMP: case OP_LERP: return 3;
             case OP_MIN: case OP_MAX: case OP_MOD: case OP_POW: return 2;
+            
+            // Comparison & Logic
+            case OP_GT: case OP_GE: case OP_LT: case OP_LE: case OP_EQ: case OP_NE:
+            case OP_AND: case OP_OR: return 2;
+            case OP_NOT: return 1;
+            
             default: return 1;
         }
     }

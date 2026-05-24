@@ -5,6 +5,7 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <iostream>
 
 //==============================================================================
 // ─── AUDIO I/O ───────────────────────────────────────────────────────────────
@@ -16,18 +17,14 @@ class AudioInputNode : public DSPNode
 public:
     AudioInputNode() : DSPNode ("audio_input", "Audio In")
     {
-        addOutput ("out");
-        addParam ("channel", "Channel", 1.0f, 32.0f, 1.0f);
+        addOutput ("left");
+        addOutput ("right");
     }
 
     void process (const float**, int, float** out, int numOut, int n) override
     {
-        // Output is filled by DSPGraph based on channel param — just pass through
-        // If graph hasn't filled it, output silence
         (void) out; (void) numOut; (void) n;
     }
-
-    int getSelectedChannel() { return (int) getParam("channel")->get(); }
 };
 
 class AudioOutputNode : public DSPNode
@@ -35,17 +32,14 @@ class AudioOutputNode : public DSPNode
 public:
     AudioOutputNode() : DSPNode ("audio_output", "Audio Out")
     {
-        addInput ("in");
-        addParam ("channel", "Channel", 1.0f, 32.0f, 1.0f);
+        addInput ("left");
+        addInput ("right");
     }
 
-    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    void process (const float** in, int, float** out, int numOut, int n) override
     {
-        if (numIn > 0 && numOut > 0)
-            std::copy (in[0], in[0] + n, out[0]);
+        (void) in; (void) out; (void) numOut; (void) n;
     }
-
-    int getSelectedChannel() { return (int) getParam("channel")->get(); }
 };
 
 class MidiInputNode : public DSPNode
@@ -1350,8 +1344,8 @@ class RangerNode : public DSPNode
 public:
     RangerNode() : DSPNode ("ranger", "Ranger / Remap")
     {
-        addInput ("in");
-        addOutput ("out");
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
         addParam ("in_min", "In Min", -1000.0f, 1000.0f, 0.0f);
         addParam ("in_max", "In Max", -1000.0f, 1000.0f, 1.0f);
         addParam ("out_min", "Out Min", -20000.0f, 20000.0f, 20.0f);
@@ -1385,8 +1379,8 @@ class SmoothNode : public DSPNode
 public:
     SmoothNode() : DSPNode ("smooth", "Smooth / Slew")
     {
-        addInput ("in");
-        addOutput ("out");
+        addInput ("in", NodePort::Control);
+        addOutput ("out", NodePort::Control);
         addParam ("rise", "Rise (ms)", 0.1f, 1000.0f, 10.0f);
         addParam ("fall", "Fall (ms)", 0.1f, 1000.0f, 10.0f);
     }
@@ -1541,18 +1535,32 @@ public:
         addParam ("bpm", "BPM", 20.0f, 300.0f, 120.0f);
         addParam ("duty", "Duty Cycle", 0.01f, 0.99f, 0.5f);
     }
-    void prepare (double sampleRate, int bs) override { DSPNode::prepare(sampleRate, bs); phase = 0.0; }
+    void prepare (double sampleRate, int bs) override 
+    { 
+        DSPNode::prepare(sampleRate, bs); 
+        phase = 0.0; 
+    }
     void process (const float**, int, float** out, int numOut, int n) override
     {
         float bpm  = getParam("bpm")->get();
         float duty = getParam("duty")->get();
         double freq = bpm / 60.0;
-        double inc = freq / sr;
+        
+        // Defensive check: Ensure sr is valid and not zero
+        double currentSr = (sr > 0.0) ? sr : 44100.0;
+        double inc = freq / currentSr;
 
         for (int i = 0; i < n; ++i)
         {
+            // Defensive boundary check on phase to prevent NaNs or infinite values from blocking execution
+            if (std::isnan (phase) || std::isinf (phase) || phase < 0.0 || phase >= 1.0)
+            {
+                phase = 0.0;
+            }
+
             out[0][i] = (phase < duty) ? 1.0f : 0.0f;
             if (numOut > 1) out[1][i] = (float) phase;
+            
             phase += inc;
             if (phase >= 1.0) phase -= 1.0;
         }
@@ -1658,7 +1666,7 @@ private:
 class ExpressionNode : public DSPNode
 {
 public:
-    ExpressionNode() : DSPNode ("expression", "Expression (E2)")
+    ExpressionNode() : DSPNode ("expression", "Expression")
     {
         // Default expression if none provided
         setExpression ("@inputs in in2\n@outputs out\n@parameters p1 p2 p3 p4\nout = in * p1");
@@ -1862,6 +1870,8 @@ public:
                     currentNote = msg.getNoteNumber() / 127.0f;
                     currentVelocity = msg.getFloatVelocity();
                     gate = 1.0f;
+                    DBG ("MidiNoteNode: RECEIVED note=" + juce::String(msg.getNoteNumber()) + " vel=" + juce::String(msg.getVelocity()) + " ch=" + juce::String(msg.getChannel()));
+                    std::cerr << "MidiNoteNode: RECEIVED note=" << msg.getNoteNumber() << " vel=" << msg.getVelocity() << " ch=" << msg.getChannel() << std::endl;
                 }
                 else if (msg.isNoteOff())
                 {

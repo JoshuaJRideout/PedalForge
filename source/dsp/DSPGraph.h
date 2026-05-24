@@ -4,6 +4,7 @@
 #include "DSPNodeLibrary.h"
 #include "NAMNode.h"
 #include "PluginHostNode.h"
+#include "MidiEditorNode.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <map>
 #include <memory>
@@ -162,6 +163,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "counter")      return std::make_unique<CounterNode>();
     if (type == "sequencer")    return std::make_unique<SequencerNode>();
     if (type == "grid_sequencer") return std::make_unique<GridSequencerNode>();
+    if (type == "midi_editor")  return std::make_unique<MidiEditorNode>();
     
     // Audio Sensors / Advanced Processing
     if (type == "pitch_det")    return std::make_unique<PitchDetectorNode>();
@@ -248,6 +250,17 @@ public:
         node->setNodeID (id);
         node->autoExposeParams();
         nodes[id] = std::move (node);
+        sortDirty = true;
+        return id;
+    }
+
+    /** Add a node with a specific, predefined ID. */
+    int addNode (std::unique_ptr<DSPNode> node, int id)
+    {
+        node->setNodeID (id);
+        node->autoExposeParams();
+        nodes[id] = std::move (node);
+        nextID = juce::jmax (nextID, id + 1);
         sortDirty = true;
         return id;
     }
@@ -382,21 +395,22 @@ public:
             auto* node = getNode (nodeID);
             if (!node) continue;
 
-            // Special case: AudioInputNode — read from selected channel
+            // Special case: AudioInputNode — read from Left and Right channels
             if (node->getType() == "audio_input")
             {
-                auto key = std::make_pair(nodeID, 0);
-                if (portBufferMap.count(key))
+                for (int ch = 0; ch < 2; ++ch)
                 {
-                    auto* inNode = dynamic_cast<AudioInputNode*>(node);
-                    int ch = inNode ? (inNode->getSelectedChannel() - 1) : 0;
-                    if (ch < buffer.getNumChannels())
-                        std::copy (buffer.getReadPointer(ch),
-                                   buffer.getReadPointer(ch) + numSamples,
-                                   bufferPool[portBufferMap[key]].data());
-                    else
-                        std::fill (bufferPool[portBufferMap[key]].data(),
-                                   bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+                    auto key = std::make_pair(nodeID, ch);
+                    if (portBufferMap.count(key))
+                    {
+                        if (ch < buffer.getNumChannels())
+                            std::copy (buffer.getReadPointer(ch),
+                                       buffer.getReadPointer(ch) + numSamples,
+                                       bufferPool[portBufferMap[key]].data());
+                        else
+                            std::fill (bufferPool[portBufferMap[key]].data(),
+                                       bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+                    }
                 }
                 continue;
             }
@@ -446,14 +460,40 @@ public:
             // Process!
             node->process (scratchInPtrs.data(), numInputs, scratchOutPtrs.data(), numOutputs, numSamples);
 
-            // Special case: AudioOutputNode — write to selected channel
-            if (node->getType() == "audio_output" && numInputs > 0 && scratchInPtrs[0] != nullptr)
+            // Record live port debug values for UI inspection
+            if (node->lastInputValues.size() != (size_t) numInputs)
+                node->lastInputValues.resize ((size_t) numInputs, 0.0f);
+            for (int i = 0; i < numInputs; ++i)
+                node->lastInputValues[(size_t) i] = scratchInPtrs[i] != nullptr ? scratchInPtrs[i][numSamples - 1] : 0.0f;
+
+            if (node->lastOutputValues.size() != (size_t) numOutputs)
+                node->lastOutputValues.resize ((size_t) numOutputs, 0.0f);
+            for (int i = 0; i < numOutputs; ++i)
+                node->lastOutputValues[(size_t) i] = scratchOutPtrs[i] != nullptr ? scratchOutPtrs[i][numSamples - 1] : 0.0f;
+
+            // Special case: AudioOutputNode — write to Left and Right channels
+            if (node->getType() == "audio_output")
             {
-                auto* outNode = dynamic_cast<AudioOutputNode*>(node);
-                int ch = outNode ? (outNode->getSelectedChannel() - 1) : 0;
-                if (ch < buffer.getNumChannels())
-                    std::copy (scratchInPtrs[0], scratchInPtrs[0] + numSamples,
-                               buffer.getWritePointer(ch));
+                for (int ch = 0; ch < 2; ++ch)
+                {
+                    if (ch < numInputs && scratchInPtrs[ch] != nullptr && ch < buffer.getNumChannels())
+                    {
+                        if (hasAudioInput)
+                        {
+                            std::copy (scratchInPtrs[ch], scratchInPtrs[ch] + numSamples,
+                                       buffer.getWritePointer(ch));
+                        }
+                        else
+                        {
+                            auto* dest = buffer.getWritePointer(ch);
+                            const auto* src = scratchInPtrs[ch];
+                            for (int i = 0; i < numSamples; ++i)
+                            {
+                                dest[i] += src[i];
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -569,6 +609,7 @@ private:
     double sr = 44100.0;
     int maxBlock = 512;
     juce::MidiBuffer* currentMidiBuffer = nullptr;
+    bool hasAudioInput = false;
 
     /** Topological sort using Kahn's algorithm. */
     void topologicalSort()
@@ -616,6 +657,17 @@ private:
             {
                 portBufferMap[{nodeID, p}] = bufIdx % juce::jmax(1, (int)bufferPool.size());
                 bufIdx++;
+            }
+        }
+
+        // Determine if this graph contains an audio_input node
+        hasAudioInput = false;
+        for (const auto& [id, node] : nodes)
+        {
+            if (node && node->getType() == "audio_input")
+            {
+                hasAudioInput = true;
+                break;
             }
         }
 

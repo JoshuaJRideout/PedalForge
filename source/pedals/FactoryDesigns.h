@@ -49,7 +49,25 @@ namespace FactoryDesigns
         d->chassisH = 340.0f;
         d->chassisColour = juce::Colour(0xFF1A0533); // Deep Indigo
         
-        // Custom Grid Sequencer DSP Node (Type: grid_sequencer)
+        // DSP Graph
+        DSPGraph graph;
+        int inID  = graph.addNode (createNodeByType ("audio_input"));
+        int seqID = graph.addNode (createNodeByType ("grid_sequencer"));
+        int outID = graph.addNode (createNodeByType ("audio_output"));
+        
+        graph.getNode (inID)->visualX = 80.0f;
+        graph.getNode (inID)->visualY = 200.0f;
+        
+        graph.getNode (seqID)->visualX = 290.0f;
+        graph.getNode (seqID)->visualY = 200.0f;
+        
+        graph.getNode (outID)->visualX = 500.0f;
+        graph.getNode (outID)->visualY = 200.0f;
+        
+        graph.connect (inID, 0, outID, 0);
+        graph.connect (inID, 1, outID, 1);
+        
+        d->effectsGraph = graph.toJSON();
         
         // We'll map DSP controls directly to the chassis
         PedalDesign::Control screen;
@@ -131,46 +149,110 @@ namespace FactoryDesigns
         gridPage.height = 600.0f;
         gridPage.backgroundColour = juce::Colour(0xFF110B1C); // Very dark indigo
         
-        // Add 8 tracks * 32 steps grid
-        float startX = 120.0f;
-        float startY = 80.0f;
-        float stepSpacingX = 25.0f;
-        float stepSpacingY = 50.0f;
-        
-        for (int tr = 0; tr < 8; ++tr)
-        {
-            // Track label
-            PedalDesign::Control lbl;
-            lbl.type = "label";
-            lbl.x = 20.0f; lbl.y = startY + tr * stepSpacingY;
-            lbl.width = 80.0f; lbl.height = 20.0f;
-            lbl.label = "Track " + juce::String(tr + 1);
-            lbl.controlID = "lbl_tr" + juce::String(tr);
-            gridPage.controls.push_back(lbl);
-            
-            for (int s = 0; s < 32; ++s)
-            {
-                PedalDesign::Control stepBtn;
-                stepBtn.type = "led_toggle";
-                stepBtn.x = startX + s * stepSpacingX;
-                stepBtn.y = startY + tr * stepSpacingY;
-                stepBtn.width = 16.0f; stepBtn.height = 16.0f;
-                stepBtn.controlID = "tr" + juce::String(tr) + "_s" + juce::String(s);
-                
-                // Color code by beats (4 steps = 1 beat)
-                if ((s / 4) % 2 == 0)
-                    stepBtn.customColour = juce::Colour(0xFF8B5CF6); // Purple
-                else
-                    stepBtn.customColour = juce::Colour(0xFF6366F1); // Indigo
-                    
-                gridPage.controls.push_back(stepBtn);
-                
-                // Add DSP Mapping
-                d->mappings.push_back({ stepBtn.controlID, "2_" + stepBtn.controlID });
-            }
-        }
+        // Add single unified dynamic display component that draws and manages the entire step grid
+        PedalDesign::Control gridDisplay;
+        gridDisplay.type = "dynamic_display";
+        gridDisplay.controlID = "grid_display";
+        gridDisplay.x = 10.0f;
+        gridDisplay.y = 10.0f;
+        gridDisplay.width = 980.0f;
+        gridDisplay.height = 580.0f;
+        gridPage.controls.push_back(gridDisplay);
         
         d->canvasPages.push_back(gridPage);
+
+        // ── Chassis control mappings ─────────────────────────────────────
+        // Knobs control Track 0 parameters on the grid_sequencer node (ID 2)
+        d->mappings.push_back({"k_swing",  "2_tr0_swing"});   // Track 0 swing amount
+        d->mappings.push_back({"k_div",    "2_tr0_div"});     // Track 0 clock division
+        d->mappings.push_back({"k_glitch", "2_tr0_glitch"});  // Track 0 glitch probability
+        d->mappings.push_back({"k_vel",    "2_tr0_val2"});    // Track 0 velocity (val2)
+        d->mappings.push_back({"k_steps",  "2_tr0_len"});     // Track 0 sequence length
+
+        // Footswitches
+        d->mappings.push_back({"sw_play",  "2_run"});           // Run/Stop toggle
+        d->mappings.push_back({"sw_tap",   "2_tap"});           // Tap tempo trigger
+        d->mappings.push_back({"sw_clr",   "2_clear"});         // Clear selected track
+        d->mappings.push_back({"sw_track", "2_track_advance"}); // Cycle to next track
+
+        addStandardPorts (*d);
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createMidiEditor()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "MIDI Editor";
+        d->category = "MIDI & CV";
+        d->tags = { "midi", "daw", "sequencer", "piano-roll", "advanced" };
+        d->chassisW = 280.0f;
+        d->chassisH = 340.0f;
+        d->chassisColour = juce::Colour(0xFF1E1B4B); // Deep Dark Indigo
+        
+        // DSP Graph
+        DSPGraph graph;
+        int inID  = graph.addNode (createNodeByType ("audio_input"));
+        int seqID = graph.addNode (createNodeByType ("midi_editor"));
+        int outID = graph.addNode (createNodeByType ("audio_output"));
+        
+        graph.getNode (inID)->visualX = 80.0f;
+        graph.getNode (inID)->visualY = 200.0f;
+        
+        graph.getNode (seqID)->visualX = 290.0f;
+        graph.getNode (seqID)->visualY = 200.0f;
+        
+        graph.getNode (outID)->visualX = 500.0f;
+        graph.getNode (outID)->visualY = 200.0f;
+        
+        graph.connect (inID, 0, outID, 0);
+        graph.connect (inID, 1, outID, 1);
+        
+        d->effectsGraph = graph.toJSON();
+        
+        // Map DSP controls directly to the chassis
+        PedalDesign::Control screen;
+        screen.type = "text_screen";
+        screen.width = 250; screen.height = 60;
+        screen.x = 15.0f; screen.y = 15.0f;
+        screen.controlID = "screen_1";
+        d->controls.push_back(screen);
+
+        float knobY1 = 100.0f;
+        
+        PedalDesign::Control k1; k1.type = "knob"; k1.controlID = "k_bpm"; k1.label = "BPM"; k1.x = 25.0f; k1.y = knobY1; k1.width = 50; k1.height = 50; d->controls.push_back(k1);
+        PedalDesign::Control k2; k2.type = "knob"; k2.controlID = "k_chan"; k2.label = "Channel"; k2.x = 115.0f; k2.y = knobY1; k2.width = 50; k2.height = 50; d->controls.push_back(k2);
+        PedalDesign::Control k3; k3.type = "knob"; k3.controlID = "k_snap"; k3.label = "Snap"; k3.x = 205.0f; k3.y = knobY1; k3.width = 50; k3.height = 50; d->controls.push_back(k3);
+
+        // Footswitches
+        PedalDesign::Control swPlay; swPlay.type = "footswitch"; swPlay.controlID = "sw_play"; swPlay.label = "RUN"; swPlay.x = 35.0f; swPlay.y = 250.0f; swPlay.width = 60; swPlay.height = 60; d->controls.push_back(swPlay);
+        PedalDesign::Control swClr; swClr.type = "footswitch"; swClr.controlID = "sw_clr"; swClr.label = "CLEAR"; swClr.x = 185.0f; swClr.y = 250.0f; swClr.width = 60; swClr.height = 60; d->controls.push_back(swClr);
+
+        // Grid Overlay Screen Configuration
+        PedalDesign::OverlayPage gridPage;
+        gridPage.name = "MIDI Editor Grid";
+        gridPage.width = 1000.0f;
+        gridPage.height = 600.0f;
+        gridPage.backgroundColour = juce::Colour(0xFF110B1C); // Very dark indigo
+        
+        // Add single unified dynamic display component that draws and manages the entire midi editor grid
+        PedalDesign::Control gridDisplay;
+        gridDisplay.type = "custom_display"; // custom_display triggers our dynamic display as well!
+        gridDisplay.controlID = "midi_editor_display";
+        gridDisplay.x = 10.0f;
+        gridDisplay.y = 10.0f;
+        gridDisplay.width = 980.0f;
+        gridDisplay.height = 580.0f;
+        gridPage.controls.push_back(gridDisplay);
+        
+        d->canvasPages.push_back(gridPage);
+
+        // ── Chassis control mappings ─────────────────────────────────────
+        d->mappings.push_back({"k_bpm",  "2_bpm"});
+        d->mappings.push_back({"k_chan", "2_chan"});
+        d->mappings.push_back({"k_snap", "2_snap"});
+
+        d->mappings.push_back({"sw_play",  "2_run"});
+        d->mappings.push_back({"sw_clr",   "2_clear"});
 
         addStandardPorts (*d);
         return d;
@@ -188,24 +270,14 @@ namespace FactoryDesigns
         // DSP Graph
         DSPGraph graph;
         
-        int inL = graph.addNode(createNodeByType("audio_input"));
-        graph.getNode(inL)->getParam("channel")->set(1.0f);
+        int inID  = graph.addNode (createNodeByType ("audio_input"));
+        int host  = graph.addNode (createNodeByType ("plugin_host"));
+        int outID = graph.addNode (createNodeByType ("audio_output"));
         
-        int inR = graph.addNode(createNodeByType("audio_input"));
-        graph.getNode(inR)->getParam("channel")->set(2.0f);
-        
-        int host = graph.addNode(createNodeByType("plugin_host"));
-        
-        int outL = graph.addNode(createNodeByType("audio_output"));
-        graph.getNode(outL)->getParam("channel")->set(1.0f);
-        
-        int outR = graph.addNode(createNodeByType("audio_output"));
-        graph.getNode(outR)->getParam("channel")->set(2.0f);
-        
-        graph.connect(inL, 0, host, 0);
-        graph.connect(inR, 0, host, 1);
-        graph.connect(host, 0, outL, 0);
-        graph.connect(host, 1, outR, 0);
+        graph.connect (inID, 0, host, 0);
+        graph.connect (inID, 1, host, 1);
+        graph.connect (host, 0, outID, 0);
+        graph.connect (host, 1, outID, 1);
         
         d->effectsGraph = graph.toJSON();
 
@@ -1012,10 +1084,21 @@ namespace FactoryDesigns
         knob.controlID = "knob_1";
         d->controls.push_back(knob);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_gain"}); // node 2 = GainNode
+
+        StickyNote note;
+        note.text = "Tutorial 1: Hello Gain\n\nThis is the simplest possible guitar pedal! It takes the audio input, runs it through a Gain Node to boost or cut the level, and sends it directly to the output.\n\nTweak the \"Level\" knob on the chassis to control the Gain Node's gain parameter (in decibels).";
+        note.bounds = { 300, 100, 280, 175 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "The Gain Node (Node 2)\n\nThis is where the volume change happens! It scales the amplitude of the incoming audio samples. Tweak the \"Level\" knob on the chassis to see the gain parameter adjust in real-time.";
+        note2.bounds = { 300, 290, 280, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1060,11 +1143,22 @@ namespace FactoryDesigns
         k2.controlID = "knob_2";
         d->controls.push_back(k2);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_freq"});      // node 2 = LowPassNode
         d->mappings.push_back({"knob_2", "2_q"});
+
+        StickyNote note;
+        note.text = "Tutorial 2: Filter Sweep\n\nThis pedal routes the guitar signal through a Low Pass Filter.\n\n- The \"Cutoff\" knob modulates the filter's frequency (freq), which cuts off high-frequency harmonics and makes the sound darker.\n- The \"Reso\" knob modulates the resonance (q), which boosts frequencies near the cutoff point for a vocal, synthesizer-like sweep.";
+        note.bounds = { 300, 100, 280, 195 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Low Pass Filter (Node 2)\n\nThis node represents the core DSP block. By rolling off high frequencies, it mimics the analog tone controls of classic vintage wah-wahs and synths. Tweak Reso to hear the sweep narrow down!";
+        note2.bounds = { 300, 310, 280, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1109,11 +1203,22 @@ namespace FactoryDesigns
         k2.controlID = "knob_2";
         d->controls.push_back(k2);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "1_rate"});  // node 1 = LFONode
         d->mappings.push_back({"knob_2", "1_depth"});
+
+        StickyNote note;
+        note.text = "Tutorial 3: Tremolo 101\n\nHere, we use a Low Frequency Oscillator (LFO) to automate the guitar's volume, creating a classic tremolo effect.\n\n- The LFO generates a cycling wave.\n- We scale the wave from bipolar (-1 to +1) to unipolar (0 to 1) using the Add (+1) and Divide (/2) nodes.\n- The scaled LFO modulates a Multiply Node, scaling the guitar's audio signal.";
+        note.bounds = { 350, 100, 300, 215 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "LFO Bipolar-to-Unipolar Scaling\n\n- Node 1 (LFO) oscillates between -1.0 and +1.0.\n- Node 4 (Add) offsets it by +1.0 (now 0.0 to 2.0).\n- Node 5 (Divide) halves it by 2.0 (now 0.0 to 1.0).\nThis prevents phase inversion during multiplication!";
+        note2.bounds = { 350, 330, 300, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1168,12 +1273,23 @@ namespace FactoryDesigns
         k3.controlID = "knob_3";
         d->controls.push_back(k3);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_time"});     // node 2 = DelayNode
         d->mappings.push_back({"knob_2", "2_feedback"});
         d->mappings.push_back({"knob_3", "3_mix"});      // node 3 = MixNode
+
+        StickyNote note;
+        note.text = "Tutorial 4: Delay Lab\n\nThis pedal demonstrates parallel signal routing!\n\n- We use a Split Node to send the guitar audio down two parallel paths:\n  1. Dry path (unprocessed).\n  2. Wet path (routed through the Delay Node).\n- We mix these dry and wet signals back together using a Mix Node before sending them to the output.";
+        note.bounds = { 400, 100, 300, 215 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Parallel Dry/Wet Signal Paths\n\n- Node 1 (Split) copies the mono audio input to two independent pathways.\n- Node 2 (Delay) delays the wet path and feeds its output back to create repeating echoes.\n- Node 3 (Mix) mixes the original dry and delayed wet signals safely.";
+        note2.bounds = { 400, 330, 300, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1240,6 +1356,19 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "3_decay"});
         d->mappings.push_back({"knob_3", "3_sustain"});
         d->mappings.push_back({"knob_4", "3_release"});
+
+        StickyNote note;
+        note.text = "Tutorial 5: Mini Synth\n\nThis is a fully playable MIDI synthesizer voice!\n\n- The MIDI In node tracks incoming keyboard notes and gates.\n- The pitch CV controls the Oscillator frequency.\n- The gate trigger fires the ADSR envelope generator.\n- The ADSR envelope controls a VCA (amplifier), shaping the volume dynamics of the oscillator over time.";
+        note.bounds = { 450, 100, 300, 235 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "MIDI-to-CV Voice Architecture\n\n- Node 5 (MidiNote) splits input: port 0 outputs frequency CV; port 1 outputs gate triggers.\n- Node 2 (Oscillator) produces tone.\n- Node 4 (ADSR) creates an envelope contour.\n- Node 3 (VCA) multiplies tone by the ADSR contour.";
+        note2.bounds = { 450, 350, 300, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1292,12 +1421,23 @@ namespace FactoryDesigns
         k3.controlID = "knob_3";
         d->controls.push_back(k3);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "2_sensitivity"}); // node 2 = EnvelopeFollower
         d->mappings.push_back({"knob_2", "4_q"});           // node 4 = LowPassNode
         d->mappings.push_back({"knob_3", "3_out_max"});     // node 3 = RangerNode
+
+        StickyNote note;
+        note.text = "Tutorial 6: Envelope Filter\n\nAn Auto-Wah! The envelope follower tracks the amplitude/dynamics of your guitar playing.\n\n- A harder pluck generates a higher control voltage.\n- The Ranger node scales this 0..1 voltage up to a musical frequency sweep range (100Hz to 5000Hz).\n- This mapped voltage modulates the Low Pass Filter frequency dynamically, creating a responsive wah sound!";
+        note.bounds = { 450, 100, 320, 235 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Control Voltage (CV) Sweep Path\n\n- Node 3 (EnvelopeFollower) acts as a dynamic level sensor (outputs 0.0 to 1.0).\n- Node 4 (Ranger) maps the 0..1 level up to musical frequencies (100Hz to 5000Hz).\n- Node 5 (LowPass) uses this mapped frequency for dynamic cutoff sweeping.";
+        note2.bounds = { 450, 350, 320, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1340,11 +1480,22 @@ namespace FactoryDesigns
         k2.controlID = "knob_2";
         d->controls.push_back(k2);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_bpm"}); // node 2 = ClockNode
-        d->mappings.push_back({"knob_2", "5_q"});   // node 5 = LowPassNode
+        d->mappings.push_back({"knob_1", "3_bpm"}); // node 3 = ClockNode
+        d->mappings.push_back({"knob_2", "6_q"});   // node 6 = LowPassNode
+
+        StickyNote note;
+        note.text = "Tutorial 7: Step Sequencer Filter\n\nAn automated rhythmic step filter!\n\n- The Clock Node generates steady pulses at a BPM rate.\n- Each pulse advances the 8-step Sequencer to the next step value.\n- These stepped control voltages are remapped by the Ranger and modulate the Low Pass Filter, creating rhythmic stepping filter patterns.";
+        note.bounds = { 500, 100, 320, 215 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Clock & Sequencer Modulations\n\n- Node 3 (Clock) acts as a metronome generator, dispatching steady trigger pulses.\n- Node 4 (Sequencer) advances through its custom sliders on each trigger, outputting stepped control values.\n- Node 5 (Ranger) remaps the steps up to musical lowpass cutoffs (200Hz to 6000Hz).";
+        note2.bounds = { 500, 330, 320, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1397,13 +1548,96 @@ namespace FactoryDesigns
         k3.controlID = "knob_3";
         d->controls.push_back(k3);
 
-        addBypassAndLED(*d);
-
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "4_bpm"});          // node 4 = ClockNode
         d->mappings.push_back({"knob_2", "6_drive"});        // node 6 = SoftClipNode
         d->mappings.push_back({"knob_3", "2_sensitivity"});  // node 2 = EnvelopeFollower
+
+        StickyNote note;
+        note.text = "Tutorial 8: Pattern Slicer\n\nAn advanced logic-controlled gated fuzz!\n\n- The Envelope Follower + Comparator detect when you are actively playing a note.\n- The Clock Node generates steady rhythmic gate pulses.\n- We combine these via an AND Gate: slicing is active ONLY when you are actively playing AND the clock pulse is high.\n- The AND Gate output drives a Multiplexer (Mux), switching between Dry and Fuzz paths.";
+        note.bounds = { 550, 100, 340, 255 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Logic Gates & Multiplexing Paths\n\n- Node 3 (EnvelopeFollower) & Node 4 (Comparator) threshold your plucks (outputting 0 or 1 CV).\n- Node 5 (Clock) emits a steady rhythmic pulse gate.\n- Node 6 (ANDGate) combines them: high only when plucking AND clock pulse high.\n- Node 8 (MuxNode) routes Dry (port A) or Fuzz (port B) based on Node 6's gate!";
+        note2.bounds = { 550, 370, 340, 140 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
         addStandardPorts (*d);
         return d;
     }
+
+    /** Tutorial 9 — Wave Folder */
+    inline std::shared_ptr<PedalDesign> createTutorialWaveFolder()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Wave Folder";
+        d->category = "Tutorial";
+        d->tags = { "distortion", "scripting", "modulation", "cyberpunk", "lua" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFFC084FC); // pastel purple
+
+        // Title label
+        PedalDesign::Control title;
+        title.type = "label";
+        title.label = "WAVE FOLDER";
+        title.controlID = "lbl_title";
+        title.x = 10.0f; title.y = 8.0f;
+        title.width = 100.0f; title.height = 20.0f;
+        d->controls.push_back(title);
+
+        // Drive knob (maps to drive parameter on node 3)
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 30; k1.height = 30;
+        k1.x = 15.0f; k1.y = 40.0f;
+        k1.label = "Drive";
+        k1.controlID = "knob_1";
+        d->controls.push_back(k1);
+
+        // Rate knob (maps to rate parameter on node 3)
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 30; k2.height = 30;
+        k2.x = 75.0f; k2.y = 40.0f;
+        k2.label = "Rate";
+        k2.controlID = "knob_2";
+        d->controls.push_back(k2);
+
+        // Mix knob (maps to mix parameter on node 3)
+        PedalDesign::Control k3;
+        k3.type = "knob";
+        k3.width = 30; k3.height = 30;
+        k3.x = d->chassisW / 2.0f - 15.0f;
+        k3.y = 95.0f;
+        k3.label = "Mix";
+        k3.controlID = "knob_3";
+        d->controls.push_back(k3);
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"knob_1", "2_drive"}); // node 2 = Expression
+        d->mappings.push_back({"knob_2", "2_rate"});  // node 2 = Expression
+        d->mappings.push_back({"knob_3", "2_mix"});   // node 2 = Expression
+
+        StickyNote note;
+        note.text = "Tutorial 9: Scriptable Wave Folder\n\nWelcome to scriptable modular synthesis!\n\n- The active DSP of this pedal is driven entirely by a LUA-compiled Expression script.\n- Tweak the knobs on the chassis to see the drive, rate, and mix parameters scale the variables inside the code editor in real-time.\n- Explore the code inside the Code/DSP editor tab and feel free to rewrite the math equations!";
+        note.bounds = { 500, 100, 320, 215 };
+        note.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note);
+
+        StickyNote note2;
+        note2.text = "Mathematical Wavefolding\n\n- folder = sin(in * drive) applies a soft sinusoidal wavefolding shape, creating metallic overtones.\n- carrier = sin(t * rate * 6.28318) generates a continuous time-based modulator using the elapsed time variable t.\n- out = lerp(in, modulator, mix) mixes the clean input dry path with the ring modulated folders.";
+        note2.bounds = { 500, 330, 320, 130 };
+        note2.colour = juce::Colour(0xFFFFEB3B);
+        d->fxNotes.push_back(note2);
+
+        addStandardPorts (*d);
+        addBypassAndLED (*d);
+        d->isFactory = true;
+        return d;
+    }
 }
+

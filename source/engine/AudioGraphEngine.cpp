@@ -1,6 +1,7 @@
 #include "AudioGraphEngine.h"
 #include "../dsp/GraphPedalProcessor.h"
 #include "MidiRoutingNodes.h"
+#include "../pedals/PedalRegistry.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 
 //==============================================================================
@@ -19,6 +20,9 @@ AudioGraphEngine::AudioGraphEngine()
     
     // Add board node to the graph
     graph.addNode (std::make_unique<BoardMidiReceiverNode>(*this, mainBoard.id), NodeID { mainBoard.engineNodeId });
+
+    // Save the starting state as the initial undo state
+    saveUndoState();
 }
 
 AudioGraphEngine::~AudioGraphEngine()
@@ -77,6 +81,7 @@ void AudioGraphEngine::prepare (double sampleRate, int samplesPerBlock,
     graph.prepareToPlay (sampleRate, samplesPerBlock);
 
     setupIONodes();
+    autoRebuildIOConnections (numInputChannels, numOutputChannels);
 }
 
 void BoardMidiReceiverNode::processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midiMessages)
@@ -318,9 +323,13 @@ void AudioGraphEngine::connectPassthrough()
 AudioGraphEngine::NodeID AudioGraphEngine::addPedal (
     std::unique_ptr<juce::AudioProcessor> processor,
     const juce::String& boardId, int pageIndex,
-    float boardX, float boardY, float boardW, float boardH)
+    float boardX, float boardY, float boardW, float boardH,
+    NodeID customNodeId)
 {
-    auto nodeId = NodeID (nextNodeIndex++);
+    auto nodeId = customNodeId.uid != 0 ? customNodeId : NodeID (nextNodeIndex++);
+    if (nodeId.uid >= nextNodeIndex)
+        nextNodeIndex = nodeId.uid + 1;
+
     auto* gp = dynamic_cast<GraphPedalProcessor*>(processor.get());
     auto node = graph.addNode (std::move (processor), nodeId);
 
@@ -355,9 +364,13 @@ void AudioGraphEngine::removePedal (NodeID nodeId)
 }
 
 AudioGraphEngine::NodeID AudioGraphEngine::addPedalOffBoard (
-    std::unique_ptr<juce::AudioProcessor> processor)
+    std::unique_ptr<juce::AudioProcessor> processor,
+    NodeID customNodeId)
 {
-    auto nodeId = NodeID (nextNodeIndex++);
+    auto nodeId = customNodeId.uid != 0 ? customNodeId : NodeID (nextNodeIndex++);
+    if (nodeId.uid >= nextNodeIndex)
+        nextNodeIndex = nodeId.uid + 1;
+
     auto* gp = dynamic_cast<GraphPedalProcessor*>(processor.get());
     auto node = graph.addNode (std::move (processor), nodeId);
 
@@ -468,6 +481,14 @@ void AudioGraphEngine::updatePedalProcessor (NodeID nodeId, std::unique_ptr<juce
         if (c.source.nodeID == nodeId || c.destination.nodeID == nodeId)
             connections.push_back (c);
     }
+
+    // Set play config and prepare the processor before adding to graph so it gets correct sampleRate and blockSize
+    newProcessor->setPlayConfigDetails (
+        2, 2, // stereo I/O config
+        currentSampleRate,
+        currentBlockSize
+    );
+    newProcessor->prepareToPlay (currentSampleRate, currentBlockSize);
 
     graph.removeNode (nodeId);
 
@@ -747,13 +768,38 @@ juce::String AudioGraphEngine::serialise() const
     for (auto& inst : instances)
     {
         auto obj = std::make_unique<juce::DynamicObject>();
-        obj->setProperty ("nodeID",   (int) inst.nodeID.uid);
-        obj->setProperty ("name",     inst.name);
-        obj->setProperty ("boardX",   inst.boardX);
-        obj->setProperty ("boardY",   inst.boardY);
-        obj->setProperty ("boardW",   inst.boardW);
-        obj->setProperty ("boardH",   inst.boardH);
-        obj->setProperty ("bypassed", inst.bypassed);
+        obj->setProperty ("nodeID",    (int) inst.nodeID.uid);
+        obj->setProperty ("name",      inst.name);
+        obj->setProperty ("category",  inst.category);
+        obj->setProperty ("colour",    (juce::int64) inst.colour.getARGB());
+        obj->setProperty ("numKnobs",  inst.numKnobs);
+        obj->setProperty ("boardX",    inst.boardX);
+        obj->setProperty ("boardY",    inst.boardY);
+        obj->setProperty ("boardW",    inst.boardW);
+        obj->setProperty ("boardH",    inst.boardH);
+        obj->setProperty ("bypassed",  inst.bypassed);
+        obj->setProperty ("onBoard",   inst.onBoard);
+        obj->setProperty ("boardId",   inst.boardId);
+        obj->setProperty ("pageIndex", inst.pageIndex);
+        obj->setProperty ("rotation",  inst.rotation);
+        obj->setProperty ("routeX",    inst.routeX);
+        obj->setProperty ("routeY",    inst.routeY);
+
+        if (inst.design != nullptr)
+            obj->setProperty ("design", inst.design->toJSON());
+
+        // Control values
+        auto ctrlValObj = std::make_unique<juce::DynamicObject>();
+        for (const auto& [cid, val] : inst.controlValues)
+            ctrlValObj->setProperty (cid, val);
+        obj->setProperty ("controlValues", juce::var (ctrlValObj.release()));
+
+        // Control texts
+        auto ctrlTextObj = std::make_unique<juce::DynamicObject>();
+        for (const auto& [cid, text] : inst.controlTexts)
+            ctrlTextObj->setProperty (cid, text);
+        obj->setProperty ("controlTexts", juce::var (ctrlTextObj.release()));
+
         pedalArray.add (juce::var (obj.release()));
     }
 
@@ -794,10 +840,20 @@ juce::String AudioGraphEngine::serialise() const
 
 void AudioGraphEngine::deserialise (const juce::String& jsonState)
 {
-    // TODO: Implement full deserialisation in Phase 1E
+    bool wasRestoring = isRestoringState;
+    isRestoringState = true;
+
     auto parsed = juce::JSON::parse (jsonState);
     if (auto* root = parsed.getDynamicObject())
     {
+        // 1. Clear all existing active pedals first
+        std::vector<NodeID> idsToRemove;
+        for (auto& inst : instances)
+            idsToRemove.push_back (inst.nodeID);
+        for (auto id : idsToRemove)
+            removePedal (id);
+
+        // 2. Deserialise board, routing, and play notes
         if (root->hasProperty ("boardNotes"))
             boardNotes = StickyNoteData::fromJSON (root->getProperty ("boardNotes"));
         if (root->hasProperty ("routeNotes"))
@@ -805,7 +861,7 @@ void AudioGraphEngine::deserialise (const juce::String& jsonState)
         if (root->hasProperty ("playNotes"))
             playNotes = StickyNoteData::fromJSON (root->getProperty ("playNotes"));
 
-        // Deserialise MIDI config
+        // 3. Deserialise MIDI config
         if (root->hasProperty ("midiConfig"))
         {
             if (auto* midiCfgObj = root->getProperty ("midiConfig").getDynamicObject())
@@ -828,5 +884,343 @@ void AudioGraphEngine::deserialise (const juce::String& jsonState)
                     appMidiConfig.novationMode = (AppMidiConfig::NovationMode) (int) midiCfgObj->getProperty ("novationMode");
             }
         }
+
+        // 4. Reconstruct pedal instances
+        if (root->hasProperty ("pedals"))
+        {
+            if (auto* pedalArray = root->getProperty ("pedals").getArray())
+            {
+                for (const auto& pv : *pedalArray)
+                {
+                    if (auto* obj = pv.getDynamicObject())
+                    {
+                        NodeID nodeId { (juce::uint32) (int) obj->getProperty ("nodeID") };
+                        juce::String name = obj->getProperty ("name").toString();
+
+                        std::shared_ptr<PedalDesign> design = nullptr;
+                        std::function<std::unique_ptr<juce::AudioProcessor>()> factoryFn = nullptr;
+
+                        for (const auto& info : getFactoryPedals())
+                        {
+                            if (info.name == name)
+                            {
+                                factoryFn = info.factory;
+                                break;
+                            }
+                        }
+
+                        if (obj->hasProperty ("design"))
+                        {
+                            design = std::make_shared<PedalDesign> (PedalDesign::fromJSON (obj->getProperty ("design")));
+                        }
+                        else
+                        {
+                            // Fallback for factory presets
+                            for (const auto& info : getFactoryPedals())
+                            {
+                                if (info.name == name)
+                                {
+                                    if (info.designFactory)
+                                        design = info.designFactory();
+                                    break;
+                                }
+                            }
+                        }
+
+                        juce::String jsonGraph;
+                        if (design != nullptr && !design->effectsGraph.isVoid())
+                            jsonGraph = juce::JSON::toString (design->effectsGraph);
+
+                        std::unique_ptr<juce::AudioProcessor> processor;
+                        if (jsonGraph.isNotEmpty())
+                        {
+                            processor = std::make_unique<GraphPedalProcessor> (name, jsonGraph);
+                        }
+                        else if (factoryFn != nullptr)
+                        {
+                            processor = factoryFn();
+                        }
+                        else
+                        {
+                            processor = std::make_unique<GraphPedalProcessor> (name, jsonGraph);
+                        }
+                        
+                        // Extract additional fields
+                        juce::String boardId = obj->getProperty ("boardId").toString();
+                        int pageIndex = (int) obj->getProperty ("pageIndex");
+                        float boardX = (float) (double) obj->getProperty ("boardX");
+                        float boardY = (float) (double) obj->getProperty ("boardY");
+                        float boardW = (float) (double) obj->getProperty ("boardW");
+                        float boardH = (float) (double) obj->getProperty ("boardH");
+                        bool onBoard = obj->hasProperty ("onBoard") ? (bool) obj->getProperty ("onBoard") : true;
+
+                        NodeID addedId;
+                        if (onBoard)
+                        {
+                            addedId = addPedal (std::move (processor), boardId, pageIndex, boardX, boardY, boardW, boardH, nodeId);
+                        }
+                        else
+                        {
+                            addedId = addPedalOffBoard (std::move (processor), nodeId);
+                        }
+
+                        if (auto* inst = getPedalInstance (addedId))
+                        {
+                            if (obj->hasProperty ("category")) inst->category = obj->getProperty ("category").toString();
+                            if (obj->hasProperty ("colour")) inst->colour = juce::Colour ((juce::uint32) (juce::int64) obj->getProperty ("colour"));
+                            if (obj->hasProperty ("numKnobs")) inst->numKnobs = (int) obj->getProperty ("numKnobs");
+                            if (obj->hasProperty ("bypassed")) inst->bypassed = (bool) obj->getProperty ("bypassed");
+                            if (obj->hasProperty ("rotation")) inst->rotation = (int) obj->getProperty ("rotation");
+                            if (obj->hasProperty ("routeX")) inst->routeX = (float) (double) obj->getProperty ("routeX");
+                            if (obj->hasProperty ("routeY")) inst->routeY = (float) (double) obj->getProperty ("routeY");
+                            
+                            inst->design = design;
+
+                            // Sync bypass parameter in processor if it exists
+                            if (auto* node = graph.getNodeForId (addedId))
+                            {
+                                if (auto* proc = node->getProcessor())
+                                {
+                                    if (!proc->getParameters().isEmpty())
+                                    {
+                                        if (auto* bypassParam = proc->getParameters()[0]) // bypass is first parameter in rebuildParameters()
+                                            bypassParam->setValueNotifyingHost (inst->bypassed ? 1.0f : 0.0f);
+                                    }
+
+                                    if (auto* gProc = dynamic_cast<GraphPedalProcessor*> (proc))
+                                    {
+                                        if (inst->design != nullptr && inst->design->effectsGraph.isVoid())
+                                        {
+                                            inst->design->effectsGraph = juce::JSON::parse (gProc->saveGraph());
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Restore control values
+                            if (obj->hasProperty ("controlValues"))
+                            {
+                                if (auto* ctrlValObj = obj->getProperty ("controlValues").getDynamicObject())
+                                {
+                                    for (const auto& prop : ctrlValObj->getProperties())
+                                        inst->controlValues[prop.name.toString()] = (float) (double) prop.value;
+                                }
+                            }
+
+                            // Restore control texts
+                            if (obj->hasProperty ("controlTexts"))
+                            {
+                                if (auto* ctrlTextObj = obj->getProperty ("controlTexts").getDynamicObject())
+                                {
+                                    for (const auto& prop : ctrlTextObj->getProperties())
+                                        inst->controlTexts[prop.name.toString()] = prop.value.toString();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Reconstruct routing connections
+        // Clear all current active connections so we don't have duplicates or remnants
+        auto currentConnections = graph.getConnections();
+        for (auto& conn : currentConnections)
+            graph.removeConnection (conn);
+
+        if (root->hasProperty ("connections"))
+        {
+            if (auto* connArray = root->getProperty ("connections").getArray())
+            {
+                for (const auto& cv : *connArray)
+                {
+                    if (auto* co = cv.getDynamicObject())
+                    {
+                        NodeID srcNode { (juce::uint32) (int) co->getProperty ("srcNode") };
+                        int srcChan = (int) co->getProperty ("srcChan");
+                        NodeID dstNode { (juce::uint32) (int) co->getProperty ("dstNode") };
+                        int dstChan = (int) co->getProperty ("dstChan");
+
+                        // Verify that both nodes actually exist in the graph before connecting
+                        if (graph.getNodeForId (srcNode) != nullptr && graph.getNodeForId (dstNode) != nullptr)
+                        {
+                            graph.addConnection ({ { srcNode, srcChan }, { dstNode, dstChan } });
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // If no connections saved (e.g. legacy), restore default passthrough
+            connectPassthrough();
+        }
+    }
+
+    isRestoringState = wasRestoring;
+
+    if (!isRestoringState)
+    {
+        clearUndoHistory();
+        saveUndoState();
     }
 }
+
+//==============================================================================
+void AudioGraphEngine::autoRebuildIOConnections (int numInputs, int numOutputs)
+{
+    // Find the first and last pedals on the board
+    juce::String targetBoardId = boards.empty() ? "main" : boards.front().id;
+    PedalInstance* firstPedal = nullptr;
+    PedalInstance* lastPedal = nullptr;
+    float minX = 999999.0f;
+    float maxX = -999999.0f;
+
+    for (auto& inst : instances)
+    {
+        if (inst.onBoard && inst.boardId == targetBoardId)
+        {
+            if (inst.boardX < minX)
+            {
+                minX = inst.boardX;
+                firstPedal = &inst;
+            }
+            if (inst.boardX > maxX)
+            {
+                maxX = inst.boardX;
+                lastPedal = &inst;
+            }
+        }
+    }
+
+    // Disconnect old audio connections on audioInputNodeID and audioOutputNodeID
+    for (auto c : graph.getConnections())
+    {
+        if (c.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
+        {
+            if (c.source.nodeID == audioInputNodeID || c.destination.nodeID == audioOutputNodeID)
+            {
+                graph.removeConnection (c);
+            }
+        }
+    }
+
+    if (firstPedal != nullptr && lastPedal != nullptr)
+    {
+        // Rebuild from audioInputNodeID to firstPedal
+        if (numInputs == 1)
+        {
+            // Mono input: route hardware input 0 to both L and R of firstPedal
+            graph.addConnection ({ { audioInputNodeID, 0 }, { firstPedal->nodeID, 0 } });
+            graph.addConnection ({ { audioInputNodeID, 0 }, { firstPedal->nodeID, 1 } });
+        }
+        else if (numInputs >= 2)
+        {
+            // Stereo input: route hardware input 0->L (0) and 1->R (1) of firstPedal
+            graph.addConnection ({ { audioInputNodeID, 0 }, { firstPedal->nodeID, 0 } });
+            graph.addConnection ({ { audioInputNodeID, 1 }, { firstPedal->nodeID, 1 } });
+        }
+
+        // Rebuild from lastPedal to audioOutputNodeID
+        if (numOutputs == 1)
+        {
+            // Mono output: route L (0) of lastPedal to hardware output 0
+            graph.addConnection ({ { lastPedal->nodeID, 0 }, { audioOutputNodeID, 0 } });
+        }
+        else if (numOutputs >= 2)
+        {
+            // Stereo output: route L (0)->0 and R (1)->1 of lastPedal
+            graph.addConnection ({ { lastPedal->nodeID, 0 }, { audioOutputNodeID, 0 } });
+            graph.addConnection ({ { lastPedal->nodeID, 1 }, { audioOutputNodeID, 1 } });
+        }
+    }
+    else
+    {
+        // No pedals on the board: do a direct passthrough
+        if (numInputs == 1)
+        {
+            if (numOutputs == 1)
+            {
+                graph.addConnection ({ { audioInputNodeID, 0 }, { audioOutputNodeID, 0 } });
+            }
+            else if (numOutputs >= 2)
+            {
+                graph.addConnection ({ { audioInputNodeID, 0 }, { audioOutputNodeID, 0 } });
+                graph.addConnection ({ { audioInputNodeID, 0 }, { audioOutputNodeID, 1 } });
+            }
+        }
+        else if (numInputs >= 2)
+        {
+            if (numOutputs == 1)
+            {
+                graph.addConnection ({ { audioInputNodeID, 0 }, { audioOutputNodeID, 0 } });
+            }
+            else if (numOutputs >= 2)
+            {
+                graph.addConnection ({ { audioInputNodeID, 0 }, { audioOutputNodeID, 0 } });
+                graph.addConnection ({ { audioInputNodeID, 1 }, { audioOutputNodeID, 1 } });
+            }
+        }
+    }
+}
+
+//==============================================================================
+void AudioGraphEngine::saveUndoState()
+{
+    if (isRestoringState) return;
+
+    juce::String state = serialise();
+    
+    // If the state is identical to the current top of the stack, don't push it
+    if (!undoStack.empty() && undoStack.back() == state)
+        return;
+
+    undoStack.push_back (state);
+    redoStack.clear(); // Clear redo stack on any new action
+
+    if (undoStack.size() > maxUndoDepth)
+        undoStack.erase (undoStack.begin());
+}
+
+bool AudioGraphEngine::undo()
+{
+    if (undoStack.size() <= 1) // We need at least the initial state + 1 state to undo
+        return false;
+
+    // Pop the current state and push it to the redo stack
+    juce::String currentState = undoStack.back();
+    undoStack.pop_back();
+    redoStack.push_back (currentState);
+
+    // Get the previous state
+    juce::String targetState = undoStack.back();
+
+    isRestoringState = true;
+    deserialise (targetState);
+    isRestoringState = false;
+
+    return true;
+}
+
+bool AudioGraphEngine::redo()
+{
+    if (redoStack.empty())
+        return false;
+
+    juce::String targetState = redoStack.back();
+    redoStack.pop_back();
+    undoStack.push_back (targetState);
+
+    isRestoringState = true;
+    deserialise (targetState);
+    isRestoringState = false;
+
+    return true;
+}
+
+void AudioGraphEngine::clearUndoHistory()
+{
+    undoStack.clear();
+    redoStack.clear();
+}
+

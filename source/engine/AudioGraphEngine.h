@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <list>
+#include <vector>
 #include "PedalInstance.h"
 #include "BoardConfig.h"
 #include "AppMidiConfig.h"
@@ -19,6 +20,15 @@ public:
 
     AudioGraphEngine();
     ~AudioGraphEngine();
+
+    //==========================================================================
+    /** Undo/Redo support */
+    void saveUndoState();
+    bool undo();
+    bool redo();
+    bool canUndo() const { return !undoStack.empty(); }
+    bool canRedo() const { return !redoStack.empty(); }
+    void clearUndoHistory();
 
     //==========================================================================
     /** Board management */
@@ -43,11 +53,13 @@ public:
     /** Add a pedal processor to the graph at a board position. Returns the new node's ID. */
     NodeID addPedal (std::unique_ptr<juce::AudioProcessor> processor,
                      const juce::String& boardId, int pageIndex,
-                     float boardX, float boardY, float boardW, float boardH);
+                     float boardX, float boardY, float boardW, float boardH,
+                     NodeID customNodeId = {});
 
     /** Add a pedal processor to the graph WITHOUT placing it on the board.
         The pedal exists in the engine for routing but onBoard is false. */
-    NodeID addPedalOffBoard (std::unique_ptr<juce::AudioProcessor> processor);
+    NodeID addPedalOffBoard (std::unique_ptr<juce::AudioProcessor> processor,
+                             NodeID customNodeId = {});
 
     /** Safely splices a newly added pedal into the signal chain based on its physical left-neighbor. */
     void autoRoutePedal (NodeID newNodeId);
@@ -88,6 +100,8 @@ public:
     /** Get the audio I/O node IDs. */
     NodeID getAudioInputNodeID()  const { return audioInputNodeID; }
     NodeID getAudioOutputNodeID() const { return audioOutputNodeID; }
+    NodeID getMidiInputNodeID()   const { return midiInputNodeID; }
+    NodeID getMidiOutputNodeID()  const { return midiOutputNodeID; }
 
     //==========================================================================
     /** Serialise the graph state to a JSON string. */
@@ -99,6 +113,8 @@ public:
     // Routing-tab positions for the fixed I/O nodes (public for RoutingGraphEditor)
     float audioInRouteX  = 80.0f,  audioInRouteY  = 200.0f;
     float audioOutRouteX = 800.0f, audioOutRouteY = 200.0f;
+    float midiInRouteX   = 80.0f,  midiInRouteY   = 320.0f;
+    float midiOutRouteX  = 800.0f, midiOutRouteY  = 320.0f;
     
     AppMidiConfig appMidiConfig;
 
@@ -227,6 +243,12 @@ private:
 
     uint32_t nextNodeIndex = 1000; // Start IDs above the I/O nodes
 
+    // Undo/Redo stack
+    std::vector<juce::String> undoStack;
+    std::vector<juce::String> redoStack;
+    static constexpr size_t maxUndoDepth = 50;
+    bool isRestoringState = false;
+
     double currentSampleRate = 44100.0;
     int    currentBlockSize  = 512;
     int    currentNumChannels = 2;
@@ -234,6 +256,7 @@ private:
 
     void setupIONodes();
     void connectPassthrough();
+    void autoRebuildIOConnections (int numInputs, int numOutputs);
 
     juce::CriticalSection midiMonitorLock;
     juce::Array<MidiMonitorEvent> midiMonitorQueue;

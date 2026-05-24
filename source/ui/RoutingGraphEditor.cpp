@@ -17,10 +17,15 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
 
     notesOverlay.setNotes (engine.routeNotes);
     addChildComponent (notesOverlay);
+    btnNotes.setClickingTogglesState (true);
+    btnNotes.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFFF59E0B)); // amber
+    btnNotes.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
-        bool show = !notesOverlay.isNotesVisible();
+        NotesOverlay::globallyVisible = btnNotes.getToggleState();
+        bool show = NotesOverlay::globallyVisible;
         notesOverlay.setVisible (show);
         if (show && engine.routeNotes.empty())
             notesOverlay.addNote (120, 80);
@@ -101,6 +106,27 @@ void RoutingGraphEditor::syncFromEngine()
             audioOut.inputs.push_back ({ label, PortType::AudioStereo, false, i });
         }
         nodes.push_back (std::move (audioOut));
+    }
+
+    {
+        RoutingNode midiIn;
+        midiIn.engineNodeId = engine.getMidiInputNodeID();
+        midiIn.name = "MIDI In";
+        midiIn.x = engine.midiInRouteX;
+        midiIn.y = engine.midiInRouteY;
+        midiIn.isIONode = true;
+        midiIn.outputs.push_back ({ "MIDI Out", PortType::MIDI, true, juce::AudioProcessorGraph::midiChannelIndex });
+        nodes.push_back (std::move (midiIn));
+    }
+    {
+        RoutingNode midiOut;
+        midiOut.engineNodeId = engine.getMidiOutputNodeID();
+        midiOut.name = "MIDI Out";
+        midiOut.x = engine.midiOutRouteX;
+        midiOut.y = engine.midiOutRouteY;
+        midiOut.isIONode = true;
+        midiOut.inputs.push_back ({ "MIDI In", PortType::MIDI, false, juce::AudioProcessorGraph::midiChannelIndex });
+        nodes.push_back (std::move (midiOut));
     }
 
     // -- Pedal nodes ---------------------------------------------------------
@@ -389,6 +415,15 @@ void RoutingGraphEditor::timerCallback()
         canvas.repaint();
 }
 
+void RoutingGraphEditor::visibilityChanged()
+{
+    if (isVisible())
+    {
+        btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+        notesOverlay.setVisible (!engine.routeNotes.empty());
+    }
+}
+
 //==============================================================================
 // Helpers
 //==============================================================================
@@ -504,18 +539,18 @@ int RoutingGraphEditor::RoutingCanvas::hitTestConnection (juce::Point<float> cp)
     for (int i = 0; i < (int) editor.connections.size(); ++i)
     {
         const auto& conn = editor.connections[(size_t) i];
-        auto start = editor.getPortPosition (conn.sourceNodeIdx, true, conn.sourcePortIdx);
-        auto end   = editor.getPortPosition (conn.destNodeIdx, false, conn.destPortIdx);
+        auto s = editor.getPortPosition (conn.sourceNodeIdx, true, conn.sourcePortIdx);
+        auto d = editor.getPortPosition (conn.destNodeIdx, false, conn.destPortIdx);
+        float dist = std::abs (d.x - s.x) * 0.5f;
 
-        juce::Path path;
-        path.startNewSubPath (start);
-        float bezierCP = std::abs (end.x - start.x) * 0.5f;
-        path.cubicTo (start.x + bezierCP, start.y,
-                      end.x - bezierCP, end.y,
-                      end.x, end.y);
-
-        if (path.intersectsLine (juce::Line<float> (cp.x - 5, cp.y - 5, cp.x + 5, cp.y + 5), 4.0f))
-            return i;
+        // High-resolution check: 100 sample points along the Bezier curve
+        for (float t = 0.0f; t <= 1.0f; t += 0.01f)
+        {
+            float u = 1.0f - t;
+            float bx = u*u*u*s.x + 3*u*u*t*(s.x+dist) + 3*u*t*t*(d.x-dist) + t*t*t*d.x;
+            float by = u*u*u*s.y + 3*u*u*t*s.y + 3*u*t*t*d.y + t*t*t*d.y;
+            if (cp.getDistanceFrom ({bx, by}) < 10.0f) return i;
+        }
     }
     return -1;
 }
@@ -538,8 +573,8 @@ void RoutingGraphEditor::RoutingCanvas::paint (juce::Graphics& g)
                         .scaled (scale, scale, panX, panY));
 
     // Draw connections
-    for (const auto& conn : editor.connections)
-        drawConnection (g, conn);
+    for (int i = 0; i < (int) editor.connections.size(); ++i)
+        drawConnection (g, editor.connections[(size_t) i], hoveredConnectionIndex == i);
 
     // Draw wire preview
     if (draggingWire)
@@ -637,7 +672,7 @@ void RoutingGraphEditor::RoutingCanvas::drawNode (juce::Graphics& g, int idx, co
     }
 }
 
-void RoutingGraphEditor::RoutingCanvas::drawConnection (juce::Graphics& g, const RoutingConnection& conn) const
+void RoutingGraphEditor::RoutingCanvas::drawConnection (juce::Graphics& g, const RoutingConnection& conn, bool highlighted) const
 {
     auto start = editor.getPortPosition (conn.sourceNodeIdx, true, conn.sourcePortIdx);
     auto end   = editor.getPortPosition (conn.destNodeIdx, false, conn.destPortIdx);
@@ -658,9 +693,19 @@ void RoutingGraphEditor::RoutingCanvas::drawConnection (juce::Graphics& g, const
                   end.x - cp, end.y,
                   end.x, end.y);
 
-    juce::Colour baseColour = editor.getPortColour (type);
+    juce::Colour baseColour = highlighted ? juce::Colour (0xFFFF6B6B) : editor.getPortColour (type);
     
-    if (conn.glowLevel > 0.01f)
+    if (highlighted)
+    {
+        // Draw glow halo
+        g.setColour (baseColour.withAlpha (0.4f));
+        g.strokePath (path, juce::PathStrokeType (5.5f));
+        
+        // Draw coral red highlighted wire
+        g.setColour (baseColour.withAlpha (0.9f));
+        g.strokePath (path, juce::PathStrokeType (3.5f));
+    }
+    else if (conn.glowLevel > 0.01f)
     {
         // Draw glow halo
         g.setColour (baseColour.withAlpha (conn.glowLevel * 0.5f));
@@ -701,11 +746,53 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
 {
     auto cp = screenToCanvas ((float) e.x, (float) e.y);
 
-    if (e.mods.isRightButtonDown())
+    // 1. Port click first! If they clicked a port, they want to drag/connect a wire
+    auto port = hitTestPort (cp);
+    if (port.nodeIdx >= 0 && port.isOutput)
     {
-        // Right-click on a connection → delete it
-        int connIdx = hitTestConnection (cp);
-        if (connIdx >= 0)
+        draggingWire = true;
+        wireStart = port;
+        wireEndX = (float) e.x;
+        wireEndY = (float) e.y;
+        return;
+    }
+
+    // 2. Connection click second! Only check for connection deletion if they didn't click a port
+    int connIdx = hitTestConnection (cp);
+    if (connIdx >= 0)
+    {
+        if (e.mods.isPopupMenu())
+        {
+            juce::PopupMenu menu;
+            menu.addItem (1, "Disconnect / Delete Wire");
+            int choice = menu.show();
+            if (choice == 1)
+            {
+                auto& conn = editor.connections[(size_t) connIdx];
+                auto& srcNode = editor.nodes[(size_t) conn.sourceNodeIdx];
+                auto& dstNode = editor.nodes[(size_t) conn.destNodeIdx];
+                auto& srcPort = srcNode.outputs[(size_t) conn.sourcePortIdx];
+                auto& dstPort = dstNode.inputs[(size_t) conn.destPortIdx];
+
+                if (srcPort.type == PortType::AudioStereo || srcPort.type == PortType::MIDI)
+                {
+                    editor.engine.disconnect (srcNode.engineNodeId, srcPort.engineChannel,
+                                              dstNode.engineNodeId, dstPort.engineChannel);
+                }
+                else
+                {
+                    editor.engine.removeBoardConnection (srcNode.engineNodeId, srcPort.routingPortId,
+                                                         dstNode.engineNodeId, dstPort.routingPortId);
+                }
+                
+                editor.connections.erase (editor.connections.begin() + connIdx);
+                hoveredConnectionIndex = -1;
+                setMouseCursor (juce::MouseCursor::NormalCursor);
+                repaint();
+                editor.engine.saveUndoState();
+            }
+        }
+        else
         {
             auto& conn = editor.connections[(size_t) connIdx];
             auto& srcNode = editor.nodes[(size_t) conn.sourceNodeIdx];
@@ -725,10 +812,16 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
             }
             
             editor.connections.erase (editor.connections.begin() + connIdx);
+            hoveredConnectionIndex = -1;
+            setMouseCursor (juce::MouseCursor::NormalCursor);
             repaint();
-            return;
+            editor.engine.saveUndoState();
         }
+        return;
+    }
 
+    if (e.mods.isRightButtonDown())
+    {
         // Right-click on a pedal node → context menu
         int nodeIdx = hitTestNode (cp);
         if (nodeIdx >= 0 && ! editor.nodes[(size_t) nodeIdx].isIONode)
@@ -743,20 +836,10 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
                                     {
                                         editor.engine.removePedal (nodeId);
                                         editor.syncFromEngine();
+                                        editor.engine.saveUndoState();
                                     }
                                 });
         }
-        return;
-    }
-
-    // Port hit?
-    auto port = hitTestPort (cp);
-    if (port.nodeIdx >= 0 && port.isOutput)
-    {
-        draggingWire = true;
-        wireStart = port;
-        wireEndX = (float) e.x;
-        wireEndY = (float) e.y;
         return;
     }
 
@@ -779,6 +862,12 @@ void RoutingGraphEditor::RoutingCanvas::mouseDown (const juce::MouseEvent& e)
 
 void RoutingGraphEditor::RoutingCanvas::mouseDrag (const juce::MouseEvent& e)
 {
+    if (hoveredConnectionIndex != -1)
+    {
+        hoveredConnectionIndex = -1;
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+    }
+
     if (draggingWire)
     {
         wireEndX = (float) e.x;
@@ -837,6 +926,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
                             wireStart.nodeIdx, wireStart.portIdx,
                             port.nodeIdx, port.portIdx
                         });
+                        editor.engine.saveUndoState();
                     }
                 }
                 else
@@ -853,6 +943,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
                         wireStart.nodeIdx, wireStart.portIdx,
                         port.nodeIdx, port.portIdx
                     });
+                    editor.engine.saveUndoState();
                 }
             }
         }
@@ -905,6 +996,7 @@ void RoutingGraphEditor::RoutingCanvas::mouseUp (const juce::MouseEvent& e)
             inst->routeX = n.x;
             inst->routeY = n.y;
         }
+        editor.engine.saveUndoState();
     }
 
     draggingNodeIdx = -1;
@@ -925,6 +1017,38 @@ void RoutingGraphEditor::RoutingCanvas::mouseWheelMove (const juce::MouseEvent& 
     scale = newScale;
 
     repaint();
+}
+
+void RoutingGraphEditor::RoutingCanvas::mouseMove (const juce::MouseEvent& e)
+{
+    auto cp = screenToCanvas ((float) e.x, (float) e.y);
+    int newHoveredIdx = hitTestConnection (cp);
+
+    // Disable connection hover highlight if mouse is currently over a node or port
+    if (hitTestPort (cp).nodeIdx >= 0 || hitTestNode (cp) >= 0)
+        newHoveredIdx = -1;
+
+    if (newHoveredIdx != hoveredConnectionIndex)
+    {
+        hoveredConnectionIndex = newHoveredIdx;
+
+        if (hoveredConnectionIndex >= 0)
+            setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        else
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+
+        repaint();
+    }
+}
+
+void RoutingGraphEditor::RoutingCanvas::mouseExit (const juce::MouseEvent&)
+{
+    if (hoveredConnectionIndex != -1)
+    {
+        hoveredConnectionIndex = -1;
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        repaint();
+    }
 }
 
 //==============================================================================

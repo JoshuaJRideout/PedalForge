@@ -6,6 +6,7 @@
 #include "HardwareDrawing.h"
 #include "PedalPainter.h"
 #include "../dsp/PluginHostNode.h"
+#include "DynamicDisplayComponent.h"
 
 class CanvasOverlay : public juce::Component, public juce::Timer
 {
@@ -28,6 +29,11 @@ public:
             removeChildComponent(activePluginEditor.get());
             activePluginEditor.reset();
         }
+
+        // Clean up old dynamic displays
+        for (auto& disp : dynamicDisplays)
+            removeChildComponent (disp.get());
+        dynamicDisplays.clear();
 
         targetInstance = inst;
         engine = eng;
@@ -54,6 +60,17 @@ public:
             if (targetInstance->controlTexts.find(ctrl.controlID) == targetInstance->controlTexts.end())
                 targetInstance->controlTexts[ctrl.controlID] = ctrl.label;
 
+            // Handle dynamic displays
+            if (ctrl.type == "dynamic_display" || ctrl.type == "custom_display")
+            {
+                auto disp = std::make_unique<DynamicDisplayComponent> (this, targetInstance, engine, ctrl.controlID);
+                disp->onParamChanged = [this]() {
+                    if (engine) engine->saveUndoState();
+                };
+                addAndMakeVisible (disp.get());
+                dynamicDisplays.push_back (std::move (disp));
+            }
+
             // Handle plugin_editor components
             if (ctrl.type == "plugin_editor")
             {
@@ -78,7 +95,13 @@ public:
                         if (mappedNodeIDStr.isNotEmpty())
                         {
                             int mappedNodeID = mappedNodeIDStr.getIntValue();
-                            if (auto* targetDSPNode = graphProc->getDSPGraph().getNode(mappedNodeID))
+                            auto getDSPNode = [&](int id) -> DSPNode* {
+                                if (auto* n = graphProc->getDSPGraph().getNode(id)) return n;
+                                if (auto* n = graphProc->getDSPGraph().getNode(id - 1)) return n;
+                                if (auto* n = graphProc->getDSPGraph().getNode(id + 1)) return n;
+                                return nullptr;
+                            };
+                            if (auto* targetDSPNode = getDSPNode(mappedNodeID))
                             {
                                 if (auto* hostNode = dynamic_cast<PluginHostNode*>(targetDSPNode))
                                 {
@@ -115,6 +138,10 @@ public:
             removeChildComponent(activePluginEditor.get());
             activePluginEditor.reset();
         }
+        for (auto& disp : dynamicDisplays)
+            removeChildComponent (disp.get());
+        dynamicDisplays.clear();
+
         setVisible(false);
         stopTimer();
         targetInstance = nullptr;
@@ -150,7 +177,13 @@ public:
                 int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
                 if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
                 {
-                    if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
+                    auto getDSPNode = [&](int id) -> DSPNode* {
+                        if (auto* n = graphProc->getDSPGraph().getNode(id)) return n;
+                        if (auto* n = graphProc->getDSPGraph().getNode(id - 1)) return n;
+                        if (auto* n = graphProc->getDSPGraph().getNode(id + 1)) return n;
+                        return nullptr;
+                    };
+                    if (auto* targetNode = getDSPNode(targetNodeID))
                     {
                         juce::String path = targetNode->getFilePath();
                         juce::String text = "Empty";
@@ -194,9 +227,9 @@ public:
                 {
                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                     {
-                        if (ranged->getParameterID() == mapping.nodeParam)
+                        if (matchMappingParam (mapping.nodeParam, ranged->getParameterID()))
                         {
-                            float val = ranged->convertFrom0to1(ranged->getValue());
+                            float val = ranged->getValue();
                             juce::String text = ranged->getText(ranged->getValue(), 32);
 
                             juce::String baseControlID = mapping.controlID;
@@ -392,7 +425,7 @@ public:
                             {
                                 if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                                 {
-                                    if (ranged->getParameterID() == mappedParamID)
+                                    if (matchMappingParam (mappedParamID, ranged->getParameterID()))
                                     {
                                         ranged->setValueNotifyingHost(newVal);
                                         break;
@@ -453,7 +486,7 @@ public:
                     {
                         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                         {
-                            if (ranged->getParameterID() == mappedParamID)
+                            if (matchMappingParam (mappedParamID, ranged->getParameterID()))
                             {
                                 ranged->setValueNotifyingHost(newVal);
                                 break;
@@ -528,6 +561,24 @@ public:
                 }
             }
         }
+
+        for (auto& disp : dynamicDisplays)
+        {
+            juce::String cid = disp->getControlID();
+            for (const auto& ctrl : targetPage->controls)
+            {
+                if (ctrl.controlID == cid)
+                {
+                    disp->setBounds (
+                        (int)(offX + ctrl.x * sc),
+                        (int)(offY + ctrl.y * sc),
+                        (int)(ctrl.width * sc),
+                        (int)(ctrl.height * sc)
+                    );
+                    break;
+                }
+            }
+        }
     }
 
 private:
@@ -541,4 +592,5 @@ private:
     float draggedKnobStartValue = 0.0f;
     
     std::unique_ptr<juce::AudioProcessorEditor> activePluginEditor;
+    std::vector<std::unique_ptr<DynamicDisplayComponent>> dynamicDisplays;
 };

@@ -212,10 +212,15 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
 
     notesOverlay.setNotes (playEngine.playNotes);
     addChildComponent (notesOverlay);
+    btnNotes.setClickingTogglesState (true);
+    btnNotes.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFFF59E0B)); // amber
+    btnNotes.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
-        bool show = !notesOverlay.isNotesVisible();
+        NotesOverlay::globallyVisible = btnNotes.getToggleState();
+        bool show = NotesOverlay::globallyVisible;
         notesOverlay.setVisible (show);
         if (show && playEngine.playNotes.empty())
             notesOverlay.addNote (120, 80);
@@ -335,7 +340,13 @@ void PlayTabComponent::timerCallback()
                                     int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
                                     if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
                                     {
-                                        if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
+                                    auto getDSPNode = [&](int id) -> DSPNode* {
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id)) return n;
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id - 1)) return n;
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id + 1)) return n;
+                                        return nullptr;
+                                    };
+                                    if (auto* targetNode = getDSPNode(targetNodeID))
                                         {
                                             juce::String path = targetNode->getFilePath();
                                             juce::String text = "Empty";
@@ -379,7 +390,13 @@ void PlayTabComponent::timerCallback()
                                     int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
                                     if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
                                     {
-                                        if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
+                                        auto getDSPNode = [&](int id) -> DSPNode* {
+                                            if (auto* n = graphProc->getDSPGraph().getNode(id)) return n;
+                                            if (auto* n = graphProc->getDSPGraph().getNode(id - 1)) return n;
+                                            if (auto* n = graphProc->getDSPGraph().getNode(id + 1)) return n;
+                                            return nullptr;
+                                        };
+                                        if (auto* targetNode = getDSPNode(targetNodeID))
                                         {
                                             if (targetNode->isDisplayNode())
                                             {
@@ -410,9 +427,9 @@ void PlayTabComponent::timerCallback()
                                         {
                                             if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
                                             {
-                                                if (ranged->getParameterID() == mapping.nodeParam)
+                                                if (matchMappingParam (mapping.nodeParam, ranged->getParameterID()))
                                                 {
-                                                    float val = ranged->convertFrom0to1 (ranged->getValue());
+                                                    float val = ranged->getValue();
                                                     juce::String text = ranged->getText (ranged->getValue(), 32);
 
                                                     juce::String baseControlID = mapping.controlID;
@@ -547,30 +564,42 @@ void PlayTabComponent::rebuildRouting()
 {
     auto& graph = playEngine.getGraph();
     
-    // Remove all current audio connections
+    // Remove all current audio and MIDI connections to ensure a clean slate
     for (auto c : graph.getConnections())
     {
-        if (c.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
-            graph.removeConnection (c);
+        graph.removeConnection (c);
     }
     
     auto inNode = playEngine.getAudioInputNodeID();
     auto outNode = playEngine.getAudioOutputNodeID();
+    auto inMidiNode = playEngine.getMidiInputNodeID();
+    auto outMidiNode = playEngine.getMidiOutputNodeID();
     
     AudioGraphEngine::NodeID lastNode = inNode;
+    AudioGraphEngine::NodeID lastMidiNode = inMidiNode;
     
     for (auto& s : slots)
     {
         if (s->pedalId.uid != 0)
         {
+            // Audio Routing
             graph.addConnection ({ { lastNode, 0 }, { s->pedalId, 0 } });
             graph.addConnection ({ { lastNode, 1 }, { s->pedalId, 1 } });
             lastNode = s->pedalId;
+            
+            // MIDI Routing
+            graph.addConnection ({ { lastMidiNode, juce::AudioProcessorGraph::midiChannelIndex }, 
+                                   { s->pedalId,   juce::AudioProcessorGraph::midiChannelIndex } });
+            lastMidiNode = s->pedalId;
         }
     }
     
+    // Connect last pedal to output
     graph.addConnection ({ { lastNode, 0 }, { outNode, 0 } });
     graph.addConnection ({ { lastNode, 1 }, { outNode, 1 } });
+    
+    graph.addConnection ({ { lastMidiNode, juce::AudioProcessorGraph::midiChannelIndex }, 
+                           { outMidiNode,   juce::AudioProcessorGraph::midiChannelIndex } });
     
     // Passthrough extra channels (like FX Send/Return on 3-4)
     int totalChans = graph.getNodeForId(inNode)->getProcessor()->getTotalNumOutputChannels();
@@ -778,4 +807,13 @@ void PlayTabComponent::loadPreset (const juce::String& presetName)
     }
     
     rebuildSlots();
+}
+
+void PlayTabComponent::visibilityChanged()
+{
+    if (isVisible())
+    {
+        btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+        notesOverlay.setVisible (!playEngine.playNotes.empty());
+    }
 }

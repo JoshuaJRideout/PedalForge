@@ -159,7 +159,7 @@ void PedalDetailPanel::resized()
             juce::String mappedControlID;
             for (const auto& mapping : selectedInstance->design->mappings)
             {
-                if (mapping.nodeParam == entry.paramId)
+                if (matchMappingParam (mapping.nodeParam, entry.paramId))
                 {
                     mappedControlID = mapping.controlID;
                     break;
@@ -286,7 +286,7 @@ void PedalDetailPanel::rebuildKnobs()
             {
                 for (const auto& mapping : selectedInstance->design->mappings)
                 {
-                    if (mapping.nodeParam == rangedParam->getParameterID())
+                    if (matchMappingParam (mapping.nodeParam, rangedParam->getParameterID()))
                     {
                         for (const auto& ctrl : selectedInstance->design->controls)
                         {
@@ -444,7 +444,7 @@ void PedalDetailPanel::sliderValueChanged (juce::Slider* slider)
     {
         for (const auto& mapping : selectedInstance->design->mappings)
         {
-            if (mapping.nodeParam == slider->getName())
+            if (matchMappingParam (mapping.nodeParam, slider->getName()))
             {
                 controlID = mapping.controlID;
                 break;

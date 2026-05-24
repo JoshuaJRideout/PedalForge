@@ -30,6 +30,7 @@ public:
     void syncFromEngine();
 
     void timerCallback() override;
+    void visibilityChanged() override;
 
     /** Callback fired when a pedal is selected/deselected. */
     std::function<void(PedalInstance*)> onPedalSelected;
@@ -97,6 +98,8 @@ private:
         void mouseDrag (const juce::MouseEvent& e) override;
         void mouseUp (const juce::MouseEvent& e) override;
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override;
+        void mouseMove (const juce::MouseEvent& e) override;
+        void mouseExit (const juce::MouseEvent& e) override;
 
         // DragAndDropTarget
         bool isInterestedInDragSource (const SourceDetails& details) override;
@@ -115,6 +118,7 @@ private:
         bool isPanning = false;
         PortHit wireStart;
         float wireEndX = 0, wireEndY = 0;
+        int hoveredConnectionIndex = -1;
 
         juce::Point<float> screenToCanvas (float sx, float sy) const;
         PortHit hitTestPort (juce::Point<float> cp) const;
@@ -122,7 +126,7 @@ private:
         int hitTestConnection (juce::Point<float> cp) const;
 
         void drawNode (juce::Graphics& g, int idx, const RoutingNode& node) const;
-        void drawConnection (juce::Graphics& g, const RoutingConnection& conn) const;
+        void drawConnection (juce::Graphics& g, const RoutingConnection& conn, bool highlighted) const;
         void drawWirePreview (juce::Graphics& g) const;
     };
 

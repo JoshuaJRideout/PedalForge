@@ -49,6 +49,7 @@ public:
     void timerCallback() override;
 
     void mouseDown (const juce::MouseEvent& e) override;
+    void visibilityChanged() override;
 
     //==========================================================================
     void addPedalAtGrid (const juce::String& pedalName, float boardX, float boardY);

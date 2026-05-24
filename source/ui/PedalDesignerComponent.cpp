@@ -1795,19 +1795,25 @@ private:
                     juce::String fullID = juce::String (nodeID) + "_" + param.id;
                     juce::String display = node->getName() + " : " + param.name;
                     paramCombo.addItem (display + "  [" + fullID + "]", itemID);
-                    if (hw && hw->parameterID == fullID)
+                    if (hw && matchMappingParam (hw->parameterID, fullID))
+                    {
+                        hw->parameterID = fullID; // self-heal in-memory representation
                         paramCombo.setSelectedId (itemID, juce::dontSendNotification);
+                    }
                     itemID++;
                 }
                 
                 // Add virtual "File" parameter for nodes that load files
                 if (node->getType() == "nam" || node->getType() == "sampler" || node->getType() == "ir")
                 {
-                    juce::String fullID = juce::String (nodeID) + "_file";
+                    juce::String fullID = juce::String (nodeID) + "_filepath";
                     juce::String display = node->getName() + " : File Target";
                     paramCombo.addItem (display + "  [" + fullID + "]", itemID);
-                    if (hw && hw->parameterID == fullID)
+                    if (hw && matchMappingParam (hw->parameterID, fullID))
+                    {
+                        hw->parameterID = fullID; // self-heal in-memory representation
                         paramCombo.setSelectedId (itemID, juce::dontSendNotification);
+                    }
                     itemID++;
                 }
             }
@@ -2402,9 +2408,14 @@ public:
     notesOverlay.setNotes (designNotes);
     addChildComponent (notesOverlay);
     setupToolBtn (btnNotes);
+    btnNotes.setClickingTogglesState (true);
+    btnNotes.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFFF59E0B)); // amber
+    btnNotes.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
-        bool show = !notesOverlay.isNotesVisible();
+        NotesOverlay::globallyVisible = btnNotes.getToggleState();
+        bool show = NotesOverlay::globallyVisible;
         notesOverlay.setVisible (show);
         if (show && designNotes.empty())
             notesOverlay.addNote (120, 80);
@@ -2607,6 +2618,16 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
     designNotes = design.designNotes;
     notesOverlay.setNotes (designNotes);
     notesOverlay.setVisible (!designNotes.empty());
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+}
+
+void PedalDesignerComponent::visibilityChanged()
+{
+    if (isVisible())
+    {
+        btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+        notesOverlay.setVisible (!designNotes.empty());
+    }
 }
 
 void PedalDesignerComponent::clearDesign()

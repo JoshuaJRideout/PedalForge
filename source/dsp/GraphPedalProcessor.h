@@ -47,6 +47,14 @@ public:
         {
             node->setFilePath(path);
         }
+        else if (auto* node = dspGraph.getNode(nodeID - 1))
+        {
+            node->setFilePath(path);
+        }
+        else if (auto* node = dspGraph.getNode(nodeID + 1))
+        {
+            node->setFilePath(path);
+        }
     }
 
     juce::String saveGraph() const
@@ -120,67 +128,15 @@ public:
         for (auto& bridge : paramBridge)
             bridge.nodeParam->set (bridge.juceParam->get());
 
-        // Check the graph to see if it's Mono or Stereo
-        int maxInChannel = -1;
-        int maxOutChannel = -1;
-        for (const auto& [id, node] : dspGraph.getNodes())
-        {
-            if (node->getType() == "audio_input")
-            {
-                if (auto* param = node->getParam("channel"))
-                    maxInChannel = juce::jmax(maxInChannel, (int)param->get() - 1);
-            }
-            if (node->getType() == "audio_output")
-            {
-                if (auto* param = node->getParam("channel"))
-                    maxOutChannel = juce::jmax(maxOutChannel, (int)param->get() - 1);
-            }
-        }
-
-        int numChans = buffer.getNumChannels();
-
-        // If graph is Mono Input but we have Stereo (or more) data, mix to Mono L
-        if (maxInChannel == 0 && numChans > 1)
-        {
-            auto* writeL = buffer.getWritePointer(0);
-            for (int ch = 1; ch < numChans; ++ch)
-            {
-                auto* readR = buffer.getReadPointer(ch);
-                for (int i = 0; i < buffer.getNumSamples(); ++i)
-                    writeL[i] += readR[i];
-            }
-            // Normalize gain
-            float gain = 1.0f / (float)numChans;
-            for (int i = 0; i < buffer.getNumSamples(); ++i)
-                writeL[i] *= gain;
-        }
-
-        if (bypassParam != nullptr && bypassParam->get())
-        {
-            // If bypassed, do not run DSP graph, and output original input.
-            // Wait, since we mix Mono L above, the buffer has the input already.
-            // Just copy it to output channels if needed below.
-        }
-        else
+        if (bypassParam == nullptr || !bypassParam->get())
         {
             dspGraph.processBlock (buffer, buffer.getNumSamples(), &midi);
-        }
-
-        // If graph is Mono Output but we are outputting to Stereo (or more), copy L to all
-        if (maxOutChannel == 0 && numChans > 1)
-        {
-            auto* readL = buffer.getReadPointer(0);
-            for (int ch = 1; ch < numChans; ++ch)
-            {
-                auto* writeCh = buffer.getWritePointer(ch);
-                if (readL != writeCh)
-                    std::copy(readL, readL + buffer.getNumSamples(), writeCh);
-            }
         }
 
         if (meters != nullptr)
         {
             int numSamples = buffer.getNumSamples();
+            int numChans = buffer.getNumChannels();
             if (numSamples > 0)
             {
                 meters->outRMS[0].store (buffer.getRMSLevel(0, 0, numSamples));
@@ -251,13 +207,29 @@ namespace GraphPedalFactory
         auto proc = std::make_unique<GraphPedalProcessor> ("Step Sequencer");
         auto& g = proc->getDSPGraph();
         
-        // Audio just passes through transparently
-        int inID  = g.addNode (std::make_unique<AudioInputNode>());
-        int outID = g.addNode (std::make_unique<AudioOutputNode>());
-        g.connect (inID, 0, outID, 0);
+        // Audio passes through transparently in stereo
+        int inID  = g.addNode (std::make_unique<AudioInputNode>(), 1);
+        int seqID = g.addNode (std::make_unique<GridSequencerNode>(), 2);
+        int outID = g.addNode (std::make_unique<AudioOutputNode>(), 3);
         
-        // Add the Grid Sequencer node
-        g.addNode (std::make_unique<GridSequencerNode>());
+        g.connect (inID, 0, outID, 0);
+        g.connect (inID, 1, outID, 1);
+        
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createMidiEditor()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("MIDI Editor");
+        auto& g = proc->getDSPGraph();
+        
+        int inID  = g.addNode (std::make_unique<AudioInputNode>(), 1);
+        int seqID = g.addNode (std::make_unique<MidiEditorNode>(), 2);
+        int outID = g.addNode (std::make_unique<AudioOutputNode>(), 3);
+        
+        g.connect (inID, 0, outID, 0);
+        g.connect (inID, 1, outID, 1);
         
         proc->rebuildParameters();
         return proc;
@@ -268,24 +240,14 @@ namespace GraphPedalFactory
         auto proc = std::make_unique<GraphPedalProcessor> ("VST/AU Host");
         auto& g = proc->getDSPGraph();
         
-        int inL = g.addNode (std::make_unique<AudioInputNode>());
-        g.getNode(inL)->getParam("channel")->set(1.0f);
+        int inID  = g.addNode (std::make_unique<AudioInputNode>());
+        int host  = g.addNode (std::make_unique<PluginHostNode>());
+        int outID = g.addNode (std::make_unique<AudioOutputNode>());
         
-        int inR = g.addNode (std::make_unique<AudioInputNode>());
-        g.getNode(inR)->getParam("channel")->set(2.0f);
-        
-        int host = g.addNode (std::make_unique<PluginHostNode>());
-        
-        int outL = g.addNode (std::make_unique<AudioOutputNode>());
-        g.getNode(outL)->getParam("channel")->set(1.0f);
-        
-        int outR = g.addNode (std::make_unique<AudioOutputNode>());
-        g.getNode(outR)->getParam("channel")->set(2.0f);
-        
-        g.connect (inL, 0, host, 0);
-        g.connect (inR, 0, host, 1);
-        g.connect (host, 0, outL, 0);
-        g.connect (host, 1, outR, 0);
+        g.connect (inID, 0, host, 0);
+        g.connect (inID, 1, host, 1);
+        g.connect (host, 0, outID, 0);
+        g.connect (host, 1, outID, 1);
         
         proc->rebuildParameters();
         return proc;
@@ -304,6 +266,7 @@ namespace GraphPedalFactory
         g.getNode(gainID)->getParam("gain")->set (6.0f);
         g.connect (inID, 0, gainID, 0);
         g.connect (gainID, 0, outID, 0);
+        g.connect (gainID, 0, outID, 1);
         proc->rebuildParameters();
         return proc;
     }
@@ -331,6 +294,7 @@ namespace GraphPedalFactory
         g.connect (clipID, 0, toneID, 0);
         g.connect (toneID, 0, volID, 0);
         g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -360,6 +324,7 @@ namespace GraphPedalFactory
         g.connect (clipID, 0, toneID, 0);
         g.connect (toneID, 0, volID, 0);
         g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -389,6 +354,7 @@ namespace GraphPedalFactory
         g.connect (fuzzID, 0, toneID, 0);
         g.connect (toneID, 0, volID, 0);
         g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -419,6 +385,7 @@ namespace GraphPedalFactory
         g.connect (lfoID, 0, modDelID, 1);
         g.connect (modDelID, 0, mixID, 1);
         g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -446,6 +413,7 @@ namespace GraphPedalFactory
         g.connect (lfoID, 0, phsID, 1);
         g.connect (phsID, 0, mixID, 1);
         g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -474,6 +442,7 @@ namespace GraphPedalFactory
         g.connect (lfoID, 0, flgID, 1);
         g.connect (flgID, 0, mixID, 1);
         g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -506,6 +475,7 @@ namespace GraphPedalFactory
         g.connect (inID, 0, mulID, 0);
         g.connect (divID, 0, mulID, 1);
         g.connect (mulID, 0, outID, 0);
+        g.connect (mulID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -533,6 +503,7 @@ namespace GraphPedalFactory
         g.connect (splitID, 1, delayID, 0);
         g.connect (delayID, 0, mixID, 1);
         g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -552,6 +523,7 @@ namespace GraphPedalFactory
 
         g.connect (inID, 0, revID, 0);
         g.connect (revID, 0, outID, 0);
+        g.connect (revID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -571,6 +543,7 @@ namespace GraphPedalFactory
 
         g.connect (inID, 0, compID, 0);
         g.connect (compID, 0, outID, 0);
+        g.connect (compID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -589,6 +562,7 @@ namespace GraphPedalFactory
 
         g.connect (inID, 0, gateID, 0);
         g.connect (gateID, 0, outID, 0);
+        g.connect (gateID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -619,6 +593,7 @@ namespace GraphPedalFactory
         g.connect (eq1ID, 0, eq2ID, 0);
         g.connect (eq2ID, 0, eq3ID, 0);
         g.connect (eq3ID, 0, outID, 0);
+        g.connect (eq3ID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -635,6 +610,7 @@ namespace GraphPedalFactory
         
         g.connect (inID, 0, toneID, 0);
         g.connect (toneID, 0, outID, 0);
+        g.connect (toneID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -656,6 +632,7 @@ namespace GraphPedalFactory
 
         g.connect (inID, 0, cabID, 0);
         g.connect (cabID, 0, outID, 0);
+        g.connect (cabID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -671,6 +648,7 @@ namespace GraphPedalFactory
 
         g.connect (inID, 0, namID, 0);
         g.connect (namID, 0, outID, 0);
+        g.connect (namID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -685,8 +663,9 @@ namespace GraphPedalFactory
         int outID  = g.addNode (std::make_unique<AudioOutputNode>());
 
         g.connect (inID, 0, irID, 0);
-        g.connect (inID, 0, irID, 1);
+        g.connect (inID, 1, irID, 1);
         g.connect (irID, 0, outID, 0);
+        g.connect (irID, 1, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -703,8 +682,9 @@ namespace GraphPedalFactory
         g.getNode(irID)->getParam("mix")->set(0.5f);
 
         g.connect (inID, 0, irID, 0);
-        g.connect (inID, 0, irID, 1);
+        g.connect (inID, 1, irID, 1);
         g.connect (irID, 0, outID, 0);
+        g.connect (irID, 1, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -718,12 +698,19 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Hello Gain");
         auto& g = proc->getDSPGraph();
-        int inID   = g.addNode (std::make_unique<AudioInputNode>());   // 0
-        int outID  = g.addNode (std::make_unique<AudioOutputNode>());  // 1
-        int gainID = g.addNode (std::make_unique<GainNode>());         // 2
+        int inID   = g.addNode (std::make_unique<AudioInputNode>(), 1);   // 1
+        int gainID = g.addNode (std::make_unique<GainNode>(), 2);         // 2
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>(), 3);  // 3
         g.getNode(gainID)->getParam("gain")->set (0.0f);
+
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;   g.getNode(inID)->visualY = 200.0f;
+        g.getNode(gainID)->visualX = 300.0f; g.getNode(gainID)->visualY = 200.0f;
+        g.getNode(outID)->visualX = 520.0f;  g.getNode(outID)->visualY = 200.0f;
+
         g.connect (inID, 0, gainID, 0);
         g.connect (gainID, 0, outID, 0);
+        g.connect (gainID, 0, outID, 1);
         proc->rebuildParameters();
         return proc;
     }
@@ -734,13 +721,20 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Filter Sweep");
         auto& g = proc->getDSPGraph();
-        int inID  = g.addNode (std::make_unique<AudioInputNode>());    // 0
-        int outID = g.addNode (std::make_unique<AudioOutputNode>());   // 1
-        int lpID  = g.addNode (std::make_unique<LowPassNode>());       // 2
+        int inID  = g.addNode (std::make_unique<AudioInputNode>(), 1);    // 1
+        int lpID  = g.addNode (std::make_unique<LowPassNode>(), 2);       // 2
+        int outID = g.addNode (std::make_unique<AudioOutputNode>(), 3);   // 3
         g.getNode(lpID)->getParam("freq")->set (1000.0f);
         g.getNode(lpID)->getParam("q")->set (0.5f);
+
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;  g.getNode(inID)->visualY = 200.0f;
+        g.getNode(lpID)->visualX = 300.0f; g.getNode(lpID)->visualY = 200.0f;
+        g.getNode(outID)->visualX = 520.0f; g.getNode(outID)->visualY = 200.0f;
+
         g.connect (inID, 0, lpID, 0);
         g.connect (lpID, 0, outID, 0);
+        g.connect (lpID, 0, outID, 1);
         proc->rebuildParameters();
         return proc;
     }
@@ -752,25 +746,34 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Tremolo 101");
         auto& g = proc->getDSPGraph();
-        int inID  = g.addNode (std::make_unique<AudioInputNode>());    // 0
-        int lfoID = g.addNode (std::make_unique<LFONode>());           // 1
-        int mulID = g.addNode (std::make_unique<MultiplyNode>());      // 2
-        int outID = g.addNode (std::make_unique<AudioOutputNode>());   // 3
+        int lfoID = g.addNode (std::make_unique<LFONode>(), 1);           // 1
+        int inID  = g.addNode (std::make_unique<AudioInputNode>(), 2);    // 2
+        int mulID = g.addNode (std::make_unique<MultiplyNode>(), 3);      // 3
+        int outID = g.addNode (std::make_unique<AudioOutputNode>(), 4);   // 4
 
         g.getNode(lfoID)->getParam("rate")->set (5.0f);
         g.getNode(lfoID)->getParam("depth")->set (1.0f);
 
         // Scale bipolar LFO (-1..1) to unipolar (0..1)
-        int addID = g.addNode (std::make_unique<AddNode>());           // 4
+        int addID = g.addNode (std::make_unique<AddNode>(), 5);           // 5
         g.getNode(addID)->getParam("value")->set (1.0f);
-        int divID = g.addNode (std::make_unique<DivideNode>());        // 5
+        int divID = g.addNode (std::make_unique<DivideNode>(), 6);        // 6
         g.getNode(divID)->getParam("value")->set (2.0f);
+
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;   g.getNode(inID)->visualY = 200.0f;
+        g.getNode(lfoID)->visualX = 80.0f;  g.getNode(lfoID)->visualY = 380.0f;
+        g.getNode(addID)->visualX = 260.0f; g.getNode(addID)->visualY = 380.0f;
+        g.getNode(divID)->visualX = 440.0f; g.getNode(divID)->visualY = 380.0f;
+        g.getNode(mulID)->visualX = 300.0f; g.getNode(mulID)->visualY = 200.0f;
+        g.getNode(outID)->visualX = 520.0f;  g.getNode(outID)->visualY = 200.0f;
 
         g.connect (lfoID, 0, addID, 0);
         g.connect (addID, 0, divID, 0);
         g.connect (inID, 0, mulID, 0);
         g.connect (divID, 0, mulID, 1);
         g.connect (mulID, 0, outID, 0);
+        g.connect (mulID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -782,21 +785,29 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Delay Lab");
         auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());  // 0
-        int splitID = g.addNode (std::make_unique<SplitNode>());       // 1
-        int delayID = g.addNode (std::make_unique<DelayNode>());       // 2
-        int mixID   = g.addNode (std::make_unique<MixNode>());         // 3
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>()); // 4
+        int inID    = g.addNode (std::make_unique<AudioInputNode>(), 1);  // 1
+        int delayID = g.addNode (std::make_unique<DelayNode>(), 2);       // 2
+        int mixID   = g.addNode (std::make_unique<MixNode>(), 3);         // 3
+        int splitID = g.addNode (std::make_unique<SplitNode>(), 4);       // 4
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>(), 5); // 5
 
         g.getNode(delayID)->getParam("time")->set (0.4f);
         g.getNode(delayID)->getParam("feedback")->set (0.4f);
         g.getNode(mixID)->getParam("mix")->set (0.3f);
+
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;     g.getNode(inID)->visualY = 200.0f;
+        g.getNode(splitID)->visualX = 220.0f;  g.getNode(splitID)->visualY = 200.0f;
+        g.getNode(delayID)->visualX = 380.0f;  g.getNode(delayID)->visualY = 350.0f;
+        g.getNode(mixID)->visualX = 540.0f;    g.getNode(mixID)->visualY = 200.0f;
+        g.getNode(outID)->visualX = 700.0f;    g.getNode(outID)->visualY = 200.0f;
 
         g.connect (inID, 0, splitID, 0);
         g.connect (splitID, 0, mixID, 0);      // dry path
         g.connect (splitID, 1, delayID, 0);     // wet path
         g.connect (delayID, 0, mixID, 1);
         g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -809,22 +820,30 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Mini Synth");
         auto& g = proc->getDSPGraph();
-        int outID  = g.addNode (std::make_unique<AudioOutputNode>());  // 0
-        int oscID  = g.addNode (std::make_unique<OscillatorNode>());   // 1
-        int vcaID  = g.addNode (std::make_unique<VCANode>());          // 2
-        int adsrID = g.addNode (std::make_unique<ADSRNode>());         // 3
-        int midiID = g.addNode (std::make_unique<MidiNoteNode>());     // 4
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>(), 1);  // 1
+        int oscID  = g.addNode (std::make_unique<OscillatorNode>(), 2);   // 2
+        int adsrID = g.addNode (std::make_unique<ADSRNode>(), 3);         // 3
+        int vcaID  = g.addNode (std::make_unique<VCANode>(), 4);          // 4
+        int midiID = g.addNode (std::make_unique<MidiNoteNode>(), 5);     // 5
 
         g.getNode(adsrID)->getParam("attack")->set (0.01f);
         g.getNode(adsrID)->getParam("decay")->set (0.1f);
         g.getNode(adsrID)->getParam("sustain")->set (0.7f);
         g.getNode(adsrID)->getParam("release")->set (0.3f);
 
+        // Visual Coordinates
+        g.getNode(midiID)->visualX = 80.0f;  g.getNode(midiID)->visualY = 200.0f;
+        g.getNode(oscID)->visualX = 260.0f;  g.getNode(oscID)->visualY = 100.0f;
+        g.getNode(adsrID)->visualX = 260.0f; g.getNode(adsrID)->visualY = 320.0f;
+        g.getNode(vcaID)->visualX = 440.0f;  g.getNode(vcaID)->visualY = 200.0f;
+        g.getNode(outID)->visualX = 620.0f;  g.getNode(outID)->visualY = 200.0f;
+
         g.connect (midiID, 0, oscID, 1);   // pitch → osc frequency mod
-        g.connect (midiID, 1, adsrID, 0);  // gate → ADSR trigger
+        g.connect (midiID, 2, adsrID, 0);  // gate → ADSR trigger
         g.connect (oscID, 0, vcaID, 0);    // osc audio → VCA audio in
         g.connect (adsrID, 0, vcaID, 1);   // envelope → VCA control in
         g.connect (vcaID, 0, outID, 0);    // VCA → audio output
+        g.connect (vcaID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -852,11 +871,19 @@ namespace GraphPedalFactory
         g.getNode(rangeID)->getParam("curve")->set (0.5f);
         g.getNode(lpID)->getParam("q")->set (2.0f);
 
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;     g.getNode(inID)->visualY = 200.0f;
+        g.getNode(lpID)->visualX = 340.0f;    g.getNode(lpID)->visualY = 200.0f;
+        g.getNode(envID)->visualX = 220.0f;   g.getNode(envID)->visualY = 360.0f;
+        g.getNode(rangeID)->visualX = 380.0f; g.getNode(rangeID)->visualY = 360.0f;
+        g.getNode(outID)->visualX = 560.0f;    g.getNode(outID)->visualY = 200.0f;
+
         g.connect (inID, 0, lpID, 0);
         g.connect (inID, 0, envID, 0);
         g.connect (envID, 0, rangeID, 0);
         g.connect (rangeID, 0, lpID, 1); // Modulate lowpass freq_cv
         g.connect (lpID, 0, outID, 0);
+        g.connect (lpID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -868,12 +895,12 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Step Sequencer Filter");
         auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());       // 0
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());      // 1
-        int clockID = g.addNode (std::make_unique<ClockNode>());            // 2
-        int seqID   = g.addNode (std::make_unique<SequencerNode>());        // 3
-        int rangeID = g.addNode (std::make_unique<RangerNode>());           // 4
-        int lpID    = g.addNode (std::make_unique<LowPassNode>());          // 5
+        int inID    = g.addNode (std::make_unique<AudioInputNode>(), 1);       // 1
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>(), 2);      // 2
+        int clockID = g.addNode (std::make_unique<ClockNode>(), 3);            // 3
+        int seqID   = g.addNode (std::make_unique<SequencerNode>(), 4);        // 4
+        int rangeID = g.addNode (std::make_unique<RangerNode>(), 5);           // 5
+        int lpID    = g.addNode (std::make_unique<LowPassNode>(), 6);          // 6
 
         g.getNode(clockID)->getParam("bpm")->set (120.0f);
         g.getNode(seqID)->getParam("steps")->set (4.0f);
@@ -887,11 +914,20 @@ namespace GraphPedalFactory
         g.getNode(rangeID)->getParam("out_max")->set (6000.0f);
         g.getNode(lpID)->getParam("q")->set (3.0f);
 
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;     g.getNode(inID)->visualY = 200.0f;
+        g.getNode(lpID)->visualX = 320.0f;    g.getNode(lpID)->visualY = 200.0f;
+        g.getNode(clockID)->visualX = 80.0f;  g.getNode(clockID)->visualY = 380.0f;
+        g.getNode(seqID)->visualX = 260.0f;   g.getNode(seqID)->visualY = 380.0f;
+        g.getNode(rangeID)->visualX = 440.0f; g.getNode(rangeID)->visualY = 380.0f;
+        g.getNode(outID)->visualX = 600.0f;    g.getNode(outID)->visualY = 200.0f;
+
         g.connect (clockID, 0, seqID, 0); // clock pulse out -> seq clock in
         g.connect (seqID, 0, rangeID, 0);  // seq out -> ranger in
         g.connect (rangeID, 0, lpID, 1);   // ranger out -> lowpass freq_cv
         g.connect (inID, 0, lpID, 0);
         g.connect (lpID, 0, outID, 0);
+        g.connect (lpID, 0, outID, 1);
 
         proc->rebuildParameters();
         return proc;
@@ -903,20 +939,30 @@ namespace GraphPedalFactory
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Pattern Slicer");
         auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());       // 0
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());      // 1
-        int envID   = g.addNode (std::make_unique<EnvelopeFollowerNode>()); // 2
-        int compID  = g.addNode (std::make_unique<ComparatorNode>());       // 3
-        int clockID = g.addNode (std::make_unique<ClockNode>());            // 4
-        int andID   = g.addNode (std::make_unique<ANDGateNode>());          // 5
-        int fuzzID  = g.addNode (std::make_unique<SoftClipNode>());         // 6
-        int muxID   = g.addNode (std::make_unique<MuxNode>());              // 7
+        int inID    = g.addNode (std::make_unique<AudioInputNode>(), 1);       // 1
+        int envID   = g.addNode (std::make_unique<EnvelopeFollowerNode>(), 2); // 2
+        int compID  = g.addNode (std::make_unique<ComparatorNode>(), 3);       // 3
+        int clockID = g.addNode (std::make_unique<ClockNode>(), 4);            // 4
+        int andID   = g.addNode (std::make_unique<ANDGateNode>(), 5);          // 5
+        int fuzzID  = g.addNode (std::make_unique<SoftClipNode>(), 6);         // 6
+        int muxID   = g.addNode (std::make_unique<MuxNode>(), 7);              // 7
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>(), 8);      // 8
 
         g.getNode(compID)->getParam("threshold")->set (0.15f);
         g.getNode(compID)->getParam("mode")->set (0.0f); // 0 = a > b
         g.getNode(clockID)->getParam("bpm")->set (135.0f);
         g.getNode(fuzzID)->getParam("drive")->set (40.0f);
         g.getNode(envID)->getParam("release")->set (100.0f);
+
+        // Visual Coordinates
+        g.getNode(inID)->visualX = 80.0f;     g.getNode(inID)->visualY = 200.0f;
+        g.getNode(fuzzID)->visualX = 260.0f;  g.getNode(fuzzID)->visualY = 80.0f;
+        g.getNode(muxID)->visualX = 440.0f;   g.getNode(muxID)->visualY = 200.0f;
+        g.getNode(envID)->visualX = 220.0f;   g.getNode(envID)->visualY = 360.0f;
+        g.getNode(compID)->visualX = 380.0f;  g.getNode(compID)->visualY = 360.0f;
+        g.getNode(clockID)->visualX = 380.0f; g.getNode(clockID)->visualY = 520.0f;
+        g.getNode(andID)->visualX = 540.0f;   g.getNode(andID)->visualY = 440.0f;
+        g.getNode(outID)->visualX = 700.0f;   g.getNode(outID)->visualY = 200.0f;
 
         g.connect (inID, 0, envID, 0);
         g.connect (inID, 0, muxID, 0);   // Dry path to Mux Input A
@@ -927,8 +973,54 @@ namespace GraphPedalFactory
         g.connect (clockID, 0, andID, 1);
         g.connect (andID, 0, muxID, 2);  // AND Gate out -> Mux Selector
         g.connect (muxID, 0, outID, 0);
+        g.connect (muxID, 0, outID, 1);
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    /** Tutorial 9 — Wave Folder: Scriptable wavefolding distortion + time-based ring modulation.
+        AudioInputNode -> ExpressionNode -> AudioOutputNode */
+    inline std::unique_ptr<GraphPedalProcessor> createTutorialWaveFolder()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Wave Folder");
+        auto& g = proc->getDSPGraph();
+        int inID   = g.addNode (std::make_unique<AudioInputNode>(), 1);      // ID 1
+        int exprID = g.addNode (std::make_unique<ExpressionNode>(), 2);      // ID 2
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>(), 3);     // ID 3
+
+        // Setup the script on the Expression Node
+        auto* node = dynamic_cast<ExpressionNode*> (g.getNode (exprID));
+        if (node != nullptr)
+        {
+            node->setExpression (
+                "@inputs in\n"
+                "@outputs out\n"
+                "@parameters drive rate mix\n"
+                "folder = sin(in * drive)\n"
+                "carrier = sin(t * rate * 6.28318)\n"
+                "modulator = folder * carrier\n"
+                "out = lerp(in, modulator, mix)"
+            );
+            
+            // Set defaults
+            node->getParam("drive")->set (3.0f);
+            node->getParam("rate")->set (5.0f);
+            node->getParam("mix")->set (0.5f);
+        }
+
+        // Visual Coordinates
+        g.getNode (inID)->visualX   = 100.0f; g.getNode (inID)->visualY   = 200.0f;
+        g.getNode (exprID)->visualX = 350.0f; g.getNode (exprID)->visualY = 200.0f;
+        g.getNode (outID)->visualX  = 600.0f; g.getNode (outID)->visualY  = 200.0f;
+
+        // Connections
+        g.connect (inID, 0, exprID, 0); 
+        g.connect (exprID, 0, outID, 0); 
+        g.connect (exprID, 0, outID, 1); 
 
         proc->rebuildParameters();
         return proc;
     }
 }
+

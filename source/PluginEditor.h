@@ -19,7 +19,8 @@ class PedalForgeProcessor;
 //==============================================================================
 class PedalForgeEditor : public juce::AudioProcessorEditor,
                          public juce::DragAndDropContainer,
-                         public juce::Button::Listener
+                         public juce::Button::Listener,
+                         public juce::KeyListener
 {
 public:
     explicit PedalForgeEditor (PedalForgeProcessor& processor);
@@ -29,6 +30,13 @@ public:
     void resized() override;
 
     void buttonClicked (juce::Button* button) override;
+
+    bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
+    
+    void triggerUndo();
+    void triggerRedo();
+    void commitActiveTabState();
+    void refreshAfterUndoRedo();
 
 
 private:

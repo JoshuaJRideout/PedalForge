@@ -407,3 +407,27 @@ struct PedalDesign
         return file.replaceWithText (juce::JSON::toString (toJSON()));
     }
 };
+
+// Helper function to match visual mappings to actual DSP parameters, bridging any off-by-one offsets.
+inline bool matchMappingParam (const juce::String& mappingParam, const juce::String& actualParam)
+{
+    if (mappingParam == actualParam) return true;
+    
+    int mapUnderscore = mappingParam.indexOfChar ('_');
+    int actUnderscore = actualParam.indexOfChar ('_');
+    if (mapUnderscore > 0 && actUnderscore > 0)
+    {
+        juce::String mapSuffix = mappingParam.substring (mapUnderscore);
+        juce::String actSuffix = actualParam.substring (actUnderscore);
+        if (mapSuffix == actSuffix)
+        {
+            int mapNodeID = mappingParam.substring (0, mapUnderscore).getIntValue();
+            int actNodeID = actualParam.substring (0, actUnderscore).getIntValue();
+            int diff = mapNodeID - actNodeID;
+            if (diff >= -1 && diff <= 1)
+                return true;
+        }
+    }
+    return false;
+}
+

@@ -114,12 +114,20 @@ public:
 
     virtual ~DSPNode() = default;
 
+    float visualX = -1.0f;
+    float visualY = -1.0f;
+
+    std::vector<float> lastInputValues;
+    std::vector<float> lastOutputValues;
+
     //==========================================================================
     /** Called before audio processing begins. */
     virtual void prepare (double sampleRate, int maxBlockSize)
     {
         sr = sampleRate;
         blockSize = maxBlockSize;
+        lastInputValues.assign (inputPorts.size(), 0.0f);
+        lastOutputValues.assign (outputPorts.size(), 0.0f);
     }
 
     /** Process audio. inputBuffers and outputBuffers are arrays of channel pointers.
@@ -210,12 +218,14 @@ public:
 
     //==========================================================================
     /** Serialize node state to JSON. */
-    juce::var toJSON() const
+    virtual juce::var toJSON() const
     {
         auto* obj = new juce::DynamicObject();
         obj->setProperty ("type", type);
         obj->setProperty ("name", name);
         obj->setProperty ("id", nodeID);
+        if (visualX >= 0.0f) obj->setProperty ("visualX", (double) visualX);
+        if (visualY >= 0.0f) obj->setProperty ("visualY", (double) visualY);
 
         juce::Array<juce::var> paramArray;
         for (const auto& p : params)
@@ -232,13 +242,18 @@ public:
     }
 
     /** Restore parameter values from JSON. */
-    void fromJSON (const juce::var& json)
+    virtual void fromJSON (const juce::var& json)
     {
         if (auto* obj = json.getDynamicObject())
         {
             name = obj->getProperty ("name").toString();
             if (obj->hasProperty ("filePath"))
                 setFilePath (obj->getProperty ("filePath").toString());
+
+            if (obj->hasProperty ("visualX"))
+                visualX = (float)(double) obj->getProperty ("visualX");
+            if (obj->hasProperty ("visualY"))
+                visualY = (float)(double) obj->getProperty ("visualY");
                 
             if (auto* arr = obj->getProperty ("params").getArray())
             {

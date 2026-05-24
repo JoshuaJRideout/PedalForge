@@ -25,6 +25,7 @@ public:
     void handleSlotSwapped (int sourceSlot, int targetSlot);
     
     void removeSlot (int slotIndex);
+    void visibilityChanged() override;
 
     std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
     void setOnOpenLibrary (std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> cb);

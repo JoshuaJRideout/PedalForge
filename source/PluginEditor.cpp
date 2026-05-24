@@ -63,6 +63,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     // Inventory overlay (Q-menu style, initially hidden)
     addChildComponent (inventory);
     addKeyListener (&inventory);
+    addKeyListener (this);
     
     // Library overlay
     addChildComponent (libraryOverlay);
@@ -70,12 +71,31 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     // Wire the Effects Forge graph to the Pedal Forge for parameter mapping
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
 
+    nodeGraphEditor.getEngineDSPGraph = [this] () -> DSPGraph*
+    {
+        if (activePedal != nullptr)
+        {
+            if (auto* node = processorRef.getGraphEngine().getGraph().getNodeForId (activePedal->nodeID))
+            {
+                if (auto* proc = node->getProcessor())
+                {
+                    if (auto* gProc = dynamic_cast<GraphPedalProcessor*> (proc))
+                    {
+                        return &(gProc->getDSPGraph());
+                    }
+                }
+            }
+        }
+        return nullptr;
+    };
+
     nodeGraphEditor.onGraphChanged = [this] {
         if (activePedal != nullptr && activePedal->design != nullptr)
         {
             activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
-            auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, activePedal->design->effectsGraph);
+            auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, juce::JSON::toString (activePedal->design->effectsGraph));
             processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+            processorRef.getGraphEngine().saveUndoState();
         }
     };
 
@@ -146,6 +166,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
 PedalForgeEditor::~PedalForgeEditor()
 {
     removeKeyListener (&inventory);
+    removeKeyListener (this);
     delete routingEditor;
     delete playTab;
     setLookAndFeel (nullptr);
@@ -242,18 +263,32 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     if (wasPedal && activePedal != nullptr && activePedal->design != nullptr)
     {
         auto updatedDesign = pedalDesigner.getDesign();
-        *(activePedal->design) = updatedDesign;
-        grid.refreshSelectedPedal();
+        if (juce::JSON::toString (updatedDesign.toJSON()) != juce::JSON::toString (activePedal->design->toJSON()))
+        {
+            *(activePedal->design) = updatedDesign;
+            grid.refreshSelectedPedal();
+            processorRef.getGraphEngine().saveUndoState();
+        }
     }
 
     if (wasFX && activePedal != nullptr && activePedal->design != nullptr)
     {
-        activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
-        activePedal->design->fxNotes = nodeGraphEditor.getNotes();
+        auto newGraph = nodeGraphEditor.getGraph().toJSON();
+        auto newNotes = nodeGraphEditor.getNotes();
 
-        // Rebuild processor so changes actually affect audio and parameters
-        auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, activePedal->design->effectsGraph);
-        processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+        bool graphChanged = (juce::JSON::toString (newGraph) != juce::JSON::toString (activePedal->design->effectsGraph));
+        bool notesChanged = (juce::JSON::toString (StickyNoteData::toJSON (newNotes)) != juce::JSON::toString (StickyNoteData::toJSON (activePedal->design->fxNotes)));
+
+        if (graphChanged || notesChanged)
+        {
+            activePedal->design->effectsGraph = newGraph;
+            activePedal->design->fxNotes = newNotes;
+
+            // Rebuild processor so changes actually affect audio and parameters
+            auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, juce::JSON::toString (activePedal->design->effectsGraph));
+            processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+            processorRef.getGraphEngine().saveUndoState();
+        }
     }
 
     // ── Show/hide views ─────────────────────────────────────────────
@@ -279,7 +314,10 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     pedalDesigner.setVisible (isPedal);
     if (isPedal && activePedal != nullptr && activePedal->design != nullptr)
+    {
+        nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
         pedalDesigner.loadDesign (*activePedal->design);
+    }
 
     nodeGraphEditor.setVisible (isFX);
     if (isFX && activePedal != nullptr && activePedal->design != nullptr)
@@ -332,4 +370,125 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     repaint();
 }
+
+//==============================================================================
+bool PedalForgeEditor::keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent)
+{
+    (void) originatingComponent;
+
+    // Check if keyboard focus is currently held by a text entry element.
+    // If so, let them handle local undo/redo instead of triggering global undo/redo.
+    if (auto* focused = juce::Component::getCurrentlyFocusedComponent())
+    {
+        if (dynamic_cast<juce::TextEditor*> (focused) != nullptr
+            || dynamic_cast<juce::CodeEditorComponent*> (focused) != nullptr)
+        {
+            return false;
+        }
+    }
+
+    bool isModDown = key.getModifiers().isCommandDown() || key.getModifiers().isCtrlDown();
+    if (isModDown)
+    {
+        int code = key.getKeyCode();
+        if (code == 'Z' || code == 'z')
+        {
+            if (key.getModifiers().isShiftDown())
+                triggerRedo();
+            else
+                triggerUndo();
+            return true;
+        }
+        else if (code == 'Y' || code == 'y')
+        {
+            triggerRedo();
+            return true;
+        }
+    }
+    return false;
+}
+
+void PedalForgeEditor::commitActiveTabState()
+{
+    if (pedalDesigner.isVisible() && activePedal != nullptr && activePedal->design != nullptr)
+    {
+        auto updatedDesign = pedalDesigner.getDesign();
+        if (juce::JSON::toString (updatedDesign.toJSON()) != juce::JSON::toString (activePedal->design->toJSON()))
+        {
+            *(activePedal->design) = updatedDesign;
+            grid.refreshSelectedPedal();
+        }
+    }
+    if (nodeGraphEditor.isVisible() && activePedal != nullptr && activePedal->design != nullptr)
+    {
+        auto newGraph = nodeGraphEditor.getGraph().toJSON();
+        auto newNotes = nodeGraphEditor.getNotes();
+
+        bool graphChanged = (juce::JSON::toString (newGraph) != juce::JSON::toString (activePedal->design->effectsGraph));
+        bool notesChanged = (juce::JSON::toString (StickyNoteData::toJSON (newNotes)) != juce::JSON::toString (StickyNoteData::toJSON (activePedal->design->fxNotes)));
+
+        if (graphChanged || notesChanged)
+        {
+            activePedal->design->effectsGraph = newGraph;
+            activePedal->design->fxNotes = newNotes;
+
+            auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, juce::JSON::toString (activePedal->design->effectsGraph));
+            processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+        }
+    }
+}
+
+void PedalForgeEditor::triggerUndo()
+{
+    commitActiveTabState();
+    if (processorRef.getGraphEngine().undo())
+        refreshAfterUndoRedo();
+}
+
+void PedalForgeEditor::triggerRedo()
+{
+    commitActiveTabState();
+    if (processorRef.getGraphEngine().redo())
+        refreshAfterUndoRedo();
+}
+
+void PedalForgeEditor::refreshAfterUndoRedo()
+{
+    if (activePedal != nullptr)
+    {
+        auto oldId = activePedal->nodeID;
+        activePedal = processorRef.getGraphEngine().getPedalInstance (oldId);
+    }
+
+    if (tabPlay.getToggleState())
+    {
+        if (playTab != nullptr) playTab->rebuildSlots();
+    }
+    else if (tabBoard.getToggleState())
+    {
+        grid.rebuildFromEngine();
+    }
+    else if (tabRoute.getToggleState())
+    {
+        if (routingEditor != nullptr) routingEditor->syncFromEngine();
+    }
+    else if (tabPedal.getToggleState())
+    {
+        if (activePedal != nullptr && activePedal->design != nullptr)
+        {
+            nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+            pedalDesigner.loadDesign (*activePedal->design);
+        }
+    }
+    else if (tabFX.getToggleState())
+    {
+        if (activePedal != nullptr && activePedal->design != nullptr)
+        {
+            nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+            nodeGraphEditor.loadNotes (activePedal->design->fxNotes);
+        }
+    }
+    repaint();
+}
+
 

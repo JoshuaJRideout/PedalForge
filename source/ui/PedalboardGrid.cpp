@@ -61,10 +61,15 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
     // Notes
     notesOverlay.setNotes (engine.boardNotes);
     addChildComponent (notesOverlay);
+    btnNotes.setClickingTogglesState (true);
+    btnNotes.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xFFF59E0B)); // amber
+    btnNotes.setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
     addAndMakeVisible (btnNotes);
     btnNotes.setTooltip ("Toggle Notes");
     btnNotes.onClick = [this] {
-        bool show = !notesOverlay.isNotesVisible();
+        NotesOverlay::globallyVisible = btnNotes.getToggleState();
+        bool show = NotesOverlay::globallyVisible;
         notesOverlay.setVisible (show);
         if (show && engine.boardNotes.empty())
             notesOverlay.addNote (120, 80);
@@ -176,7 +181,13 @@ void PedalboardGrid::timerCallback()
                                 int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
                                 if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
                                 {
-                                    if (auto* targetNode = graphProc->getDSPGraph().getNode(targetNodeID))
+                                    auto getDSPNode = [&](int id) -> DSPNode* {
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id)) return n;
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id - 1)) return n;
+                                        if (auto* n = graphProc->getDSPGraph().getNode(id + 1)) return n;
+                                        return nullptr;
+                                    };
+                                    if (auto* targetNode = getDSPNode(targetNodeID))
                                     {
                                         juce::String path = targetNode->getFilePath();
                                         juce::String text = "Empty";
@@ -220,7 +231,7 @@ void PedalboardGrid::timerCallback()
                                 {
                                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
                                     {
-                                        if (ranged->getParameterID() == mapping.nodeParam)
+                                        if (matchMappingParam (mapping.nodeParam, ranged->getParameterID()))
                                         {
                                             float val = ranged->getValue();
                                             juce::String text = ranged->getText (val, 32);
@@ -353,6 +364,16 @@ void PedalboardGrid::mouseDown (const juce::MouseEvent& /*e*/)
     grabKeyboardFocus();
     deselectAll();
 }
+
+void PedalboardGrid::visibilityChanged()
+{
+    if (isVisible())
+    {
+        btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
+        notesOverlay.setVisible (!engine.boardNotes.empty());
+    }
+}
+
 void PedalboardGrid::selectPedal (PedalComponent* comp)
 {
     if (selectedComponent == comp)
@@ -521,6 +542,7 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX
             }
             engine.autoRoutePedal(nodeId);
             rebuildFromEngine();
+            engine.saveUndoState();
             loaded = true;
             break;
         }
@@ -590,6 +612,7 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX
             }
             engine.autoRoutePedal(nodeId);
             rebuildFromEngine();
+            engine.saveUndoState();
         }
     }
 }
@@ -618,6 +641,7 @@ void PedalboardGrid::removePedal (AudioGraphEngine::NodeID nodeId)
     engine.removePedal (nodeId);
     deselectAll();
     rebuildFromEngine();
+    engine.saveUndoState();
 }
 
 //==============================================================================

@@ -122,11 +122,21 @@ inline std::vector<PedalInfo> getFactoryPedals()
           [] { return GraphPedalFactory::createTutorialPatternSlicer(); },
           [] { return loadDesignOrDefault("Pattern Slicer", FactoryDesigns::createTutorialPatternSlicer); } },
 
+        { "Wave Folder", "Tutorial", 1, 2, 3,
+          juce::Colour (0xFFC084FC),    // pastel purple
+          [] { return GraphPedalFactory::createTutorialWaveFolder(); },
+          [] { return loadDesignOrDefault("Wave Folder", FactoryDesigns::createTutorialWaveFolder); } },
+
         // ─── MIDI & CV ─────────────────────────────────────────────────────
         { "Step Sequencer", "MIDI & CV", 2, 2, 6,
           juce::Colour (0xFF1A0533),    // deep indigo
           [] { return GraphPedalFactory::createStepSequencer(); },
           [] { return loadDesignOrDefault("Step Sequencer", FactoryDesigns::createStepSequencer); } },
+
+        { "MIDI Editor", "MIDI & CV", 2, 2, 3,
+          juce::Colour (0xFF1E1B4B),    // deep dark indigo
+          [] { return GraphPedalFactory::createMidiEditor(); },
+          [] { return loadDesignOrDefault("MIDI Editor", FactoryDesigns::createMidiEditor); } },
 
         // ─── DRIVE ─────────────────────────────────────────────────────────
         { "Clean Boost",  "Drive",      1, 2, 1,

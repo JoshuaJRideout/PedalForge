@@ -140,7 +140,7 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                                 {
                                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                                     {
-                                        if (ranged->getParameterID() == mappedParamID)
+                                        if (matchMappingParam (mappedParamID, ranged->getParameterID()))
                                         {
                                             // Toggle: if > 0.5 → 0, else → 1
                                             float newVal = ranged->getValue() > 0.5f ? 0.0f : 1.0f;
@@ -153,6 +153,7 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                         }
                         
                         repaint();
+                        engine.saveUndoState();
                         dragging = false;
                         return;
                     }
@@ -386,7 +387,7 @@ void PedalComponent::mouseDrag (const juce::MouseEvent& e)
                 {
                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p))
                     {
-                        if (ranged->getParameterID() == mappedParamID)
+                        if (matchMappingParam (mappedParamID, ranged->getParameterID()))
                         {
                             ranged->setValueNotifyingHost (newVal);
                             break;
@@ -444,6 +445,11 @@ void PedalComponent::mouseUp (const juce::MouseEvent& e)
 {
     if (draggedKnobID.isNotEmpty())
     {
+        float finalVal = instance.controlValues[draggedKnobID];
+        if (finalVal != draggedKnobStartValue)
+        {
+            engine.saveUndoState();
+        }
         draggedKnobID = "";
         return;
     }
@@ -473,12 +479,20 @@ void PedalComponent::mouseUp (const juce::MouseEvent& e)
 
         if (dragValid)
         {
+            float oldX = instance.boardX;
+            float oldY = instance.boardY;
+
             // Commit the new position
             instance.boardX = dragSnappedBoard.x;
             instance.boardY = dragSnappedBoard.y;
 
             setBounds (instance.boardX, 40 + instance.boardY,
                        instance.boardW, instance.boardH);
+
+            if (oldX != instance.boardX || oldY != instance.boardY)
+            {
+                engine.saveUndoState();
+            }
         }
         else
         {
