@@ -152,6 +152,16 @@ public:
     virtual float getDisplayValue() const { return 0.0f; }
     virtual const std::vector<float>* getPixelData() const { return nullptr; }
 
+    /** Control-surface nodes (Knob, Fader, Button, Toggle, Selector, XY pad)
+        produce a control signal that the user manipulates from the pedal face.
+        When isControlSurface() is true, PedalDesign auto-creates a matching UI
+        control bound to the node's "value" (or equivalent) parameter. */
+    virtual bool isControlSurface() const { return false; }
+
+    /** Pedal-face control type to spawn when this is a control surface node.
+        Standard values: "knob", "fader", "button", "switch" (toggle), "footswitch", "selector". */
+    virtual juce::String getControlType() const { return {}; }
+
     //==========================================================================
     const std::vector<NodePort>& getInputPorts()  const { return inputPorts; }
     const std::vector<NodePort>& getOutputPorts() const { return outputPorts; }

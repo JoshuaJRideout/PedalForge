@@ -6,6 +6,7 @@
 #include "../engine/AudioGraphEngine.h"
 #include "../dsp/ExpressionVM.h"
 #include "../dsp/DSPGraph.h"
+#include "../pedals/PedalRegistry.h"
 #include "ExpressionTokeniser.h"
 #include "LookAndFeel.h"
 #include "AutocompletePanelComponent.h"
@@ -35,42 +36,69 @@ public:
         document.removeListener (this);
     }
     
+    /** Highlight a specific line as containing a compile error.
+        Pass line=0 to clear. */
+    void setErrorLine (int line, const juce::String& message = {})
+    {
+        errorLine = line;
+        errorMessage = message;
+        repaint();
+    }
+
     void paint (juce::Graphics& g) override
     {
         // 1. Base background color
         g.fillAll (defaultBg);
-        
+
         // 2. Draw block backgrounds for visible lines
         if (! lineToBlockColor.empty())
         {
             int lh = getLineHeight();
             int firstLine = getFirstLineOnScreen();
-            
+
             auto clip = g.getClipBounds();
             int lastLine = juce::jmin ((int)lineToBlockColor.size() - 1, firstLine + clip.getBottom() / lh + 1);
-            
+
             int gutterW = 0;
-            int contentW = getWidth(); 
-            
+            int contentW = getWidth();
+
             for (int i = firstLine; i <= lastLine; ++i)
             {
                 juce::Colour c = lineToBlockColor[(size_t)i];
                 if (c.isTransparent()) continue;
-                
+
                 int y = (i - firstLine) * lh;
                 g.setColour (c);
                 g.fillRect (gutterW, y, contentW, lh);
             }
         }
-        
+
         // 3. Draw text and gutter (base class)
         juce::CodeEditorComponent::paint (g);
+
+        // 4. Overlay error-line marker (after the base class so it sits on top)
+        if (errorLine > 0)
+        {
+            int lh = getLineHeight();
+            int firstLine = getFirstLineOnScreen();
+            int rowOnScreen = (errorLine - 1) - firstLine;
+            if (rowOnScreen >= 0 && rowOnScreen * lh < getHeight())
+            {
+                int y = rowOnScreen * lh;
+                g.setColour (juce::Colour (0xFFEF4444).withAlpha (0.18f));
+                g.fillRect (0, y, getWidth(), lh);
+                g.setColour (juce::Colour (0xFFEF4444));
+                g.fillRect (0, y, 3, lh);
+            }
+        }
     }
 
 private:
     juce::CodeDocument& document;
     juce::Colour defaultBg;
     std::vector<juce::Colour> lineToBlockColor;
+    int errorLine = 0;
+    juce::String errorMessage;
     
     // Subtle muted palette for separating blocks
     const juce::Colour palette[5] = {
@@ -138,7 +166,7 @@ class ScriptingTabComponent : public juce::Component,
                               private juce::Timer
 {
 public:
-    enum class ScriptMode { UI = 1, DSP = 2, GraphBuilder = 3 };
+    enum class ScriptMode { UI = 1, DSP = 2, GraphBuilder = 3, Board = 4, Pedal = 5 };
 
     ScriptingTabComponent () : codeDocument(), codeEditor(codeDocument, &tokeniser)
     {
@@ -149,6 +177,8 @@ public:
         modeSelector.addItem ("UI Script",        (int)ScriptMode::UI);
         modeSelector.addItem ("DSP Expression",   (int)ScriptMode::DSP);
         modeSelector.addItem ("FX Graph Builder", (int)ScriptMode::GraphBuilder);
+        modeSelector.addItem ("Pedalboard",       (int)ScriptMode::Board);
+        modeSelector.addItem ("Pedal Design",     (int)ScriptMode::Pedal);
         modeSelector.setSelectedId ((int)ScriptMode::UI, juce::dontSendNotification);
         modeSelector.addListener (this);
         modeSelector.setColour (juce::ComboBox::backgroundColourId,  juce::Colour (0xFF1F2937));
@@ -157,7 +187,7 @@ public:
         addAndMakeVisible (modeSelector);
 
         // ── Toolbar Buttons ────────────────────────────────────────────
-        for (auto* btn : { &btnCompile, &btnNew, &btnSave, &btnToggleSidebar })
+        for (auto* btn : { &btnCompile, &btnNew, &btnSave, &btnLoad, &btnImportGraph, &btnToggleSidebar })
         {
             btn->addListener (this);
             btn->setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF1F2937));
@@ -325,6 +355,10 @@ public:
         btnNew.setBounds (toolbar.removeFromLeft (60));
         toolbar.removeFromLeft (4);
         btnSave.setBounds (toolbar.removeFromLeft (60));
+        toolbar.removeFromLeft (4);
+        btnLoad.setBounds (toolbar.removeFromLeft (60));
+        toolbar.removeFromLeft (4);
+        btnImportGraph.setBounds (toolbar.removeFromLeft (80));
         toolbar.removeFromLeft (8);
         btnToggleSidebar.setBounds(toolbar.removeFromLeft(80));
 
@@ -387,6 +421,19 @@ public:
         else if (button == &btnSave)
         {
             saveScript();
+        }
+        else if (button == &btnLoad)
+        {
+            showLoadScriptMenu();
+        }
+        else if (button == &btnImportGraph)
+        {
+            if (currentMode == ScriptMode::Board)
+                importBoardAsScript();
+            else if (currentMode == ScriptMode::Pedal)
+                importPedalAsScript();
+            else
+                importGraphAsScript();
         }
         else if (button == &btnToggleSidebar)
         {
@@ -571,6 +618,8 @@ private:
     juce::TextButton btnCompile { "Compile" };
     juce::TextButton btnNew { "New" };
     juce::TextButton btnSave { "Save" };
+    juce::TextButton btnLoad { "Load" };
+    juce::TextButton btnImportGraph { "\xe2\x86\x90 Graph" };  // ← Graph
     juce::TextButton btnToggleSidebar { "API Ref" };
     juce::Label statusLabel;
     juce::Label pedalInfoLabel;
@@ -686,6 +735,14 @@ private:
         {
             compileGraphBuilder (source);
         }
+        else if (currentMode == ScriptMode::Board)
+        {
+            compileBoardScript (source);
+        }
+        else if (currentMode == ScriptMode::Pedal)
+        {
+            compilePedalScript (source);
+        }
     }
 
     void compileUIScript (const juce::String& source)
@@ -712,13 +769,16 @@ private:
 
         if (ok)
         {
+            codeEditor.setErrorLine (0);
             setStatus ("Compile successful!", juce::Colour (0xFF10B981));
             logToConsole ("UI script compiled successfully.");
         }
         else
         {
-            setStatus ("Error: " + vm.getError(), juce::Colour (0xFFEF4444));
-            logToConsole ("ERROR: " + vm.getError());
+            int line = vm.getErrorLine();
+            codeEditor.setErrorLine (line, vm.getError());
+            setStatus ("Error (line " + juce::String (line) + "): " + vm.getError(), juce::Colour (0xFFEF4444));
+            logToConsole ("ERROR line " + juce::String (line) + ": " + vm.getError());
         }
         repaint();
     }
@@ -770,13 +830,16 @@ private:
             bool ok = testVM.compile (source);
             if (ok)
             {
+                codeEditor.setErrorLine (0);
                 setStatus ("Syntax valid (no Expression node to apply to)", juce::Colour (0xFF10B981));
                 logToConsole ("Syntax validation passed.");
             }
             else
             {
-                setStatus ("Error: " + testVM.getError(), juce::Colour (0xFFEF4444));
-                logToConsole ("ERROR: " + testVM.getError());
+                int line = testVM.getErrorLine();
+                codeEditor.setErrorLine (line, testVM.getError());
+                setStatus ("Error (line " + juce::String (line) + "): " + testVM.getError(), juce::Colour (0xFFEF4444));
+                logToConsole ("ERROR line " + juce::String (line) + ": " + testVM.getError());
             }
             return;
         }
@@ -787,6 +850,7 @@ private:
             bool ok = exprNodeTyped->setExpression (source);
             if (ok)
             {
+                codeEditor.setErrorLine (0);
                 setStatus ("DSP expression compiled & applied!", juce::Colour (0xFF10B981));
                 logToConsole ("Expression applied to node ID " + juce::String (exprNode->getNodeID()));
 
@@ -796,8 +860,15 @@ private:
             }
             else
             {
-                setStatus ("Error: " + exprNodeTyped->getCompileError(), juce::Colour (0xFFEF4444));
-                logToConsole ("ERROR: " + exprNodeTyped->getCompileError());
+                // ExpressionNode doesn't surface a line number; re-compile through a
+                // local VM purely to locate the offending line in the source.
+                ExpressionVM probe;
+                probe.clearVars();
+                probe.compile (source);
+                int line = probe.getErrorLine();
+                codeEditor.setErrorLine (line, exprNodeTyped->getCompileError());
+                setStatus ("Error (line " + juce::String (line) + "): " + exprNodeTyped->getCompileError(), juce::Colour (0xFFEF4444));
+                logToConsole ("ERROR line " + juce::String (line) + ": " + exprNodeTyped->getCompileError());
             }
         }
     }
@@ -840,6 +911,7 @@ private:
 
                 if (nodeType.isEmpty())
                 {
+                    codeEditor.setErrorLine (lineIdx + 1, "addNode requires a quoted type string");
                     logToConsole ("ERROR line " + juce::String (lineIdx + 1) + ": addNode requires a quoted type string");
                     hasError = true;
                     break;
@@ -848,6 +920,7 @@ private:
                 auto node = createNodeByType (nodeType);
                 if (!node)
                 {
+                    codeEditor.setErrorLine (lineIdx + 1, "Unknown node type \"" + nodeType + "\"");
                     logToConsole ("ERROR line " + juce::String (lineIdx + 1) + ": Unknown node type \"" + nodeType + "\"");
                     hasError = true;
                     break;
@@ -868,6 +941,7 @@ private:
 
                 if (parts.size() != 4)
                 {
+                    codeEditor.setErrorLine (lineIdx + 1, "connect requires 4 arguments");
                     logToConsole ("ERROR line " + juce::String (lineIdx + 1) + ": connect requires 4 arguments");
                     hasError = true;
                     break;
@@ -928,6 +1002,8 @@ private:
             return;
         }
 
+        codeEditor.setErrorLine (0);
+
         // Apply the built graph to the active pedal
         juce::var graphJSON = tempGraph.toJSON();
         logToConsole ("Graph built successfully with " + juce::String (tempGraph.getNodes().size()) + " nodes.");
@@ -955,6 +1031,581 @@ private:
         {
             setStatus ("Pedal not found in engine", juce::Colour (0xFFEF4444));
         }
+    }
+
+    //==========================================================================
+    // Pedalboard script: addPedal / connect / setPos / focus / bypass / clearBoard.
+    // Compiling REPLACES the entire current board with what the script declares,
+    // so that the same script always reproduces the same board.
+
+    void compileBoardScript (const juce::String& source)
+    {
+        if (!engine)
+        {
+            setStatus ("No engine", juce::Colour (0xFFEF4444));
+            return;
+        }
+
+        logToConsole ("--- Pedalboard Builder ---");
+
+        const auto& factory = getFactoryPedals();
+        auto findFactory = [&] (juce::String name) -> const PedalInfo*
+        {
+            juce::String wanted = name.trim().unquoted();
+            for (const auto& p : factory)
+                if (p.name.equalsIgnoreCase (wanted)) return &p;
+            return nullptr;
+        };
+
+        // First pass: validate before mutating engine state
+        juce::StringArray lines = juce::StringArray::fromLines (source);
+        struct AddOp { juce::String var, type; float x = -1, y = -1; int lineNum; };
+        struct ConnOp { juce::String srcVar; int srcCh; juce::String dstVar; int dstCh; int lineNum; };
+        struct PosOp { juce::String var; float x, y; int lineNum; };
+        struct FocusOp { juce::String var; int lineNum; };
+        std::vector<AddOp>   adds;
+        std::vector<ConnOp>  conns;
+        std::vector<PosOp>   poses;
+        std::vector<FocusOp> focuses;
+        bool hasError = false;
+
+        auto stripQuotes = [] (juce::String s) {
+            s = s.trim();
+            if (s.startsWithChar ('"') && s.endsWithChar ('"'))
+                s = s.substring (1, s.length() - 1);
+            return s;
+        };
+
+        auto setLineErr = [&] (int n, const juce::String& msg) {
+            codeEditor.setErrorLine (n, msg);
+            logToConsole ("ERROR line " + juce::String (n) + ": " + msg);
+            hasError = true;
+        };
+
+        std::set<juce::String> declared;
+
+        for (int i = 0; i < lines.size(); ++i)
+        {
+            juce::String line = lines[i].trim();
+            int lineNum = i + 1;
+            if (line.isEmpty() || line.startsWith ("--") || line.startsWith ("//") || line.startsWith ("#") || line.startsWith ("@"))
+                continue;
+
+            // Pattern: var = addPedal("Name") | addPedal("Name", x, y)
+            if (line.contains ("addPedal"))
+            {
+                juce::String var = line.upToFirstOccurrenceOf ("=", false, false).trim();
+                if (var.isEmpty()) { setLineErr (lineNum, "addPedal needs a variable: ts = addPedal(\"Type\")"); break; }
+
+                juce::String args = line.fromFirstOccurrenceOf ("(", false, false)
+                                        .upToLastOccurrenceOf  (")", false, false);
+                juce::StringArray parts;
+                parts.addTokens (args, ",", "\"");
+                parts.trim();
+                if (parts.size() < 1) { setLineErr (lineNum, "addPedal requires a pedal type"); break; }
+
+                AddOp op { var, stripQuotes (parts[0]), -1.0f, -1.0f, lineNum };
+                if (parts.size() >= 3)
+                {
+                    op.x = parts[1].getFloatValue();
+                    op.y = parts[2].getFloatValue();
+                }
+                if (!findFactory (op.type)) { setLineErr (lineNum, "Unknown pedal type \"" + op.type + "\""); break; }
+                if (declared.count (var)) { setLineErr (lineNum, "Variable \"" + var + "\" redeclared"); break; }
+                declared.insert (var);
+                adds.push_back (op);
+            }
+            else if (line.startsWith ("connect"))
+            {
+                juce::String args = line.fromFirstOccurrenceOf ("(", false, false)
+                                        .upToLastOccurrenceOf  (")", false, false);
+                juce::StringArray parts;
+                parts.addTokens (args, ",", "");
+                parts.trim();
+                if (parts.size() != 4) { setLineErr (lineNum, "connect needs 4 args: connect(src, srcCh, dst, dstCh)"); break; }
+                if (!declared.count (parts[0])) { setLineErr (lineNum, "Unknown pedal \"" + parts[0] + "\""); break; }
+                if (!declared.count (parts[2])) { setLineErr (lineNum, "Unknown pedal \"" + parts[2] + "\""); break; }
+                conns.push_back ({ parts[0], parts[1].getIntValue(), parts[2], parts[3].getIntValue(), lineNum });
+            }
+            else if (line.startsWith ("setPos"))
+            {
+                juce::String args = line.fromFirstOccurrenceOf ("(", false, false)
+                                        .upToLastOccurrenceOf  (")", false, false);
+                juce::StringArray parts;
+                parts.addTokens (args, ",", "");
+                parts.trim();
+                if (parts.size() != 3) { setLineErr (lineNum, "setPos needs 3 args: setPos(pedal, x, y)"); break; }
+                if (!declared.count (parts[0])) { setLineErr (lineNum, "Unknown pedal \"" + parts[0] + "\""); break; }
+                poses.push_back ({ parts[0], parts[1].getFloatValue(), parts[2].getFloatValue(), lineNum });
+            }
+            else if (line.startsWith ("focus"))
+            {
+                juce::String args = line.fromFirstOccurrenceOf ("(", false, false)
+                                        .upToLastOccurrenceOf  (")", false, false).trim();
+                if (!declared.count (args)) { setLineErr (lineNum, "Unknown pedal \"" + args + "\""); break; }
+                focuses.push_back ({ args, lineNum });
+            }
+            else if (line.startsWith ("clearBoard"))
+            {
+                // No-op for the first pass — the apply pass always starts from empty.
+            }
+            else
+            {
+                logToConsole ("WARNING line " + juce::String (lineNum) + ": Unrecognized statement: " + line);
+            }
+        }
+
+        if (hasError)
+        {
+            setStatus ("Board script failed — see console", juce::Colour (0xFFEF4444));
+            return;
+        }
+
+        // Apply pass — clear the board, then create everything.
+        {
+            std::vector<AudioGraphEngine::NodeID> idsToRemove;
+            for (const auto& inst : engine->getPedalInstances())
+                idsToRemove.push_back (inst.nodeID);
+            for (auto id : idsToRemove)
+                engine->removePedal (id);
+        }
+
+        std::map<juce::String, AudioGraphEngine::NodeID> varToNode;
+        for (const auto& op : adds)
+        {
+            const PedalInfo* info = findFactory (op.type);
+            float x = (op.x >= 0) ? op.x : 80.0f + (float) varToNode.size() * 140.0f;
+            float y = (op.y >= 0) ? op.y : 200.0f;
+            float w = (float) info->gridW * 90.0f;
+            float h = (float) info->gridH * 180.0f;
+            auto id = engine->addPedal (info->factory(), "", 0, x, y, w, h);
+            if (auto* inst = engine->getPedalInstance (id))
+            {
+                inst->name = info->name;
+                inst->category = info->category;
+                inst->colour = info->colour;
+                inst->numKnobs = info->numKnobs;
+                if (info->designFactory)
+                    inst->design = info->designFactory();
+            }
+            varToNode[op.var] = id;
+            logToConsole ("  Created \"" + op.type + "\" as " + op.var);
+        }
+
+        for (const auto& op : poses)
+        {
+            auto it = varToNode.find (op.var);
+            if (it == varToNode.end()) continue;
+            if (auto* inst = engine->getPedalInstance (it->second))
+            {
+                inst->boardX = op.x;
+                inst->boardY = op.y;
+            }
+        }
+
+        for (const auto& c : conns)
+        {
+            auto srcIt = varToNode.find (c.srcVar);
+            auto dstIt = varToNode.find (c.dstVar);
+            if (srcIt == varToNode.end() || dstIt == varToNode.end()) continue;
+            if (!engine->connect (srcIt->second, c.srcCh, dstIt->second, c.dstCh))
+                logToConsole ("  WARNING line " + juce::String (c.lineNum) + ": connect failed");
+            else
+                logToConsole ("  Connected " + c.srcVar + ":" + juce::String (c.srcCh)
+                              + " -> " + c.dstVar + ":" + juce::String (c.dstCh));
+        }
+
+        for (const auto& f : focuses)
+        {
+            auto it = varToNode.find (f.var);
+            if (it != varToNode.end()) engine->setFocusedPedal (it->second);
+        }
+
+        engine->saveUndoState();
+        codeEditor.setErrorLine (0);
+        setStatus ("Pedalboard rebuilt from script", juce::Colour (0xFF10B981));
+        logToConsole ("Board script applied: " + juce::String ((int) adds.size()) + " pedals, "
+                      + juce::String ((int) conns.size()) + " connections.");
+
+        if (onGraphChanged) onGraphChanged();
+    }
+
+    //==========================================================================
+    // Generate a Pedalboard script that reproduces the engine's current board.
+
+    void importBoardAsScript()
+    {
+        if (!engine)
+        {
+            setStatus ("No engine", juce::Colour (0xFFEF4444));
+            return;
+        }
+
+        const auto& instances = engine->getPedalInstances();
+
+        std::map<juce::uint32, juce::String> nodeIdToVar;
+        std::map<juce::String, int> typeCount;
+
+        auto sanitize = [] (const juce::String& s) {
+            juce::String out;
+            for (auto c : s)
+                if (juce::CharacterFunctions::isLetterOrDigit (c)) out << c;
+                else if (c == ' ' || c == '-' || c == '_') out << '_';
+            if (out.isEmpty() || juce::CharacterFunctions::isDigit (out[0])) out = "p_" + out;
+            return out.toLowerCase();
+        };
+
+        juce::String script;
+        script << "-- Generated board script\n";
+        script << "-- " << juce::String ((int) instances.size()) << " pedals\n\n";
+
+        for (const auto& inst : instances)
+        {
+            juce::String base = sanitize (inst.name);
+            int n = ++typeCount[base];
+            juce::String var = (n == 1) ? base : (base + juce::String (n));
+            nodeIdToVar[inst.nodeID.uid] = var;
+
+            script << var << " = addPedal(\"" << inst.name << "\", "
+                   << juce::String (inst.boardX, 0) << ", " << juce::String (inst.boardY, 0) << ")\n";
+        }
+        script << "\n";
+
+        for (const auto& conn : engine->getGraph().getConnections())
+        {
+            auto srcIt = nodeIdToVar.find (conn.source.nodeID.uid);
+            auto dstIt = nodeIdToVar.find (conn.destination.nodeID.uid);
+            if (srcIt == nodeIdToVar.end() || dstIt == nodeIdToVar.end()) continue;
+            script << "connect(" << srcIt->second << ", " << conn.source.channelIndex
+                   << ", "       << dstIt->second << ", " << conn.destination.channelIndex << ")\n";
+        }
+
+        auto focused = engine->getFocusedPedal();
+        auto fIt = nodeIdToVar.find (focused.uid);
+        if (fIt != nodeIdToVar.end())
+            script << "\nfocus(" << fIt->second << ")\n";
+
+        modeSelector.setSelectedId ((int) ScriptMode::Board, juce::sendNotification);
+        codeDocument.replaceAllContent (script);
+        scriptNameEditor.setText ("board_export", false);
+        codeEditor.setErrorLine (0);
+        setStatus ("Imported board as script", juce::Colour (0xFF10B981));
+        logToConsole ("Imported board: " + juce::String ((int) instances.size()) + " pedals.");
+    }
+
+    //==========================================================================
+    // Pedal Design script: setMeta / setChassis / addKnob / addSwitch / addLed /
+    //   addFootswitch / addFader / addTextScreen / mapControl.
+    // Compiling REPLACES the active pedal's chassis + controls + mappings.
+    // The DSP graph is preserved untouched — use FX Graph Builder mode for that.
+
+    void compilePedalScript (const juce::String& source)
+    {
+        if (!activePedal || !activePedal->design)
+        {
+            setStatus ("No pedal selected", juce::Colour (0xFFFB923C));
+            logToConsole ("ERROR: Select a pedal on the Board tab first.");
+            return;
+        }
+
+        logToConsole ("--- Pedal Design Builder ---");
+
+        PedalDesign next = *activePedal->design;
+        next.controls.clear();
+        next.mappings.clear();
+
+        bool hasError = false;
+
+        auto stripQuotes = [] (juce::String s) {
+            s = s.trim();
+            if (s.startsWithChar ('"') && s.endsWithChar ('"'))
+                s = s.substring (1, s.length() - 1);
+            return s;
+        };
+
+        auto setLineErr = [&] (int n, const juce::String& msg) {
+            codeEditor.setErrorLine (n, msg);
+            logToConsole ("ERROR line " + juce::String (n) + ": " + msg);
+            hasError = true;
+        };
+
+        auto splitArgs = [] (juce::String args) {
+            juce::StringArray parts;
+            parts.addTokens (args, ",", "\"");
+            parts.trim();
+            return parts;
+        };
+
+        auto addControl = [&] (juce::String type, const juce::StringArray& parts, int lineNum)
+        {
+            // Common shape: addX(id, x, y, label[, w, h])
+            if (parts.size() < 4) { setLineErr (lineNum, "add" + type + " needs at least (id, x, y, label)"); return; }
+            PedalDesign::Control c;
+            c.type      = type.toLowerCase().replace ("footswitch", "footswitch")
+                                            .replace ("textscreen",  "text_screen");
+            // map our friendly names to PedalDesign's actual type strings
+            if      (type == "Knob")        c.type = "knob";
+            else if (type == "Switch")      c.type = "switch";
+            else if (type == "Footswitch")  c.type = "footswitch";
+            else if (type == "Led")         c.type = "led";
+            else if (type == "Fader")       c.type = "fader";
+            else if (type == "TextScreen")  c.type = "text_screen";
+
+            c.controlID = stripQuotes (parts[0]);
+            c.x         = parts[1].getFloatValue();
+            c.y         = parts[2].getFloatValue();
+            c.label     = stripQuotes (parts[3]);
+            if (parts.size() >= 5) c.width  = parts[4].getFloatValue();
+            if (parts.size() >= 6) c.height = parts[5].getFloatValue();
+
+            // Sensible defaults by type if width/height not supplied
+            if (c.width  <= 0) c.width  = (c.type == "fader") ? 30.0f : (c.type == "text_screen" ? 120.0f : 40.0f);
+            if (c.height <= 0) c.height = (c.type == "fader") ? 120.0f : (c.type == "text_screen" ? 40.0f : 40.0f);
+
+            next.controls.push_back (c);
+        };
+
+        juce::StringArray lines = juce::StringArray::fromLines (source);
+        for (int i = 0; i < lines.size(); ++i)
+        {
+            juce::String line = lines[i].trim();
+            int lineNum = i + 1;
+            if (line.isEmpty() || line.startsWith ("--") || line.startsWith ("//") || line.startsWith ("#") || line.startsWith ("@"))
+                continue;
+
+            // Strip optional `var = ` prefix — variables are decorative for pedal mode.
+            juce::String rhs = line;
+            if (line.contains ("="))
+            {
+                auto before = line.upToFirstOccurrenceOf ("=", false, false).trim();
+                if (! before.contains ("("))
+                    rhs = line.fromFirstOccurrenceOf ("=", false, false).trim();
+            }
+
+            juce::String args = rhs.fromFirstOccurrenceOf ("(", false, false)
+                                   .upToLastOccurrenceOf  (")", false, false);
+            auto parts = splitArgs (args);
+
+            if      (rhs.startsWith ("setMeta"))
+            {
+                if (parts.size() >= 1) next.name        = stripQuotes (parts[0]);
+                if (parts.size() >= 2) next.author      = stripQuotes (parts[1]);
+                if (parts.size() >= 3) next.category    = stripQuotes (parts[2]);
+                if (parts.size() >= 4) next.description = stripQuotes (parts[3]);
+            }
+            else if (rhs.startsWith ("setChassis"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setChassis needs (w, h[, colorHex])"); break; }
+                next.chassisW = parts[0].getFloatValue();
+                next.chassisH = parts[1].getFloatValue();
+                if (parts.size() >= 3)
+                {
+                    juce::String hex = parts[2].trim();
+                    if (hex.startsWith ("0x") || hex.startsWith ("0X")) hex = hex.substring (2);
+                    next.chassisColour = juce::Colour ((juce::uint32) hex.getHexValue64());
+                }
+            }
+            else if (rhs.startsWith ("addKnob"))        addControl ("Knob",        parts, lineNum);
+            else if (rhs.startsWith ("addSwitch"))      addControl ("Switch",      parts, lineNum);
+            else if (rhs.startsWith ("addFootswitch"))  addControl ("Footswitch",  parts, lineNum);
+            else if (rhs.startsWith ("addLed"))         addControl ("Led",         parts, lineNum);
+            else if (rhs.startsWith ("addFader"))       addControl ("Fader",       parts, lineNum);
+            else if (rhs.startsWith ("addTextScreen"))  addControl ("TextScreen",  parts, lineNum);
+            else if (rhs.startsWith ("mapControl"))
+            {
+                if (parts.size() != 2) { setLineErr (lineNum, "mapControl needs (controlID, \"nodeID_paramID\")"); break; }
+                PedalDesign::Mapping m;
+                m.controlID = stripQuotes (parts[0]);
+                m.nodeParam = stripQuotes (parts[1]);
+                next.mappings.push_back (m);
+            }
+            else
+            {
+                logToConsole ("WARNING line " + juce::String (lineNum) + ": Unrecognized statement: " + line);
+            }
+
+            if (hasError) break;
+        }
+
+        if (hasError)
+        {
+            setStatus ("Pedal script failed — see console", juce::Colour (0xFFEF4444));
+            return;
+        }
+
+        *activePedal->design = next;
+        if (engine) engine->saveUndoState();
+        codeEditor.setErrorLine (0);
+        setStatus ("Pedal design rebuilt from script", juce::Colour (0xFF10B981));
+        logToConsole ("Pedal design applied: " + juce::String ((int) next.controls.size())
+                      + " controls, " + juce::String ((int) next.mappings.size()) + " mappings.");
+
+        if (onGraphChanged) onGraphChanged();
+    }
+
+    //==========================================================================
+    // Generate a Pedal Design script reproducing the active pedal's chassis + controls + mappings.
+
+    void importPedalAsScript()
+    {
+        if (!activePedal || !activePedal->design)
+        {
+            setStatus ("No pedal selected", juce::Colour (0xFFFB923C));
+            return;
+        }
+        const auto& d = *activePedal->design;
+
+        auto typeToFunc = [] (const juce::String& t) -> juce::String
+        {
+            if (t == "knob")        return "addKnob";
+            if (t == "switch")      return "addSwitch";
+            if (t == "footswitch")  return "addFootswitch";
+            if (t == "led")         return "addLed";
+            if (t == "fader")       return "addFader";
+            if (t == "text_screen") return "addTextScreen";
+            return juce::String();
+        };
+
+        juce::String s;
+        s << "-- Generated pedal design script\n";
+        s << "-- " << juce::String ((int) d.controls.size()) << " controls, "
+          <<         juce::String ((int) d.mappings.size()) << " mappings\n\n";
+
+        s << "setMeta(\"" << d.name << "\", \"" << d.author << "\", \""
+          << d.category << "\", \"" << d.description << "\")\n";
+        s << "setChassis(" << juce::String (d.chassisW, 0) << ", "
+          <<                  juce::String (d.chassisH, 0) << ", 0x"
+          <<                  juce::String::toHexString ((juce::int64) d.chassisColour.getARGB()).toUpperCase() << ")\n\n";
+
+        for (const auto& c : d.controls)
+        {
+            juce::String fn = typeToFunc (c.type);
+            if (fn.isEmpty()) { s << "-- (skipped unknown type \"" << c.type << "\" id=" << c.controlID << ")\n"; continue; }
+            s << fn << "(\"" << c.controlID << "\", "
+              << juce::String (c.x, 0) << ", " << juce::String (c.y, 0)
+              << ", \"" << c.label << "\"";
+            // Only emit width/height if non-default to keep scripts terse
+            bool defaultDims =
+                (c.type == "knob"        && c.width == 40.0f  && c.height == 40.0f) ||
+                (c.type == "switch"      && c.width == 40.0f  && c.height == 40.0f) ||
+                (c.type == "led"         && c.width == 40.0f  && c.height == 40.0f) ||
+                (c.type == "footswitch"  && c.width == 40.0f  && c.height == 40.0f) ||
+                (c.type == "fader"       && c.width == 30.0f  && c.height == 120.0f) ||
+                (c.type == "text_screen" && c.width == 120.0f && c.height == 40.0f);
+            if (!defaultDims)
+                s << ", " << juce::String (c.width, 0) << ", " << juce::String (c.height, 0);
+            s << ")\n";
+        }
+
+        if (! d.mappings.empty())
+        {
+            s << "\n";
+            for (const auto& m : d.mappings)
+                s << "mapControl(\"" << m.controlID << "\", \"" << m.nodeParam << "\")\n";
+        }
+
+        modeSelector.setSelectedId ((int) ScriptMode::Pedal, juce::sendNotification);
+        codeDocument.replaceAllContent (s);
+        scriptNameEditor.setText ("pedal_export", false);
+        codeEditor.setErrorLine (0);
+        setStatus ("Imported pedal design as script", juce::Colour (0xFF10B981));
+        logToConsole ("Imported pedal: " + d.name + " (" + juce::String ((int) d.controls.size()) + " controls).");
+    }
+
+    //==========================================================================
+    // Generate an FX-Graph-Builder script that reproduces the active pedal's
+    // current DSPGraph. Round-trip companion to compileGraphBuilder().
+    //
+    // Switches mode to GraphBuilder, replaces the editor contents, and does NOT
+    // compile (the script is identical to what's already running, so applying it
+    // would be redundant — the user can edit then hit Compile).
+
+    void importGraphAsScript()
+    {
+        if (!activePedal || !engine)
+        {
+            logToConsole ("WARNING: No pedal selected.");
+            setStatus ("No pedal selected", juce::Colour (0xFFFB923C));
+            return;
+        }
+
+        auto* parentNode = engine->getGraph().getNodeForId (activePedal->nodeID);
+        if (!parentNode)
+        {
+            setStatus ("Pedal node not found", juce::Colour (0xFFEF4444));
+            return;
+        }
+        auto* graphProc = dynamic_cast<GraphPedalProcessor*> (parentNode->getProcessor());
+        if (!graphProc)
+        {
+            setStatus ("Not a graph pedal", juce::Colour (0xFFEF4444));
+            return;
+        }
+
+        const auto& graph = graphProc->getDSPGraph();
+
+        juce::String script;
+        script << "-- Generated from \"" << activePedal->name << "\" on " << juce::Time::getCurrentTime().toString (true, true) << "\n";
+        script << "-- " << juce::String ((int) graph.getNodes().size()) << " nodes, "
+               <<            juce::String ((int) graph.getConnections().size()) << " connections\n\n";
+
+        // Assign a unique variable name per node. Iterating in node-ID order keeps
+        // the output stable and roughly matches the execution order.
+        std::map<int, juce::String> nodeIDToVar;
+        std::map<juce::String, int> typeCount;
+        for (const auto& [id, nodePtr] : graph.getNodes())
+        {
+            if (!nodePtr) continue;
+            juce::String type = nodePtr->getType();
+            juce::String safeType = type.replace ("-", "_").replace (" ", "_");
+            int n = ++typeCount[safeType];
+            juce::String var = safeType + juce::String (n);
+            nodeIDToVar[id] = var;
+        }
+
+        // Node creation
+        for (const auto& [id, nodePtr] : graph.getNodes())
+        {
+            if (!nodePtr) continue;
+            script << nodeIDToVar[id] << " = addNode(\"" << nodePtr->getType() << "\")\n";
+        }
+        script << "\n";
+
+        // Non-default parameter values
+        bool anyParam = false;
+        for (const auto& [id, nodePtr] : graph.getNodes())
+        {
+            if (!nodePtr) continue;
+            for (const auto& p : nodePtr->getParams())
+            {
+                float v = p.get();
+                if (std::abs (v - p.defaultVal) < 1.0e-6f) continue;
+                script << "setParam(" << nodeIDToVar[id] << ", \"" << p.id << "\", "
+                       << juce::String (v, 4) << ")\n";
+                anyParam = true;
+            }
+        }
+        if (anyParam) script << "\n";
+
+        // Connections
+        for (const auto& c : graph.getConnections())
+        {
+            auto srcIt = nodeIDToVar.find (c.sourceNodeID);
+            auto dstIt = nodeIDToVar.find (c.destNodeID);
+            if (srcIt == nodeIDToVar.end() || dstIt == nodeIDToVar.end()) continue;
+            script << "connect(" << srcIt->second << ", " << c.sourcePort
+                   << ", "       << dstIt->second << ", " << c.destPort << ")\n";
+        }
+
+        // Switch mode and load
+        modeSelector.setSelectedId ((int) ScriptMode::GraphBuilder, juce::sendNotification);
+        codeDocument.replaceAllContent (script);
+        scriptNameEditor.setText ("imported", false);
+        codeEditor.setErrorLine (0);
+        setStatus ("Imported graph as script", juce::Colour (0xFF10B981));
+        logToConsole ("Imported FX graph: "
+                      + juce::String ((int) graph.getNodes().size()) + " nodes, "
+                      + juce::String ((int) graph.getConnections().size()) + " connections.");
     }
 
     //==========================================================================
@@ -1013,32 +1664,138 @@ private:
     }
 
     //==========================================================================
-    // Save script to pedal instance
+    // Script storage routing:
+    //   Modes UI/DSP/FX Graph (1-3) → per-pedal, lives on PedalDesign::scripts
+    //   Mode  Board        (4)      → engine-scoped, lives on AudioGraphEngine::engineScripts
+
+    std::vector<PedalDesign::Script>* getScriptStoreFor (ScriptMode m)
+    {
+        if (m == ScriptMode::Board)
+            return engine ? &engine->engineScripts : nullptr;
+        return (activePedal && activePedal->design) ? &activePedal->design->scripts : nullptr;
+    }
 
     void saveScript()
     {
-        if (!activePedal)
+        auto* store = getScriptStoreFor (currentMode);
+        if (!store)
         {
-            logToConsole ("WARNING: No pedal selected. Script not saved.");
-            setStatus ("No pedal selected", juce::Colour (0xFFFB923C));
+            const char* needed = (currentMode == ScriptMode::Board) ? "engine" : "pedal";
+            logToConsole (juce::String ("WARNING: No ") + needed + " available. Script not saved.");
+            setStatus (juce::String ("No ") + needed + " available", juce::Colour (0xFFFB923C));
             return;
         }
 
         juce::String name = scriptNameEditor.getText().trim();
         if (name.isEmpty()) name = "untitled";
 
-        juce::String prefix;
-        if (currentMode == ScriptMode::UI)          prefix = "script_ui_";
-        else if (currentMode == ScriptMode::DSP)    prefix = "script_dsp_";
-        else                                        prefix = "script_graph_";
+        int mode = (int) currentMode;
+        juce::String source = codeDocument.getAllContent();
 
-        juce::String key = prefix + name;
-        activePedal->controlTexts[key] = codeDocument.getAllContent();
+        bool replaced = false;
+        for (auto& s : *store)
+        {
+            if (s.name == name && s.mode == mode)
+            {
+                s.source = source;
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced)
+            store->push_back ({ name, mode, source });
 
         if (engine) engine->saveUndoState();
 
-        setStatus ("Saved as \"" + key + "\"", juce::Colour (0xFF10B981));
-        logToConsole ("Script saved: " + key);
+        juce::String modeLabel = modeName ((ScriptMode) mode);
+        const char* where = (mode == (int) ScriptMode::Board) ? "engine" : "pedal design";
+        setStatus ("Saved \"" + name + "\" (" + modeLabel + ")", juce::Colour (0xFF10B981));
+        logToConsole (juce::String ("Script saved to ") + where + ": " + name + " [" + modeLabel + "]");
+    }
+
+    //==========================================================================
+    // Show a popup menu of all scripts saved on the active pedal's design,
+    // filtered to the current mode. Selecting one loads it into the editor.
+
+    void showLoadScriptMenu()
+    {
+        // Build a combined list of scripts from both stores so the user can jump between modes.
+        struct Entry { ScriptMode owner; int index; PedalDesign::Script* ref; };
+        std::vector<Entry> entries;
+
+        auto collectFrom = [&] (std::vector<PedalDesign::Script>* store, ScriptMode tag)
+        {
+            if (!store) return;
+            for (size_t i = 0; i < store->size(); ++i)
+                entries.push_back ({ tag, (int) i, & (*store)[i] });
+        };
+
+        // tag arg distinguishes which store the script came from; we use Board for engineScripts
+        // and the pedal design for everything else.
+        collectFrom (activePedal && activePedal->design ? &activePedal->design->scripts : nullptr, ScriptMode::UI);
+        collectFrom (engine ? &engine->engineScripts : nullptr, ScriptMode::Board);
+
+        if (entries.empty())
+        {
+            logToConsole ("No saved scripts available.");
+            setStatus ("No saved scripts", juce::Colour (0xFFFB923C));
+            return;
+        }
+
+        juce::PopupMenu menu;
+        std::vector<int> entryIndexForMenuId;
+        int menuId = 1;
+
+        auto addSection = [&] (ScriptMode m)
+        {
+            bool hasAny = false;
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                if (entries[i].ref->mode != (int) m) continue;
+                if (!hasAny)
+                {
+                    menu.addSectionHeader (modeName (m));
+                    hasAny = true;
+                }
+                menu.addItem (menuId, entries[i].ref->name);
+                entryIndexForMenuId.push_back ((int) i);
+                ++menuId;
+            }
+        };
+
+        addSection (currentMode);
+        for (auto m : { ScriptMode::UI, ScriptMode::DSP, ScriptMode::GraphBuilder, ScriptMode::Board, ScriptMode::Pedal })
+            if (m != currentMode) addSection (m);
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (btnLoad),
+            [this, entries, entryIndexForMenuId] (int chosen)
+            {
+                if (chosen <= 0) return;
+                int entryIdx = entryIndexForMenuId[(size_t) (chosen - 1)];
+                const auto& e = entries[(size_t) entryIdx];
+                if (!e.ref) return;
+                const auto& s = *e.ref;
+
+                if ((int) currentMode != s.mode)
+                    modeSelector.setSelectedId (s.mode, juce::sendNotification);
+                codeDocument.replaceAllContent (s.source);
+                scriptNameEditor.setText (s.name, false);
+                setStatus ("Loaded \"" + s.name + "\"", juce::Colour (0xFF10B981));
+                logToConsole ("Loaded script: " + s.name + " [" + modeName ((ScriptMode) s.mode) + "]");
+            });
+    }
+
+    static juce::String modeName (ScriptMode m)
+    {
+        switch (m)
+        {
+            case ScriptMode::UI:           return "UI";
+            case ScriptMode::DSP:          return "DSP";
+            case ScriptMode::GraphBuilder: return "FX Graph";
+            case ScriptMode::Board:        return "Board";
+            case ScriptMode::Pedal:        return "Pedal";
+        }
+        return "?";
     }
 
     //==========================================================================
@@ -1141,6 +1898,49 @@ private:
                 "setParam(tone, \"bass\", 0.6)\n"
                 "setParam(tone, \"mid\", 0.5)\n"
                 "setParam(tone, \"treble\", 0.4)\n";
+        }
+        else if (mode == ScriptMode::Pedal)
+        {
+            script =
+                "-- Pedal Design Script --\n"
+                "-- Rebuilds the active pedal's chassis + controls + mappings.\n"
+                "-- The DSP graph is left untouched; use FX Graph Builder for that.\n"
+                "-- Functions:\n"
+                "--   setMeta(name, author, category, description)\n"
+                "--   setChassis(w, h, colorHex)\n"
+                "--   addKnob(id, x, y, label[, w, h])\n"
+                "--   addSwitch / addFootswitch / addLed / addFader / addTextScreen\n"
+                "--   mapControl(controlID, \"nodeID_paramID\")\n"
+                "\n"
+                "setMeta(\"My Drive\", \"User\", \"Drive\", \"A simple overdrive\")\n"
+                "setChassis(200, 340, 0xFF8A8A94)\n"
+                "\n"
+                "addKnob(\"drive\", 60, 80, \"Drive\")\n"
+                "addKnob(\"tone\",  140, 80, \"Tone\")\n"
+                "addKnob(\"level\", 100, 160, \"Level\")\n"
+                "addLed(\"led\",    100, 30, \"\")\n"
+                "addFootswitch(\"bypass\", 80, 280, \"\")\n";
+        }
+        else if (mode == ScriptMode::Board)
+        {
+            script =
+                "-- Pedalboard Script --\n"
+                "-- Compiles to rebuild the entire board from scratch.\n"
+                "-- Functions:\n"
+                "--   var = addPedal(\"Pedal Name\")            -- auto-position\n"
+                "--   var = addPedal(\"Pedal Name\", x, y)      -- explicit position\n"
+                "--   connect(src, srcCh, dst, dstCh)           -- audio routing\n"
+                "--   setPos(var, x, y)                         -- move a pedal\n"
+                "--   focus(var)                                -- target for MIDI learn\n"
+                "\n"
+                "tuner = addPedal(\"Hello Gain\")\n"
+                "drive = addPedal(\"Filter Sweep\")\n"
+                "delay = addPedal(\"Delay Lab\")\n"
+                "\n"
+                "connect(tuner, 0, drive, 0)\n"
+                "connect(drive, 0, delay, 0)\n"
+                "\n"
+                "focus(drive)\n";
         }
 
         codeDocument.replaceAllContent (script);

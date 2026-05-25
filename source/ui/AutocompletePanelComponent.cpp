@@ -1,4 +1,5 @@
 #include "AutocompletePanelComponent.h"
+#include "../dsp/NodeCatalog.h"
 
 CompletionDatabase::CompletionDatabase()
 {
@@ -7,51 +8,56 @@ CompletionDatabase::CompletionDatabase()
 void CompletionDatabase::loadUIDatabase()
 {
     items.clear();
-    items.push_back({"fillAll(colour)", "Function", "Fills the entire background with a hex color.", "UI_API"});
-    items.push_back({"setColour(colour)", "Function", "Sets the current drawing color.", "UI_API"});
-    items.push_back({"fillRect(x, y, w, h)", "Function", "Draws a filled rectangle.", "UI_API"});
-    items.push_back({"drawRect(x, y, w, h, thickness)", "Function", "Draws a rectangle outline.", "UI_API"});
-    items.push_back({"fillRoundedRect(x, y, w, h, radius)", "Function", "Draws a filled rounded rectangle.", "UI_API"});
-    items.push_back({"drawText(text, x, y, w, h)", "Function", "Draws text within the specified bounds.", "UI_API"});
-    items.push_back({"setFont(fontName, height, style)", "Function", "Sets the current font.", "UI_API"});
-    items.push_back({"w", "Variable", "Width of the canvas.", "UI_API"});
-    items.push_back({"h", "Variable", "Height of the canvas.", "UI_API"});
-    items.push_back({"mouse_x", "Variable", "Current mouse X position.", "UI_API"});
-    items.push_back({"mouse_y", "Variable", "Current mouse Y position.", "UI_API"});
-    items.push_back({"mouse_down", "Variable", "1 if mouse button is held, 0 otherwise.", "UI_API"});
-    items.push_back({"mouse_click", "Variable", "1 on the frame the mouse was clicked.", "UI_API"});
-    items.push_back({"time", "Variable", "Current time in seconds.", "UI_API"});
+    items.push_back({"fillAll(colour)", "Function", "Fills the entire background with a hex color.", "scripting/ui-scripts"});
+    items.push_back({"setColour(colour)", "Function", "Sets the current drawing color.", "scripting/ui-scripts"});
+    items.push_back({"fillRect(x, y, w, h)", "Function", "Draws a filled rectangle.", "scripting/ui-scripts"});
+    items.push_back({"drawRect(x, y, w, h, thickness)", "Function", "Draws a rectangle outline.", "scripting/ui-scripts"});
+    items.push_back({"fillRoundedRect(x, y, w, h, radius)", "Function", "Draws a filled rounded rectangle.", "scripting/ui-scripts"});
+    items.push_back({"drawText(text, x, y, w, h)", "Function", "Draws text within the specified bounds.", "scripting/ui-scripts"});
+    items.push_back({"setFont(fontName, height, style)", "Function", "Sets the current font.", "scripting/ui-scripts"});
+    items.push_back({"w", "Variable", "Width of the canvas.", "scripting/ui-scripts"});
+    items.push_back({"h", "Variable", "Height of the canvas.", "scripting/ui-scripts"});
+    items.push_back({"mouse_x", "Variable", "Current mouse X position.", "scripting/ui-scripts"});
+    items.push_back({"mouse_y", "Variable", "Current mouse Y position.", "scripting/ui-scripts"});
+    items.push_back({"mouse_down", "Variable", "1 if mouse button is held, 0 otherwise.", "scripting/ui-scripts"});
+    items.push_back({"mouse_click", "Variable", "1 on the frame the mouse was clicked.", "scripting/ui-scripts"});
+    items.push_back({"time", "Variable", "Current time in seconds.", "scripting/ui-scripts"});
 }
 
 void CompletionDatabase::loadDSPDatabase()
 {
     items.clear();
-    items.push_back({"in1", "Variable", "Input signal 1.", "DSP_API"});
-    items.push_back({"in2", "Variable", "Input signal 2.", "DSP_API"});
-    items.push_back({"out1", "Variable", "Output signal 1.", "DSP_API"});
-    items.push_back({"out2", "Variable", "Output signal 2.", "DSP_API"});
-    items.push_back({"sin(x)", "Function", "Sine function.", "DSP_API"});
-    items.push_back({"cos(x)", "Function", "Cosine function.", "DSP_API"});
-    items.push_back({"tan(x)", "Function", "Tangent function.", "DSP_API"});
-    items.push_back({"abs(x)", "Function", "Absolute value.", "DSP_API"});
-    items.push_back({"min(a, b)", "Function", "Minimum of two values.", "DSP_API"});
-    items.push_back({"max(a, b)", "Function", "Maximum of two values.", "DSP_API"});
-    items.push_back({"pow(base, exp)", "Function", "Power function.", "DSP_API"});
-    items.push_back({"clip(x, min, max)", "Function", "Clips value between min and max.", "DSP_API"});
+    items.push_back({"in1", "Variable", "Input signal 1.", "scripting/dsp-expressions"});
+    items.push_back({"in2", "Variable", "Input signal 2.", "scripting/dsp-expressions"});
+    items.push_back({"out1", "Variable", "Output signal 1.", "scripting/dsp-expressions"});
+    items.push_back({"out2", "Variable", "Output signal 2.", "scripting/dsp-expressions"});
+    items.push_back({"sin(x)", "Function", "Sine function.", "scripting/dsp-expressions"});
+    items.push_back({"cos(x)", "Function", "Cosine function.", "scripting/dsp-expressions"});
+    items.push_back({"tan(x)", "Function", "Tangent function.", "scripting/dsp-expressions"});
+    items.push_back({"abs(x)", "Function", "Absolute value.", "scripting/dsp-expressions"});
+    items.push_back({"min(a, b)", "Function", "Minimum of two values.", "scripting/dsp-expressions"});
+    items.push_back({"max(a, b)", "Function", "Maximum of two values.", "scripting/dsp-expressions"});
+    items.push_back({"pow(base, exp)", "Function", "Power function.", "scripting/dsp-expressions"});
+    items.push_back({"clip(x, min, max)", "Function", "Clips value between min and max.", "scripting/dsp-expressions"});
 }
 
 void CompletionDatabase::loadGraphBuilderDatabase()
 {
     items.clear();
-    items.push_back({"addNode(\"type\")", "Function", "Adds a new node to the graph.", "Graph_API"});
-    items.push_back({"connect(srcNode, srcPort, dstNode, dstPort)", "Function", "Connects two nodes.", "Graph_API"});
-    items.push_back({"setParam(node, \"paramName\", value)", "Function", "Sets a parameter on a node.", "Graph_API"});
-    items.push_back({"\"gain\"", "Node", "A basic gain node.", "DSP_Nodes"});
-    items.push_back({"\"delay\"", "Node", "A delay line node.", "DSP_Nodes"});
-    items.push_back({"\"filter\"", "Node", "A biquad filter node.", "DSP_Nodes"});
-    items.push_back({"\"nam\"", "Node", "Neural Amp Modeler node.", "DSP_Nodes"});
-    items.push_back({"\"reverb\"", "Node", "Reverb node.", "DSP_Nodes"});
-    items.push_back({"\"cab\"", "Node", "Cabinet simulator (IR) node.", "DSP_Nodes"});
+    items.push_back ({"addNode(\"type\")",                              "Function", "Adds a new node to the graph.",         "scripting/graph-builder"});
+    items.push_back ({"connect(srcNode, srcPort, dstNode, dstPort)",    "Function", "Connects two nodes.",                    "scripting/graph-builder"});
+    items.push_back ({"setParam(node, \"paramName\", value)",           "Function", "Sets a parameter on a node.",            "scripting/graph-builder"});
+
+    // Every node type the graph knows about — driven by the same catalog the
+    // right-click menu and the inventory use. Surfaced as quoted strings since
+    // that's how they appear inside addNode(...) calls.
+    for (const auto& e : NodeCatalog::getEntries())
+    {
+        items.push_back ({ "\"" + e.type + "\"",
+                           "Node",
+                           e.description,
+                           "dsp-nodes/index" });
+    }
 }
 
 std::vector<CompletionItem> CompletionDatabase::getCompletions(const juce::String& prefix)

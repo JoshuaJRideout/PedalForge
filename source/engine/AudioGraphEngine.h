@@ -7,6 +7,7 @@
 #include "BoardConfig.h"
 #include "AppMidiConfig.h"
 #include "StickyNoteData.h"
+#include "../dsp/PedalDesign.h"
 
 //==============================================================================
 /**
@@ -192,6 +193,12 @@ public:
     void removeBoardConnection (NodeID srcNodeId, const juce::String& srcPortId,
                                 NodeID dstNodeId, const juce::String& dstPortId);
     const std::vector<BoardRoutingConnection>& getBoardConnections() const { return boardConnections; }
+
+    //==========================================================================
+    // Engine-scoped scripts — used by the Scripting tab's Pedalboard mode (mode 4).
+    // Per-pedal scripts live on PedalDesign; board-wide scripts live here so they
+    // survive across pedal swaps and project saves.
+    std::vector<PedalDesign::Script> engineScripts;
     
     std::function<void()> onBoardConnectionsChanged;
 

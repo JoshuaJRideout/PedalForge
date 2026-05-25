@@ -3,8 +3,8 @@
 
 
 //==============================================================================
-Tone3000Client::Tone3000Client()
-    : juce::Thread ("Tone3000Client")
+Tone3000Client::Tone3000Client (Tone3000OAuth& o)
+    : juce::Thread ("Tone3000Client"), oauth (o)
 {
 }
 
@@ -13,13 +13,6 @@ Tone3000Client::~Tone3000Client()
     signalThreadShouldExit();
     workAvailable.signal();
     stopThread (5000);
-}
-
-//==============================================================================
-void Tone3000Client::setApiKey (const juce::String& key)
-{
-    std::lock_guard<std::mutex> lock (workMutex);
-    publishableKey = key;
 }
 
 
@@ -75,8 +68,7 @@ void Tone3000Client::cancelAll()
 
 //==============================================================================
 juce::String Tone3000Client::buildSearchUrl (const juce::String& baseUrl,
-                                              const ToneSearchParams& params,
-                                              const juce::String& apiKey)
+                                              const ToneSearchParams& params)
 {
     juce::String url = baseUrl + "/tones/search";
     juce::StringArray queryParts;
@@ -101,9 +93,6 @@ juce::String Tone3000Client::buildSearchUrl (const juce::String& baseUrl,
 
     if (params.sort.isNotEmpty())
         queryParts.add ("sort=" + juce::URL::addEscapeChars (params.sort, true));
-
-    if (apiKey.isNotEmpty() && ! apiKey.startsWith ("t3k_"))
-        queryParts.add ("api_key=" + juce::URL::addEscapeChars (apiKey, true));
 
     if (queryParts.size() > 0)
         url += "?" + queryParts.joinIntoString ("&");
@@ -188,22 +177,18 @@ juce::String Tone3000Client::sanitiseFilename (const juce::String& name)
 //==============================================================================
 std::unique_ptr<juce::InputStream> Tone3000Client::createStreamForUrl (const juce::String& urlString)
 {
-    juce::URL url (urlString);
-
-    juce::String currentKey;
+    auto token = oauth.getAccessTokenRefreshingIfNeeded();
+    if (token.isEmpty())
     {
-        std::lock_guard<std::mutex> lock (workMutex);
-        currentKey = publishableKey;
+        juce::Logger::writeToLog ("[Tone3000] No access token — sign-in required.");
+        return nullptr;
     }
 
-    // Direct REST API access with Legacy API Keys uses query parameters instead of Bearer headers.
-    // We only attach the Authorization Bearer header if the key starts with the new prefix "t3k_".
+    juce::URL url (urlString);
     auto options = juce::URL::InputStreamOptions (juce::URL::ParameterHandling::inAddress)
                        .withConnectionTimeoutMs (15000)
                        .withNumRedirectsToFollow (5)
-                       .withExtraHeaders (currentKey.isNotEmpty() && currentKey.startsWith ("t3k_")
-                           ? juce::String ("Authorization: Bearer " + currentKey)
-                           : juce::String());
+                       .withExtraHeaders ("Authorization: Bearer " + token);
 
     juce::Logger::writeToLog ("[Tone3000] GET " + urlString);
 
@@ -227,13 +212,7 @@ void Tone3000Client::search (ToneSearchParams params,
         ToneSearchResult result;
         result.currentPage = params.page;
 
-        juce::String currentKey;
-        {
-            std::lock_guard<std::mutex> lock (workMutex);
-            currentKey = publishableKey;
-        }
-
-        auto urlString = buildSearchUrl (baseUrl, params, currentKey);
+        auto urlString = buildSearchUrl (baseUrl, params);
         auto stream = createStreamForUrl (urlString);
 
         if (stream != nullptr)
@@ -300,63 +279,78 @@ void Tone3000Client::downloadTone (const ToneResult& tone,
     {
         juce::Logger::writeToLog ("[Tone3000] Downloading tone: " + toneName + " (id: " + toneId + ")");
 
-        // Step 1: Hit the model endpoint to get the actual download URL
-        auto modelUrl = baseUrl + "/models/" + toneId;
-        auto metaStream = createStreamForUrl (modelUrl);
+        // Step 1: Enumerate the models attached to this tone. /tones/search returns
+        // a tone-level summary (with counts) but no per-model download URLs; the
+        // actual files live in /models, indexed by tone_id.
+        auto modelsUrl = baseUrl + "/models?tone_id=" + toneId;
+        auto modelsStream = createStreamForUrl (modelsUrl);
 
-        juce::String downloadUrlStr;
-
-        if (metaStream != nullptr)
+        if (modelsStream == nullptr)
         {
-            auto responseText = metaStream->readEntireStreamAsString();
-            juce::Logger::writeToLog ("[Tone3000] Model response: " + responseText.substring (0, 500));
-
-            auto json = juce::JSON::parse (responseText);
-
-            if (json.isObject())
-            {
-                // Try to find the download URL in the response
-                downloadUrlStr = json.getProperty ("download_url", "").toString();
-
-                if (downloadUrlStr.isEmpty())
-                    downloadUrlStr = json.getProperty ("file_url", "").toString();
-                if (downloadUrlStr.isEmpty())
-                    downloadUrlStr = json.getProperty ("url", "").toString();
-
-                // Check nested "data" object
-                if (downloadUrlStr.isEmpty())
-                {
-                    auto data = json.getProperty ("data", {});
-                    if (data.isObject())
-                    {
-                        downloadUrlStr = data.getProperty ("download_url", "").toString();
-                        if (downloadUrlStr.isEmpty())
-                            downloadUrlStr = data.getProperty ("file_url", "").toString();
-                        if (downloadUrlStr.isEmpty())
-                            downloadUrlStr = data.getProperty ("url", "").toString();
-                    }
-                }
-            }
+            juce::Logger::writeToLog ("[Tone3000] Failed to fetch model list for tone " + toneId);
+            juce::MessageManager::callAsync ([callback] { if (callback) callback ({}, false); });
+            return;
         }
-        else
+
+        auto responseText = modelsStream->readEntireStreamAsString();
+        juce::Logger::writeToLog ("[Tone3000] Models response: " + responseText.substring (0, 800));
+
+        auto json = juce::JSON::parse (responseText);
+
+        // Response may be either a bare array or { data: [...] }. Normalise.
+        const juce::Array<juce::var>* arr = nullptr;
+        if (auto* a = json.getArray()) arr = a;
+        else if (auto* a = json.getProperty ("data", {}).getArray()) arr = a;
+
+        if (arr == nullptr || arr->isEmpty())
         {
-            juce::Logger::writeToLog ("[Tone3000] Failed to fetch model metadata for " + toneId);
+            juce::Logger::writeToLog ("[Tone3000] No models found for tone " + toneId);
+            juce::MessageManager::callAsync ([callback] { if (callback) callback ({}, false); });
+            return;
+        }
+
+        // Pick the first model that exposes a download URL.
+        // Field name varies — try the common ones in priority order.
+        juce::String downloadUrlStr, modelFilename;
+        for (const auto& m : *arr)
+        {
+            for (const char* field : { "model_url", "download_url", "file_url", "url" })
+            {
+                downloadUrlStr = m.getProperty (field, "").toString();
+                if (downloadUrlStr.isNotEmpty()) break;
+            }
+            if (downloadUrlStr.isNotEmpty())
+            {
+                modelFilename = m.getProperty ("filename", "").toString();
+                if (modelFilename.isEmpty()) modelFilename = m.getProperty ("name", "").toString();
+                break;
+            }
         }
 
         if (downloadUrlStr.isEmpty())
         {
-            juce::Logger::writeToLog ("[Tone3000] No download URL found for tone: " + toneId);
-
-            juce::MessageManager::callAsync ([callback]()
-            {
-                if (callback)
-                    callback ({}, false);
-            });
+            juce::Logger::writeToLog ("[Tone3000] None of the " + juce::String (arr->size())
+                                      + " models for tone " + toneId + " had a download URL.");
+            juce::MessageManager::callAsync ([callback] { if (callback) callback ({}, false); });
             return;
         }
 
-        // Step 2: Download the file
-        auto extension = tonePlatform.equalsIgnoreCase ("ir") ? ".wav" : ".nam";
+        // Step 2: Derive the file extension. Prefer the URL path (most reliable),
+        // then the filename field, then platform-based default.
+        auto extractExt = [] (const juce::String& s) -> juce::String
+        {
+            int dot = s.lastIndexOfChar ('.');
+            int slash = s.lastIndexOfChar ('/');
+            int qmark = s.indexOfChar ('?');
+            int end = (qmark > 0) ? qmark : s.length();
+            if (dot > slash && dot < end)
+                return s.substring (dot, end).toLowerCase();
+            return {};
+        };
+        juce::String extension = extractExt (downloadUrlStr);
+        if (extension.isEmpty()) extension = extractExt (modelFilename);
+        if (extension.isEmpty()) extension = tonePlatform.equalsIgnoreCase ("ir") ? ".wav" : ".nam";
+
         auto filename = sanitiseFilename (toneName) + extension;
         auto targetFile = targetDir.getChildFile (filename);
 

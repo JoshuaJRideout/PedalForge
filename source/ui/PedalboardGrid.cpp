@@ -46,6 +46,10 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
         boardCanvas->rebuildBoards();
     };
 
+    addAndMakeVisible (btnExportBoard);
+    btnExportBoard.setTooltip ("Export the entire pedalboard as a sharable .pfboard file");
+    btnExportBoard.onClick = [this] { exportBoardToFile(); };
+
     addAndMakeVisible (btnToggleLeft);
     btnToggleLeft.setTooltip ("Toggle Left Panel");
     btnToggleLeft.onClick = [this] { showLeftPanel = !showLeftPanel; resized(); };
@@ -317,7 +321,8 @@ void PedalboardGrid::resized()
 
     btnToggleRight.setBounds (toolbar.removeFromRight (60).reduced (4, 6));
     btnMaximizeRight.setBounds (toolbar.removeFromRight (50).reduced (4, 6));
-    btnAddBoard.setBounds (toolbar.removeFromRight (100).reduced (4, 6));
+    btnAddBoard.setBounds    (toolbar.removeFromRight (100).reduced (4, 6));
+    btnExportBoard.setBounds (toolbar.removeFromRight (90).reduced (4, 6));
 
     // Active pedals sidebar on the left
     if (showLeftPanel)
@@ -457,6 +462,10 @@ void PedalboardGrid::refreshSelectedPedal()
 
 void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX, float boardY)
 {
+    // The arg is named "pedalName" for backwards compat, but it's actually the
+    // inventory item ID — a factory ID like "factory:cabinet_sim" for factory
+    // pedals, or a PedalDesign::uuid for custom pedals. We accept the legacy
+    // bare-name form only as a last-resort fallback.
     auto& boards = engine.getBoards();
     if (boards.empty()) return;
     auto& config = boards.front(); // Use the first board for now
@@ -464,7 +473,7 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX
     bool loaded = false;
     for (auto& info : getFactoryPedals())
     {
-        if (info.name == pedalName)
+        if (info.factoryID() == pedalName || info.name == pedalName)
         {
             float placeX = boardX;
             float placeY = boardY;
@@ -550,7 +559,10 @@ void PedalboardGrid::addPedalAtGrid (const juce::String& pedalName, float boardX
 
     if (!loaded)
     {
-        if (auto design = loadCustomPedalDesign (pedalName))
+        // Prefer UUID lookup so name collisions with factory pedals don't bite.
+        auto design = loadCustomPedalDesignByUuid (pedalName);
+        if (! design) design = loadCustomPedalDesign (pedalName);  // legacy name path
+        if (design)
         {
             float bw = std::max(100.0f, design->chassisW);
             float bh = std::max(100.0f, design->chassisH);
@@ -811,4 +823,46 @@ void PedalboardGrid::ActivePedalsList::PedalRow::mouseDrag (const juce::MouseEve
             container->startDragging (desc, this, emptyImage, false);
         }
     }
+}
+
+//==============================================================================
+void PedalboardGrid::exportBoardToFile()
+{
+    // The engine's full state IS the board — pedals, layouts, connections,
+    // and every PedalDesign inlined. So .pfboard is just that JSON on disk.
+    juce::String json = engine.serialise();
+
+    juce::String name = "PedalForge_Board";
+    auto& boards = engine.getBoards();
+    if (! boards.empty() && boards.front().name.isNotEmpty())
+        name = boards.front().name.replace (" ", "_");
+
+    auto suggested = juce::File::getSpecialLocation (juce::File::userDesktopDirectory)
+                         .getChildFile (name + ".pfboard");
+
+    exportBoardChooser = std::make_unique<juce::FileChooser> (
+        "Export board as...", suggested, "*.pfboard");
+
+    int flags = juce::FileBrowserComponent::saveMode
+              | juce::FileBrowserComponent::canSelectFiles
+              | juce::FileBrowserComponent::warnAboutOverwriting;
+
+    exportBoardChooser->launchAsync (flags, [json] (const juce::FileChooser& fc)
+    {
+        auto file = fc.getResult();
+        if (file == juce::File()) return;
+        if (! file.hasFileExtension ("pfboard"))
+            file = file.withFileExtension ("pfboard");
+
+        if (file.replaceWithText (json))
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                "Exported", "Board saved to:\n" + file.getFullPathName());
+        }
+        else
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                "Export Failed", "Could not write to:\n" + file.getFullPathName());
+        }
+    });
 }

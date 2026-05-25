@@ -848,6 +848,18 @@ juce::String AudioGraphEngine::serialise() const
     midiCfgObj->setProperty ("novationMode", (int) appMidiConfig.novationMode);
     root->setProperty ("midiConfig", juce::var (midiCfgObj.release()));
 
+    // Engine-scoped scripts (board scripts)
+    juce::Array<juce::var> scriptArr;
+    for (const auto& s : engineScripts)
+    {
+        auto* so = new juce::DynamicObject();
+        so->setProperty ("name",   s.name);
+        so->setProperty ("mode",   s.mode);
+        so->setProperty ("source", s.source);
+        scriptArr.add (juce::var (so));
+    }
+    root->setProperty ("engineScripts", scriptArr);
+
     return juce::JSON::toString (juce::var (root.release()));
 }
 
@@ -895,6 +907,24 @@ void AudioGraphEngine::deserialise (const juce::String& jsonState)
                     appMidiConfig.trackRightCC = (int) midiCfgObj->getProperty ("trackRightCC");
                 if (midiCfgObj->hasProperty ("novationMode"))
                     appMidiConfig.novationMode = (AppMidiConfig::NovationMode) (int) midiCfgObj->getProperty ("novationMode");
+            }
+        }
+
+        // 3b. Engine-scoped scripts (board scripts)
+        engineScripts.clear();
+        if (auto* arr = root->getProperty ("engineScripts").getArray())
+        {
+            for (const auto& sv : *arr)
+            {
+                if (auto* so = sv.getDynamicObject())
+                {
+                    PedalDesign::Script s;
+                    s.name   = so->getProperty ("name").toString();
+                    s.mode   = (int) so->getProperty ("mode");
+                    s.source = so->getProperty ("source").toString();
+                    if (s.mode < 1 || s.mode > 4) s.mode = 4;
+                    engineScripts.push_back (s);
+                }
             }
         }
 

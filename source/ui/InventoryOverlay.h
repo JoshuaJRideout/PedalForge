@@ -41,6 +41,10 @@ public:
     
     std::function<void(const juce::String&)> onPedalClicked;
 
+    /** Re-scan the designs directory and rebuild the inventory. Call after
+        importing a .pfpedal file so the new entry shows up immediately. */
+    void refresh();
+
     //==========================================================================
     // Data model for items in the grid
     //==========================================================================

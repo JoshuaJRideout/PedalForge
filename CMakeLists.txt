@@ -132,8 +132,12 @@ target_sources(PedalForge PRIVATE
     source/midi/MidiLearn.cpp
 
     # Network
+    source/dsp/ControlSurfaceSync.h
+    source/dsp/NodeCatalog.h
     source/network/Tone3000Client.h
     source/network/Tone3000Client.cpp
+    source/network/Tone3000OAuth.h
+    source/network/Tone3000OAuth.cpp
 
     # NAM
     ${NAM_SOURCES}
@@ -188,8 +192,34 @@ target_compile_definitions(PedalForge PUBLIC
 target_link_libraries(PedalForge
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
+)
+
+# ─── Wiki reference generator ────────────────────────────────────
+# Tiny tool that regenerates docs/wiki/reference/expression-vm-functions.md from
+# ExpressionVM::dumpFunctionsAsMarkdown(). Run on demand with:
+#   cmake --build build --target wiki-reference
+# Not tied to the default build to avoid touching the docs file on every compile.
+add_executable(dump_wiki_reference EXCLUDE_FROM_ALL tools/dump_wiki_reference.cpp)
+target_link_libraries(dump_wiki_reference
+    PRIVATE
+        juce::juce_core
+        juce::juce_gui_basics
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+)
+target_compile_definitions(dump_wiki_reference PRIVATE
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_CURL=0
+)
+
+add_custom_target(wiki-reference
+    COMMAND dump_wiki_reference "${CMAKE_SOURCE_DIR}/docs/wiki/reference/expression-vm-functions.md"
+    DEPENDS dump_wiki_reference
+    COMMENT "Regenerating docs/wiki/reference/expression-vm-functions.md from ExpressionVM registry"
+    VERBATIM
 )

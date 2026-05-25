@@ -167,10 +167,14 @@ public:
 
         addAndMakeVisible (btnSave);
         btnSave.onClick = [this] { savePedalDesign(); };
+
+        addAndMakeVisible (btnExport);
+        btnExport.onClick = [this] { exportPedalDesign(); };
     }
 
     juce::var cachedEffectsGraph;
 
+    juce::String pedalUuid;        // empty = fresh design; otherwise preserved across saves
     juce::String pedalName = "My Pedal";
     juce::String pedalAuthor = "User";
     juce::String pedalDescription = "";
@@ -180,9 +184,9 @@ public:
     void savePedalDesign()
     {
         if (pedalName.isEmpty()) pedalName = "Untitled Pedal";
-        
+
         PedalDesign design = buildPedalDesign (pedalFaceBackupPtr);
-        
+
         // Save to designs directory
         auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                               .getChildFile ("PedalForge").getChildFile ("designs");
@@ -196,9 +200,53 @@ public:
                                                  "Pedal design saved to:\n" + file.getFullPathName());
     }
 
+    /** Export the current pedal as a .pfpedal file to a user-chosen location.
+        The file is just a PedalDesign JSON serialisation; .pfpedal is a friendly
+        extension so users (and Finder) know what it is when shared. */
+    void exportPedalDesign()
+    {
+        if (pedalName.isEmpty()) pedalName = "Untitled Pedal";
+
+        auto suggested = juce::File::getSpecialLocation (juce::File::userDesktopDirectory)
+                             .getChildFile (pedalName.replace (" ", "_") + ".pfpedal");
+
+        exportChooser = std::make_unique<juce::FileChooser> (
+            "Export pedal as...", suggested, "*.pfpedal");
+
+        int flags = juce::FileBrowserComponent::saveMode
+                  | juce::FileBrowserComponent::canSelectFiles
+                  | juce::FileBrowserComponent::warnAboutOverwriting;
+
+        exportChooser->launchAsync (flags, [this] (const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file == juce::File()) return;
+
+            // Ensure the file has a .pfpedal extension even if the OS dialog
+            // didn't add it (Linux/Windows behaviour varies).
+            if (! file.hasFileExtension ("pfpedal"))
+                file = file.withFileExtension ("pfpedal");
+
+            PedalDesign design = buildPedalDesign (pedalFaceBackupPtr);
+            if (design.saveToFile (file))
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                    "Exported", "Pedal saved to:\n" + file.getFullPathName());
+            }
+            else
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                    "Export Failed", "Could not write to:\n" + file.getFullPathName());
+            }
+        });
+    }
+
     PedalDesign buildPedalDesign (const std::vector<PlacedHardware>* pedalFaceBackup = nullptr) const
     {
         PedalDesign design;
+        // Preserve the existing design's UUID across saves; the default ctor
+        // already generated one if this canvas was loaded fresh.
+        if (pedalUuid.isNotEmpty()) design.uuid = pedalUuid;
         design.name = pedalName;
         design.author = pedalAuthor;
         design.description = pedalDescription;
@@ -289,7 +337,8 @@ public:
 
     void resized() override
     {
-        btnSave.setBounds (getWidth() - 90, 10, 80, 24);
+        btnSave.setBounds   (getWidth() - 90,  10, 80, 24);
+        btnExport.setBounds (getWidth() - 180, 10, 85, 24);
     }
 
     void paint (juce::Graphics& g) override
@@ -1047,7 +1096,9 @@ public:
 
     friend class PedalDesignerComponent;
 
-    juce::TextButton btnSave { "Save" };
+    juce::TextButton btnSave   { "Save" };
+    juce::TextButton btnExport { "Export..." };
+    std::unique_ptr<juce::FileChooser> exportChooser;
     float scale = 1.0f, panX = 0.0f, panY = 0.0f, rotation = 0.0f;
     juce::String chassisImage;
     std::unique_ptr<juce::FileChooser> fileChooser;
@@ -2540,6 +2591,7 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         canvas->chassisH = design.chassisH;
         canvas->chassisColour = design.chassisColour;
         canvas->chassisImage = design.chassisImage;
+        canvas->pedalUuid = design.uuid;
         canvas->pedalName = design.name;
         canvas->pedalAuthor = design.author;
         canvas->pedalDescription = design.description;

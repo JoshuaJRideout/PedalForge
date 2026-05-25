@@ -4,6 +4,7 @@
 #include "HardwareDrawing.h"
 #include "PedalPainter.h"
 #include "../dsp/PedalDesign.h"
+#include "../dsp/NodeCatalog.h"
 
 //==============================================================================
 //  CategoryPanel
@@ -198,13 +199,16 @@ void InventoryOverlay::ItemGrid::GridCell::mouseDown (const juce::MouseEvent& e)
             {
                 auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                                       .getChildFile ("PedalForge").getChildFile ("designs");
+                auto targetUuid = item.pedalDesign->uuid;
                 for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
                 {
                     auto d = PedalDesign::loadFromFile (file);
-                    if (d.name == item.pedalDesign->name)
+                    // Match by UUID first; fall back to name only if the file
+                    // predates the uuid field and the user gave it one (legacy).
+                    if ((targetUuid.isNotEmpty() && d.uuid == targetUuid)
+                        || (targetUuid.isEmpty() && d.name == item.pedalDesign->name))
                     {
                         file.deleteFile();
-                        // The overlay will need to rebuild its database
                         break;
                     }
                 }
@@ -484,6 +488,14 @@ void InventoryOverlay::setContext (Context ctx)
     filterItems();
 }
 
+void InventoryOverlay::refresh()
+{
+    allItems.clear();
+    buildItemDatabase();
+    filterItems();
+    repaint();
+}
+
 void InventoryOverlay::buildItemDatabase()
 {
     allItems.clear();
@@ -492,7 +504,7 @@ void InventoryOverlay::buildItemDatabase()
     for (auto& info : getFactoryPedals())
     {
         InventoryItem item;
-        item.id = info.name;
+        item.id = info.factoryID();           // stable factory identity
         item.displayName = info.name;
         item.category = info.category;
         item.mainCategory = "Pedals";
@@ -518,7 +530,7 @@ void InventoryOverlay::buildItemDatabase()
             if (design->name.isEmpty()) continue;
 
             InventoryItem item;
-            item.id = design->name;
+            item.id = design->uuid;            // stable per-design identity
             item.displayName = design->name;
             item.category = design->category.isNotEmpty() ? design->category : "Custom";
             item.mainCategory = "Pedals";
@@ -580,6 +592,39 @@ void InventoryOverlay::buildItemDatabase()
     }
 
     // ── Nodes (DSP Blocks) ──────────────────────────────────────────────
+    // Pulled from NodeCatalog::getEntries() — the single source of truth shared
+    // with the FX graph right-click menu. To add a new node type, edit NodeCatalog.h.
+    {
+        for (const auto& e : NodeCatalog::getEntries())
+        {
+            if (! e.inInventory) continue;
+
+            // menuPath like "Effects/Filters" or "Nodes/MIDI/Receive". First
+            // segment is the inventory main category; remaining segments are
+            // joined with " / " as the sub-category.
+            auto segs = juce::StringArray::fromTokens (e.menuPath, "/", {});
+            segs.removeEmptyStrings();
+            if (segs.isEmpty()) continue;
+
+            juce::String mainCat = segs[0];
+            segs.remove (0);
+            juce::String subCat  = segs.joinIntoString (" / ");
+
+            InventoryItem item;
+            item.id           = e.type;
+            item.displayName  = e.displayName;
+            item.category     = subCat.isNotEmpty() ? subCat : juce::String ("General");
+            item.mainCategory = mainCat;
+            item.description  = e.description;
+            item.isFactory    = true;
+            item.hardwareType = e.type;  // used for drag-and-drop target
+            allItems.push_back (std::move (item));
+        }
+    }
+
+    // Legacy hand-coded list kept #if 0'd for reference until the catalog has
+    // been verified end-to-end. To be removed.
+   #if 0
     struct NodeDef { const char* type; const char* name; const char* category; const char* mainCategory; const char* desc; };
     NodeDef nodes[] = {
         {"audio_input", "Audio Input", "I/O", "Nodes", "Receives audio from the pedalboard input."},
@@ -667,7 +712,16 @@ void InventoryOverlay::buildItemDatabase()
         {"disp_indicator", "Indicator Light", "Displays", "Nodes", "Large status indicator."},
         {"disp_scope", "Oscilloscope", "Displays", "Nodes", "Waveform analyzer display."},
         {"disp_pixel", "Pixel Display", "Displays", "Nodes", "Custom 32x16 addressable pixel grid."},
-        {"disp_shader", "Shader Display", "Displays", "Nodes", "Code-driven math visualization grid."}
+        {"disp_shader", "Shader Display", "Displays", "Nodes", "Code-driven math visualization grid."},
+
+        // Control-surface nodes: dropping one of these into the FX graph spawns a
+        // matching control on the pedal face that's auto-bound to the node's value.
+        {"ctrl_knob",     "Knob",       "Controls", "Nodes", "Rotary control. Auto-spawns a knob on the pedal face bound to its value."},
+        {"ctrl_fader",    "Fader",      "Controls", "Nodes", "Linear slider. Auto-spawns a fader on the pedal face."},
+        {"ctrl_button",   "Button",     "Controls", "Nodes", "Momentary gate. Auto-spawns a footswitch (high while pressed)."},
+        {"ctrl_toggle",   "Toggle",     "Controls", "Nodes", "Latching on/off. Auto-spawns a switch on the pedal face."},
+        {"ctrl_selector", "Selector",   "Controls", "Nodes", "Multi-position switch. Auto-spawns a switch on the pedal face."},
+        {"footswitch",    "Footswitch", "Controls", "Nodes", "Latching foot-controlled stomp switch."}
     };
 
     for (auto& n : nodes)
@@ -679,10 +733,10 @@ void InventoryOverlay::buildItemDatabase()
         item.mainCategory = n.mainCategory;
         item.description = n.desc;
         item.isFactory = true;
-        // Hardware type can be re-used to store the node type for drag-and-drop
         item.hardwareType = n.type;
         allItems.push_back (std::move (item));
     }
+   #endif  // Legacy node list
 
     // ── Build category tree (context-aware) ─────────────────────────
     juce::StringArray mainCats;

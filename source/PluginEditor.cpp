@@ -1,6 +1,8 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "dsp/PedalDesign.h"
+#include "dsp/ControlSurfaceSync.h"
+#include "pedals/PedalRegistry.h"
 #include "ui/PlayTabComponent.h"
 
 #if JucePlugin_Build_Standalone
@@ -65,6 +67,10 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
             grid.refreshSelectedPedal();
         }
     };
+    scriptingTab.onOpenWiki = [this] (const juce::String& pageId) {
+        tabWiki.setToggleState (true, juce::sendNotification);
+        wikiTab.navigateTo (pageId);
+    };
 
     // Wiki tab — load docs from the wiki directory beside the plugin binary
     addChildComponent (wikiTab);
@@ -127,10 +133,18 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     nodeGraphEditor.onGraphChanged = [this] {
         if (activePedal != nullptr && activePedal->design != nullptr)
         {
+            // Auto-create / auto-remove pedal-face controls for control-surface
+            // nodes in the graph (Knob, Fader, Toggle, etc.). Must run before
+            // the design is serialised so the new controls travel with it.
+            syncControlSurfaceNodes (*activePedal->design, nodeGraphEditor.getGraph());
+
             activePedal->design->effectsGraph = nodeGraphEditor.getGraph().toJSON();
             auto newProc = std::make_unique<GraphPedalProcessor> (activePedal->name, juce::JSON::toString (activePedal->design->effectsGraph));
             processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
             processorRef.getGraphEngine().saveUndoState();
+
+            // Re-render the pedal face / refresh detail panel since controls may have changed
+            grid.refreshSelectedPedal();
         }
     };
 
@@ -175,11 +189,35 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     
     libraryView.onAssetSelected = [this] (const juce::File& file)
     {
+        juce::String ext = file.getFileExtension().toLowerCase();
+
+        // .pfboard — replace the current board with the one in the file.
+        if (ext == ".pfboard")
+        {
+            juce::Component::SafePointer<PedalForgeEditor> sp (this);
+            juce::File boardFile = file;
+            juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon,
+                "Load Board?",
+                "Loading \"" + boardFile.getFileNameWithoutExtension()
+                    + "\" will replace your current pedalboard.\n\nContinue?",
+                "Load", "Cancel", nullptr,
+                juce::ModalCallbackFunction::create ([sp, boardFile] (int r)
+                {
+                    if (sp == nullptr || r == 0) return;
+                    auto json = boardFile.loadFileAsString();
+                    if (json.isEmpty()) return;
+                    sp->processorRef.getGraphEngine().deserialise (json);
+                    sp->grid.rebuildFromEngine();
+                    sp->inventory.refresh();
+                    sp->refreshAfterUndoRedo();
+                }));
+            return;
+        }
+
         if (activePedal == nullptr || activePedal->design == nullptr)
             return;
 
         // Determine category based on file extension
-        juce::String ext = file.getFileExtension().toLowerCase();
         juce::String category;
         if (ext == ".nam") category = "NAM";
         else if (ext == ".wav" || ext == ".ir") category = "IR";
@@ -280,6 +318,93 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     setSize (1200, 800);
     setResizable (true, true);
     setResizeLimits (900, 600, 2400, 1600);
+}
+
+bool PedalForgeEditor::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    for (const auto& f : files)
+    {
+        juce::File file (f);
+        if (file.hasFileExtension ("pfpedal") || file.hasFileExtension ("pfboard"))
+            return true;
+    }
+    return false;
+}
+
+void PedalForgeEditor::filesDropped (const juce::StringArray& files, int /*x*/, int /*y*/)
+{
+    juce::StringArray importedPedals, failedPedals;
+    juce::File boardFileToLoad;
+
+    for (const auto& f : files)
+    {
+        juce::File src (f);
+        if (src.hasFileExtension ("pfpedal"))
+        {
+            auto dest = importPedalDesignFile (src);
+            if (dest != juce::File())
+                importedPedals.add (dest.getFileNameWithoutExtension());
+            else
+                failedPedals.add (src.getFileName());
+        }
+        else if (src.hasFileExtension ("pfboard"))
+        {
+            // Only act on the first board file dropped; multi-board drop makes
+            // no sense since each one would replace the previous.
+            if (boardFileToLoad == juce::File())
+                boardFileToLoad = src;
+        }
+    }
+
+    if (! importedPedals.isEmpty())
+    {
+        inventory.refresh();
+        juce::String msg = "Imported " + juce::String (importedPedals.size())
+                         + " pedal" + (importedPedals.size() == 1 ? "" : "s") + ":\n"
+                         + importedPedals.joinIntoString ("\n");
+        if (! failedPedals.isEmpty())
+            msg += "\n\nFailed:\n" + failedPedals.joinIntoString ("\n");
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                                                 "Pedal Import", msg);
+    }
+    else if (! failedPedals.isEmpty() && boardFileToLoad == juce::File())
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+            "Pedal Import Failed",
+            "Could not import:\n" + failedPedals.joinIntoString ("\n")
+            + "\n\nThe file(s) may not be valid PedalForge designs.");
+    }
+
+    if (boardFileToLoad != juce::File())
+    {
+        juce::Component::SafePointer<PedalForgeEditor> sp (this);
+        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon,
+            "Load Board?",
+            "Loading \"" + boardFileToLoad.getFileNameWithoutExtension()
+                + "\" will replace your current pedalboard.\n\nContinue?",
+            "Load", "Cancel", nullptr,
+            juce::ModalCallbackFunction::create ([sp, boardFileToLoad] (int r)
+            {
+                if (sp == nullptr || r == 0) return;
+
+                auto json = boardFileToLoad.loadFileAsString();
+                if (json.isEmpty())
+                {
+                    juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                        "Board Import Failed", "Could not read:\n" + boardFileToLoad.getFullPathName());
+                    return;
+                }
+
+                // Persist a copy in ~/Library/PedalForge/boards/ so it shows up
+                // in the Library Boards category for later reuse.
+                importBoardFile (boardFileToLoad);
+
+                sp->processorRef.getGraphEngine().deserialise (json);
+                sp->grid.rebuildFromEngine();
+                sp->inventory.refresh();
+                sp->refreshAfterUndoRedo();
+            }));
+    }
 }
 
 PedalForgeEditor::~PedalForgeEditor()

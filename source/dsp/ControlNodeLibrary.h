@@ -46,8 +46,8 @@ public:
             out[0][i] = val;
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "knob"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "knob"; }
 };
 
 /**
@@ -75,8 +75,8 @@ public:
             out[0][i] = val;
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "fader"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "fader"; }
 };
 
 /**
@@ -100,8 +100,8 @@ public:
             out[0][i] = val;
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "button"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "footswitch"; }
 };
 
 /**
@@ -125,8 +125,8 @@ public:
             out[0][i] = val;
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "toggle"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "switch"; }
 };
 
 /**
@@ -153,8 +153,8 @@ public:
             out[0][i] = val;
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "selector"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "switch"; }  // multi-position; rendered as switch until HardwareDrawing has a dedicated rotary selector
 };
 
 /**
@@ -184,8 +184,11 @@ public:
         }
     }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "xy_pad"; }
+    // XY pads aren't yet renderable on the pedal face; treat as non-surface for
+    // now so we don't spawn an invisible control. Re-enable when HardwareDrawing
+    // gains an xy_pad case.
+    bool isControlSurface() const override { return false; }
+    juce::String getControlType() const override { return {}; }
 };
 
 //==============================================================================

@@ -20,6 +20,14 @@ struct PedalInfo
     juce::Colour colour;
     std::function<std::unique_ptr<juce::AudioProcessor>()> factory;
     std::function<std::shared_ptr<PedalDesign>()> designFactory;
+
+    /** Stable identity for the inventory. Factory entries get an ID derived
+        from their name; user-modified copies live in designs/ with their own
+        PedalDesign::uuid and never collide with this. */
+    juce::String factoryID() const
+    {
+        return "factory:" + name.replace (" ", "_").toLowerCase();
+    }
 };
 
 inline juce::File getPedalLibraryDir()
@@ -44,6 +52,110 @@ inline std::shared_ptr<PedalDesign> loadDesignOrDefault(const juce::String& name
         } catch (...) {}
     }
     return factory();
+}
+
+/** Import a .pfpedal (or .json) file as a custom pedal. Copies it into the
+    designs/ directory under the pedal's own name, with a numeric suffix if a
+    pedal with that name already exists. Returns the target file on success,
+    or an empty File() on parse/write failure.
+
+    Pure utility — does not refresh any UI. Callers should refresh the
+    inventory after a successful import. */
+inline juce::File importPedalDesignFile (const juce::File& source)
+{
+    if (! source.existsAsFile()) return {};
+
+    PedalDesign design;
+    try { design = PedalDesign::loadFromFile (source); }
+    catch (...) { return {}; }
+
+    if (design.name.isEmpty()) return {};
+
+    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                          .getChildFile ("PedalForge").getChildFile ("designs");
+    designsDir.createDirectory();
+
+    // If a design with the same UUID is already installed, treat this import
+    // as an update and overwrite it. Same identity = same pedal, even if the
+    // user renamed it locally.
+    if (design.uuid.isNotEmpty())
+    {
+        for (const auto& f : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
+        {
+            try {
+                if (PedalDesign::loadFromFile (f).uuid == design.uuid)
+                {
+                    source.copyFileTo (f);
+                    return f;
+                }
+            } catch (...) {}
+        }
+    }
+
+    // New design — pick a filename that doesn't collide. Filename uniqueness
+    // is just hygiene; identity is the uuid inside the JSON.
+    auto baseName = design.name.replace (" ", "_");
+    auto target   = designsDir.getChildFile (baseName + ".json");
+
+    int suffix = 2;
+    while (target.existsAsFile())
+    {
+        target = designsDir.getChildFile (baseName + "_" + juce::String (suffix++) + ".json");
+        if (suffix > 1000) return {};   // sanity
+    }
+
+    return source.copyFileTo (target) ? target : juce::File();
+}
+
+/** Look up a custom pedal design in the designs/ dir by its stable UUID.
+    Returns nullptr if none match. Use this instead of name-based lookup so
+    user designs whose displayName happens to collide with a factory pedal
+    are still uniquely addressable. */
+inline juce::File getBoardsDir()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("PedalForge").getChildFile ("boards");
+    dir.createDirectory();
+    return dir;
+}
+
+/** Copy a .pfboard file into ~/Library/PedalForge/boards/ for later loading
+    via the Library tab. Returns the destination on success.
+    Filename is uniquified if a board with the same name already lives there;
+    no UUID dedup yet because BoardConfig doesn't carry one (TODO). */
+inline juce::File importBoardFile (const juce::File& source)
+{
+    if (! source.existsAsFile()) return {};
+
+    auto boardsDir = getBoardsDir();
+    auto baseName  = source.getFileNameWithoutExtension();
+    auto target    = boardsDir.getChildFile (baseName + ".pfboard");
+
+    int suffix = 2;
+    while (target.existsAsFile())
+    {
+        target = boardsDir.getChildFile (baseName + "_" + juce::String (suffix++) + ".pfboard");
+        if (suffix > 1000) return {};
+    }
+    return source.copyFileTo (target) ? target : juce::File();
+}
+
+inline std::shared_ptr<PedalDesign> loadCustomPedalDesignByUuid (const juce::String& uuid)
+{
+    if (uuid.isEmpty()) return nullptr;
+
+    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                          .getChildFile ("PedalForge").getChildFile ("designs");
+    if (! designsDir.isDirectory()) return nullptr;
+
+    for (const auto& f : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
+    {
+        try {
+            auto d = PedalDesign::loadFromFile (f);
+            if (d.uuid == uuid) return std::make_shared<PedalDesign> (d);
+        } catch (...) {}
+    }
+    return nullptr;
 }
 
 inline std::shared_ptr<PedalDesign> loadCustomPedalDesign(const juce::String& name)

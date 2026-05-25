@@ -1,5 +1,8 @@
 #include "LibraryComponent.h"
 #include "LookAndFeel.h"
+#include "PedalPainter.h"
+#include "../dsp/PedalDesign.h"
+#include "../pedals/PedalRegistry.h"
 
 //==============================================================================
 class CategoryTreeItem : public juce::TreeViewItem
@@ -51,6 +54,7 @@ LibraryComponent::LibraryComponent()
     categoryTree.setRootItemVisible(false);
 
     root->addSubItem(new CategoryTreeItem("Pedals", "Pedals", *this));
+    root->addSubItem(new CategoryTreeItem("Boards", "Boards", *this));
     root->addSubItem(new CategoryTreeItem("NAM Models", "NAM", *this));
 
     auto* irNode = new CategoryTreeItem("IMPULSE RESPONSES", "", *this, true);
@@ -72,21 +76,29 @@ LibraryComponent::LibraryComponent()
     importBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
     importBtn.onClick = [this]
     {
-        auto filter = AssetLibrary::getFileFilterForCategory (currentCategoryID);
+        const bool isPedals = (currentCategoryID == "Pedals");
+        const bool isBoards = (currentCategoryID == "Boards");
+        juce::String filter =
+              isPedals ? juce::String ("*.pfpedal;*.json")
+            : isBoards ? juce::String ("*.pfboard")
+            :            AssetLibrary::getFileFilterForCategory (currentCategoryID);
+
         fileChooser = std::make_unique<juce::FileChooser> ("Import to Library", juce::File{}, filter);
         auto flags = juce::FileBrowserComponent::openMode
                    | juce::FileBrowserComponent::canSelectFiles
                    | juce::FileBrowserComponent::canSelectMultipleItems;
 
         juce::Component::SafePointer<LibraryComponent> sp (this);
-        fileChooser->launchAsync (flags, [sp] (const juce::FileChooser& fc)
+        fileChooser->launchAsync (flags, [sp, isPedals, isBoards] (const juce::FileChooser& fc)
         {
             if (sp == nullptr) return;
             auto results = fc.getResults();
             for (auto& f : results)
             {
-                if (f.existsAsFile())
-                    sp->library.importFile (f, sp->currentCategoryID);
+                if (! f.existsAsFile()) continue;
+                if      (isPedals) importPedalDesignFile (f);
+                else if (isBoards) importBoardFile (f);
+                else                sp->library.importFile (f, sp->currentCategoryID);
             }
             sp->refreshAssets();
         });
@@ -95,6 +107,7 @@ LibraryComponent::LibraryComponent()
     gridViewport.setViewedComponent (&assetGrid, false);
     gridViewport.setScrollBarsShown (true, false);
     addAndMakeVisible (gridViewport);
+    addChildComponent (assetTable);
 
     // Subcategory combo
     subcategoryCombo.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgMid);
@@ -134,23 +147,40 @@ LibraryComponent::LibraryComponent()
         first->setSelected(true, true);
 
     // ── TONE3000 Cloud Integration ──
-    auto savedKey = loadApiKey();
-    if (savedKey.isNotEmpty())
-        cloudClient.setApiKey (savedKey);
+    cloudAuth.onAuthStateChanged = [this] { refreshSignInButton(); };
 
     addChildComponent (cloudToggle);
     addChildComponent (localToggle);
-    addChildComponent (apiKeyBtn);
+    addChildComponent (signInBtn);
     cloudToggle.setVisible (true);
     localToggle.setVisible (true);
 
     cloudToggle.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
     localToggle.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
-    apiKeyBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    signInBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    refreshSignInButton();
 
     cloudToggle.onClick = [this] { switchToCloudMode (true); };
     localToggle.onClick = [this] { switchToCloudMode (false); };
-    apiKeyBtn.onClick = [this] { promptForApiKey ([this] { performCloudSearch(); }); };
+
+    // Icon/Table view toggles — only meaningful for Pedals/Boards/Images.
+    addChildComponent (btnIconView);
+    addChildComponent (btnTableView);
+    btnIconView.setColour  (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    btnTableView.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    btnIconView.onClick  = [this] { categoryShowsIcons[currentCategoryID] = true;  resized(); repaint(); };
+    btnTableView.onClick = [this] { categoryShowsIcons[currentCategoryID] = false; resized(); repaint(); };
+    signInBtn.onClick = [this]
+    {
+        if (cloudAuth.isSignedIn())
+        {
+            cloudAuth.signOut();
+        }
+        else
+        {
+            startSignIn ([this] { performCloudSearch(); });
+        }
+    };
 
     // Gear filter buttons
     for (auto* btn : { &filterAll, &filterAmps, &filterPedals, &filterRigs, &filterIRs })
@@ -268,13 +298,13 @@ void LibraryComponent::resized()
 
     if (showingCloud)
     {
-        apiKeyBtn.setVisible (true);
-        apiKeyBtn.setBounds (toggleArea.removeFromLeft (80).withSizeKeepingCentre (80, 24));
+        signInBtn.setVisible (true);
+        signInBtn.setBounds (toggleArea.removeFromLeft (80).withSizeKeepingCentre (80, 24));
         toggleArea.removeFromLeft (4);
     }
     else
     {
-        apiKeyBtn.setVisible (false);
+        signInBtn.setVisible (false);
     }
 
     cloudToggle.setBounds (toggleArea.removeFromRight (90).withSizeKeepingCentre (90, 24));
@@ -314,16 +344,103 @@ void LibraryComponent::resized()
     }
 
     auto gridBounds = bounds.reduced (8);
-    gridViewport.setBounds (gridBounds);
-    assetGrid.updateSize (gridBounds.getWidth());
+
+    // Two-button toggle for categories that support both views.
+    const bool toggleVisible = ! showingCloud && categorySupportsBothViews (currentCategoryID);
+    btnIconView.setVisible (toggleVisible);
+    btnTableView.setVisible (toggleVisible);
+    if (toggleVisible)
+    {
+        auto bar = gridBounds.removeFromTop (28);
+        gridBounds.removeFromTop (4);
+        btnIconView.setBounds  (bar.removeFromLeft (60).withSizeKeepingCentre (60, 22));
+        bar.removeFromLeft (2);
+        btnTableView.setBounds (bar.removeFromLeft (60).withSizeKeepingCentre (60, 22));
+
+        // Visual state: highlight whichever view is active.
+        bool showIcons = currentCategoryShowsIcons();
+        btnIconView .setColour (juce::TextButton::buttonColourId, showIcons ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+        btnTableView.setColour (juce::TextButton::buttonColourId, showIcons ? PedalForgeLookAndFeel::bgLight : PedalForgeLookAndFeel::accent);
+    }
+
+    const bool useTable = ! showingCloud
+                          && ! (categorySupportsBothViews (currentCategoryID) && currentCategoryShowsIcons())
+                          && currentCategoryID != "Images";
+
+    if (! useTable)
+    {
+        gridViewport.setVisible (true);
+        assetTable.setVisible (false);
+        gridViewport.setBounds (gridBounds);
+        assetGrid.updateSize (gridBounds.getWidth());
+    }
+    else
+    {
+        gridViewport.setVisible (false);
+        assetTable.setVisible (true);
+        assetTable.setBounds (gridBounds);
+    }
 }
 
 
 void LibraryComponent::refreshAssets()
 {
-    if (currentCategoryID == "Pedals")
+    if (currentCategoryID == "Boards")
     {
         currentAssets.clear();
+        auto boardsDir = getBoardsDir();
+        if (boardsDir.isDirectory())
+        {
+            for (const auto& f : boardsDir.findChildFiles (juce::File::findFiles, false, "*.pfboard"))
+            {
+                AssetLibrary::AssetItem item;
+                item.name      = f.getFileNameWithoutExtension();
+                item.category  = "Boards";
+                item.file      = f;
+                item.extension = ".pfboard";
+                item.sizeBytes = f.getSize();
+                item.dateAdded = f.getLastModificationTime();
+                currentAssets.push_back (item);
+            }
+        }
+    }
+    else if (currentCategoryID == "Pedals")
+    {
+        // Pedal designs live in ~/Library/PedalForge/designs/. Surface them here
+        // so the Library tab is the single hub. Cache the parsed PedalDesign for
+        // the icon view (PedalPainter needs it; we don't want to re-parse per paint).
+        currentAssets.clear();
+        pedalDesignCache.clear();
+
+        auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                              .getChildFile ("PedalForge").getChildFile ("designs");
+
+        if (designsDir.isDirectory())
+        {
+            for (const auto& f : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
+            {
+                AssetLibrary::AssetItem item;
+                try
+                {
+                    auto d = std::make_shared<PedalDesign> (PedalDesign::loadFromFile (f));
+                    if (d->name.isEmpty()) continue;
+                    item.name        = d->name;
+                    item.tags        = d->tags;
+                    if (d->author.isNotEmpty()) item.tags.add ("by " + d->author);
+                    pedalDesignCache[f.getFullPathName()] = d;
+                }
+                catch (...)
+                {
+                    item.name = f.getFileNameWithoutExtension();
+                }
+                item.category    = "Pedals";
+                item.file        = f;
+                item.extension   = ".pfpedal";   // friendly label in the Type column
+                item.sizeBytes   = f.getSize();
+                item.dateAdded   = f.getLastModificationTime();
+                currentAssets.push_back (item);
+            }
+        }
     }
     else
     {
@@ -369,6 +486,7 @@ void LibraryComponent::applyFilter()
 
     assetGrid.updateSize (gridViewport.getWidth());
     assetGrid.repaint();
+    assetTable.refresh();
 }
 
 void LibraryComponent::selectCategory (const juce::String& category)
@@ -526,7 +644,75 @@ void LibraryComponent::AssetGrid::paint (juce::Graphics& g)
         g.setColour (isSel ? PedalForgeLookAndFeel::accent : juce::Colour (0xff333344));
         g.drawRoundedRectangle (itemBounds.toFloat().reduced (0.5f), 6.0f, isSel ? 2.0f : 1.0f);
 
-        if (isImageMode())
+        if (isPedalMode())
+        {
+            // ── Pedal preview card ──
+            // Render the actual chassis using PedalPainter so the user sees
+            // what the pedal looks like, not just a name.
+            auto cardArea = itemBounds.reduced (6).toFloat();
+            auto previewArea = cardArea.removeFromTop (cardArea.getHeight() - 24);
+
+            auto it = parent.pedalDesignCache.find (assets[i].file.getFullPathName());
+            const PedalDesign* design = (it != parent.pedalDesignCache.end()) ? it->second.get() : nullptr;
+
+            if (design != nullptr)
+            {
+                PedalPainter::paintDesign (g, previewArea, design,
+                                           /*controlValues*/ {},
+                                           /*controlTexts*/  {},
+                                           /*controlData*/   {},
+                                           /*bypassed*/      false,
+                                           /*alpha*/         1.0f);
+            }
+            else
+            {
+                g.setColour (PedalForgeLookAndFeel::bgLight);
+                g.fillRoundedRectangle (previewArea, 4.0f);
+                g.setColour (PedalForgeLookAndFeel::textMuted);
+                g.setFont (11.0f);
+                g.drawText ("No Preview", previewArea.toNearestInt(), juce::Justification::centred);
+            }
+
+            // Name below
+            g.setColour (isSel ? juce::Colours::white : PedalForgeLookAndFeel::textPrimary);
+            g.setFont (juce::FontOptions (12.0f));
+            g.drawText (assets[i].name, cardArea.toNearestInt(), juce::Justification::centred, true);
+        }
+        else if (isBoardMode())
+        {
+            // ── Board summary card ──
+            // Full board mini-render is more work; for now show the file name
+            // and pedal-count chip derived from the JSON.
+            auto cardArea = itemBounds.reduced (8).toFloat();
+
+            int pedalCount = 0;
+            auto json = juce::JSON::parse (assets[i].file.loadFileAsString());
+            if (auto* obj = json.getDynamicObject())
+                if (auto* arr = obj->getProperty ("pedals").getArray())
+                    pedalCount = arr->size();
+
+            // Big board icon + count chip
+            auto iconArea = cardArea.removeFromTop (cardArea.getHeight() - 30);
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (isSel ? 0.35f : 0.18f));
+            g.fillRoundedRectangle (iconArea.reduced (12), 6.0f);
+            g.setColour (PedalForgeLookAndFeel::accent);
+            g.setFont (28.0f);
+            g.drawText (juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x8e\x9b")),  // 🎛
+                        iconArea.toNearestInt(), juce::Justification::centred);
+
+            auto chip = juce::Rectangle<float> (iconArea.getRight() - 60.0f, iconArea.getBottom() - 22.0f, 50.0f, 18.0f);
+            g.setColour (PedalForgeLookAndFeel::bgDark.withAlpha (0.85f));
+            g.fillRoundedRectangle (chip, 3.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.setFont (10.0f);
+            g.drawText (juce::String (pedalCount) + " pedal" + (pedalCount == 1 ? "" : "s"),
+                        chip.toNearestInt(), juce::Justification::centred);
+
+            g.setColour (isSel ? juce::Colours::white : PedalForgeLookAndFeel::textPrimary);
+            g.setFont (juce::FontOptions (12.0f));
+            g.drawText (assets[i].name, cardArea.toNearestInt(), juce::Justification::centred, true);
+        }
+        else if (isImageMode())
         {
             // ── Image thumbnail card ──
             auto thumbArea = itemBounds.reduced (6);
@@ -910,6 +1096,11 @@ void LibraryComponent::switchToCloudMode (bool cloud)
     localToggle.setColour (juce::TextButton::buttonColourId,
         cloud ? PedalForgeLookAndFeel::bgLight : PedalForgeLookAndFeel::accent);
 
+    // Clear search text on every mode switch — a query relevant to one side
+    // will almost never be the right one for the other (local file names vs
+    // cloud tone titles), and a stale query silently emptied the local view.
+    searchBox.setText ({}, juce::dontSendNotification);
+
     if (cloud)
     {
         // Switch search to cloud mode — debounce to avoid per-keystroke requests
@@ -923,10 +1114,6 @@ void LibraryComponent::switchToCloudMode (bool cloud)
         // Hide local sidebar
         categoryTree.setVisible (false);
         sidebarVisible = false;
-
-        // Trigger initial search if search box has text
-        if (searchBox.getText().trim().isNotEmpty())
-            performCloudSearch();
     }
     else
     {
@@ -964,10 +1151,11 @@ void LibraryComponent::setGearFilter (const juce::String& filter)
 
 void LibraryComponent::performCloudSearch()
 {
-    // Verify API Key exists before executing search
-    if (loadApiKey().isEmpty())
+    // Need an access token before we can search. If the user isn't signed in,
+    // kick off the OAuth flow first and re-enter on success.
+    if (! cloudAuth.isSignedIn())
     {
-        promptForApiKey ([this] { performCloudSearch(); });
+        startSignIn ([this] { performCloudSearch(); });
         return;
     }
 
@@ -993,19 +1181,16 @@ void LibraryComponent::performCloudSearch()
         {
             juce::Logger::writeToLog ("[Tone3000] Search failed: " + result.errorMessage);
 
-            // If authorization or key error is returned, prompt to re-enter
-            if (result.errorMessage.containsIgnoreCase ("Authorization") 
-                || result.errorMessage.containsIgnoreCase ("key") 
+            // If authorization fails, drop tokens and re-trigger sign-in.
+            if (result.errorMessage.containsIgnoreCase ("Authorization")
+                || result.errorMessage.containsIgnoreCase ("key")
                 || result.errorMessage.containsIgnoreCase ("unauthorized"))
             {
-                sp->saveApiKey ("");
-                sp->cloudClient.setApiKey ("");
+                sp->cloudAuth.signOut();
 
                 juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
-                    "TONE3000 Authentication Failed", 
-                    "Your TONE3000 API Key appears to be invalid or expired. Please re-enter it.");
-
-                sp->promptForApiKey ([sp] { sp->performCloudSearch(); });
+                    "TONE3000 Sign-in Required",
+                    "Your TONE3000 session has expired. Click Sign in to reauthorize.");
             }
             else
             {
@@ -1069,6 +1254,11 @@ void LibraryComponent::triggerCloudDownload (const ToneResult& tone)
             sp->library.saveMetadata (item);
 
             juce::Logger::writeToLog ("[TONE3000] Downloaded: " + toneName + " -> " + downloadedFile.getFullPathName());
+
+            // If the user happens to be looking at the matching local category,
+            // refresh so the new file shows up immediately.
+            if (! sp->showingCloud && sp->currentCategoryID == category)
+                sp->refreshAssets();
         }
         else
         {
@@ -1090,63 +1280,324 @@ void LibraryComponent::scheduleCloudSearch()
     startTimer (500); // 500ms debounce
 }
 
-juce::String LibraryComponent::loadApiKey()
+void LibraryComponent::startSignIn (std::function<void()> onSuccess)
 {
-    auto file = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                    .getChildFile ("PedalForge")
-                    .getChildFile ("settings.json");
-    if (file.existsAsFile())
-    {
-        auto json = juce::JSON::parse (file);
-        if (json.isObject())
-            return json.getProperty ("tone3000ApiKey", "").toString();
-    }
-    return {};
-}
-
-void LibraryComponent::saveApiKey (const juce::String& key)
-{
-    auto file = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                    .getChildFile ("PedalForge")
-                    .getChildFile ("settings.json");
-    file.getParentDirectory().createDirectory();
-
-    juce::DynamicObject::Ptr obj = new juce::DynamicObject();
-    obj->setProperty ("tone3000ApiKey", key);
-
-    file.replaceWithText (juce::JSON::toString (juce::var (obj.get())));
-}
-
-void LibraryComponent::promptForApiKey (std::function<void()> onSuccessCallback)
-{
-    juce::AlertWindow* alert = new juce::AlertWindow ("TONE3000 API Key Required",
-        "To search and download from TONE3000, please enter your Secret API Key (starts with 't3k_cs_') OR your Legacy API Key (from the bottom of the Settings -> API Keys page).\n\n"
-        "Your key is saved strictly on your local machine and will never be committed to Git or shared on GitHub.",
-        juce::AlertWindow::NoIcon);
-
-    alert->addTextEditor ("key", loadApiKey());
-    alert->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    signInBtn.setButtonText ("Opening browser...");
+    signInBtn.setEnabled (false);
 
     juce::Component::SafePointer<LibraryComponent> sp (this);
-    alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, alert, onSuccessCallback] (int r)
+    cloudAuth.signInAsync ([sp, onSuccess] (bool ok, juce::String error)
     {
-        if (r == 1 && sp != nullptr)
+        if (sp == nullptr) return;
+
+        sp->refreshSignInButton();
+
+        if (ok)
         {
-            auto enteredKey = alert->getTextEditorContents ("key").trim();
-            if (enteredKey.isEmpty())
-            {
-                juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
-                    "API Key Required", "The API key cannot be empty.");
-                return;
-            }
-
-            sp->saveApiKey (enteredKey);
-            sp->cloudClient.setApiKey (enteredKey);
-
-            if (onSuccessCallback)
-                onSuccessCallback();
+            if (onSuccess) onSuccess();
         }
-    }));
+        else
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                "TONE3000 Sign-in Failed", error.isEmpty() ? juce::String ("Unknown error.") : error);
+        }
+    });
+}
+
+void LibraryComponent::refreshSignInButton()
+{
+    signInBtn.setEnabled (true);
+    signInBtn.setButtonText (cloudAuth.isSignedIn() ? juce::String ("Sign out") : juce::String ("Sign in"));
+}
+
+//==============================================================================
+// AssetTable implementation
+
+namespace
+{
+    juce::String formatSize (juce::int64 bytes)
+    {
+        if (bytes < 1024)            return juce::String (bytes) + " B";
+        if (bytes < 1024 * 1024)     return juce::String (bytes / 1024.0, 1) + " KB";
+        if (bytes < 1024LL * 1024 * 1024)
+                                     return juce::String (bytes / (1024.0 * 1024.0), 1) + " MB";
+        return juce::String (bytes / (1024.0 * 1024.0 * 1024.0), 2) + " GB";
+    }
+
+    juce::String formatDate (const juce::Time& t)
+    {
+        if (t.toMilliseconds() <= 0) return {};
+        return t.formatted ("%Y-%m-%d %H:%M");
+    }
+}
+
+LibraryComponent::AssetTable::AssetTable (LibraryComponent& owner) : parent (owner)
+{
+    addAndMakeVisible (table);
+    table.setColour (juce::TableListBox::backgroundColourId, PedalForgeLookAndFeel::bgDark);
+    table.setColour (juce::TableHeaderComponent::backgroundColourId, PedalForgeLookAndFeel::bgMid);
+    table.setColour (juce::TableHeaderComponent::textColourId,       juce::Colour (0xffcccccc));
+    table.setColour (juce::TableHeaderComponent::outlineColourId,    PedalForgeLookAndFeel::gridLine);
+    table.setRowHeight (24);
+    table.setMultipleSelectionEnabled (true);
+
+    auto& header = table.getHeader();
+    // Columns: id, name, default width, min, max, flags. Flags allow drag-resize +
+    // drag-reorder + click-to-sort.
+    const int flags = juce::TableHeaderComponent::defaultFlags;
+    header.addColumn ("Name",     1, 280, 80,  -1, flags);
+    header.addColumn ("Type",     2,  60, 40, 100, flags);
+    header.addColumn ("Size",     3,  90, 50, 150, flags);
+    header.addColumn ("Modified", 4, 150, 80, 250, flags);
+    header.addColumn ("Tags",     5, 220, 60,  -1, flags);
+    header.setSortColumnId (sortColumnId, sortAscending);
+}
+
+void LibraryComponent::AssetTable::refresh()
+{
+    recomputeOrder();
+    table.updateContent();
+    table.repaint();
+}
+
+int LibraryComponent::AssetTable::getNumRows()
+{
+    return (int) displayOrder.size();
+}
+
+void LibraryComponent::AssetTable::paintRowBackground (juce::Graphics& g,
+                                                        int rowNumber, int /*width*/, int /*height*/,
+                                                        bool rowIsSelected)
+{
+    if (rowIsSelected)
+        g.fillAll (PedalForgeLookAndFeel::accent.withAlpha (0.35f));
+    else if (rowNumber % 2 == 0)
+        g.fillAll (PedalForgeLookAndFeel::bgMid.withAlpha (0.30f));
+}
+
+void LibraryComponent::AssetTable::paintCell (juce::Graphics& g,
+                                                int rowNumber, int columnId,
+                                                int width, int height,
+                                                bool rowIsSelected)
+{
+    if (rowNumber < 0 || rowNumber >= (int) displayOrder.size()) return;
+    int assetIdx = displayOrder[(size_t) rowNumber];
+    if (assetIdx < 0 || assetIdx >= (int) parent.filteredAssets.size()) return;
+    const auto& a = parent.filteredAssets[(size_t) assetIdx];
+
+    g.setColour (rowIsSelected ? juce::Colours::white : juce::Colour (0xffd0d0d0));
+    g.setFont (juce::FontOptions (13.0f));
+
+    juce::String text;
+    auto justification = juce::Justification::centredLeft;
+    switch (columnId)
+    {
+        case 1: text = a.name; break;
+        case 2: text = a.extension.startsWithChar ('.') ? a.extension.substring (1).toUpperCase()
+                                                        : a.extension.toUpperCase(); break;
+        case 3: text = formatSize (a.sizeBytes); justification = juce::Justification::centredRight; break;
+        case 4: text = formatDate (a.dateAdded); break;
+        case 5: text = a.tags.joinIntoString (", "); break;
+    }
+
+    g.drawText (text, 6, 0, width - 12, height, justification, true);
+}
+
+void LibraryComponent::AssetTable::sortOrderChanged (int newSortColumnId, bool isForwards)
+{
+    sortColumnId  = newSortColumnId;
+    sortAscending = isForwards;
+    recomputeOrder();
+    table.updateContent();
+    table.repaint();
+}
+
+void LibraryComponent::AssetTable::cellClicked (int rowNumber, int /*columnId*/, const juce::MouseEvent& e)
+{
+    if (rowNumber < 0 || rowNumber >= (int) displayOrder.size()) return;
+
+    if (e.mods.isRightButtonDown())
+        showRowContextMenu (rowNumber);
+}
+
+void LibraryComponent::AssetTable::cellDoubleClicked (int rowNumber, int /*columnId*/, const juce::MouseEvent&)
+{
+    if (rowNumber < 0 || rowNumber >= (int) displayOrder.size()) return;
+    int assetIdx = displayOrder[(size_t) rowNumber];
+    if (assetIdx < 0 || assetIdx >= (int) parent.filteredAssets.size()) return;
+    if (parent.onAssetSelected)
+        parent.onAssetSelected (parent.filteredAssets[(size_t) assetIdx].file);
+}
+
+void LibraryComponent::AssetTable::backgroundClicked (const juce::MouseEvent&)
+{
+    table.deselectAllRows();
+}
+
+juce::String LibraryComponent::AssetTable::getCellTooltip (int rowNumber, int /*columnId*/)
+{
+    if (rowNumber < 0 || rowNumber >= (int) displayOrder.size()) return {};
+    int assetIdx = displayOrder[(size_t) rowNumber];
+    if (assetIdx < 0 || assetIdx >= (int) parent.filteredAssets.size()) return {};
+    return parent.filteredAssets[(size_t) assetIdx].file.getFullPathName();
+}
+
+void LibraryComponent::AssetTable::recomputeOrder()
+{
+    const auto& assets = parent.filteredAssets;
+    displayOrder.resize (assets.size());
+    for (size_t i = 0; i < assets.size(); ++i)
+        displayOrder[i] = (int) i;
+
+    auto cmp = [&] (int la, int lb)
+    {
+        const auto& a = assets[(size_t) la];
+        const auto& b = assets[(size_t) lb];
+        int c = 0;
+        switch (sortColumnId)
+        {
+            case 1: c = a.name.compareIgnoreCase (b.name); break;
+            case 2: c = a.extension.compareIgnoreCase (b.extension); break;
+            case 3: c = (a.sizeBytes < b.sizeBytes) ? -1 : (a.sizeBytes > b.sizeBytes ? 1 : 0); break;
+            case 4: c = (a.dateAdded < b.dateAdded) ? -1 : (a.dateAdded > b.dateAdded ? 1 : 0); break;
+            case 5: c = a.tags.joinIntoString (",").compareIgnoreCase (b.tags.joinIntoString (",")); break;
+            default: c = a.name.compareIgnoreCase (b.name);
+        }
+        if (c == 0) c = a.name.compareIgnoreCase (b.name);
+        return sortAscending ? c < 0 : c > 0;
+    };
+
+    std::stable_sort (displayOrder.begin(), displayOrder.end(), cmp);
+}
+
+void LibraryComponent::AssetTable::showRowContextMenu (int rowNumber)
+{
+    int assetIdx = displayOrder[(size_t) rowNumber];
+    if (assetIdx < 0 || assetIdx >= (int) parent.filteredAssets.size()) return;
+    auto asset = parent.filteredAssets[(size_t) assetIdx];
+
+    // Ensure this row is selected before the menu shows.
+    if (! table.isRowSelected (rowNumber))
+    {
+        table.selectRow (rowNumber);
+    }
+
+    // Collect every selected row for batch operations.
+    std::vector<juce::File> filesToDelete;
+    auto selectedRanges = table.getSelectedRows();
+    for (int r = 0; r < selectedRanges.size(); ++r)
+    {
+        int sr = selectedRanges[r];
+        if (sr < 0 || sr >= (int) displayOrder.size()) continue;
+        int ai = displayOrder[(size_t) sr];
+        if (ai >= 0 && ai < (int) parent.filteredAssets.size())
+            filesToDelete.push_back (parent.filteredAssets[(size_t) ai].file);
+    }
+
+    juce::PopupMenu menu;
+    if (filesToDelete.size() == 1)
+    {
+        menu.addItem (1, "Load");
+        menu.addItem (5, "Rename...");
+        menu.addItem (2, "Show in Finder");
+        menu.addItem (4, "Edit Tags...");
+        menu.addItem (6, "Export...");
+        menu.addSeparator();
+    }
+    menu.addItem (3, filesToDelete.size() > 1 ? "Remove Selected from Library" : "Remove from Library");
+
+    juce::Component::SafePointer<LibraryComponent> sp (&parent);
+    auto fileToLoad = asset.file;
+    bool isPedalRow = (parent.currentCategoryID == "Pedals");
+
+    menu.showMenuAsync (juce::PopupMenu::Options(),
+        [sp, asset, fileToLoad, filesToDelete, isPedalRow] (int result)
+    {
+        if (sp == nullptr) return;
+        if (result == 1 && sp->onAssetSelected)
+            sp->onAssetSelected (fileToLoad);
+        else if (result == 2)
+            fileToLoad.revealToUser();
+        else if (result == 6)
+        {
+            // Export — copy the underlying file to a user-chosen location.
+            // For Pedals we rename .json → .pfpedal so the recipient gets the
+            // friendly extension.
+            juce::String defaultExt = isPedalRow ? ".pfpedal" : fileToLoad.getFileExtension();
+            auto suggested = juce::File::getSpecialLocation (juce::File::userDesktopDirectory)
+                                 .getChildFile (asset.name.replace (" ", "_") + defaultExt);
+
+            sp->exportChooser = std::make_unique<juce::FileChooser> (
+                "Export " + asset.name, suggested, "*" + defaultExt);
+
+            int flags = juce::FileBrowserComponent::saveMode
+                      | juce::FileBrowserComponent::canSelectFiles
+                      | juce::FileBrowserComponent::warnAboutOverwriting;
+
+            sp->exportChooser->launchAsync (flags, [fileToLoad, defaultExt] (const juce::FileChooser& fc)
+            {
+                auto dest = fc.getResult();
+                if (dest == juce::File()) return;
+                if (! dest.hasFileExtension (defaultExt.substring (1)))
+                    dest = dest.withFileExtension (defaultExt);
+                if (dest.existsAsFile()) dest.deleteFile();
+                if (! fileToLoad.copyFileTo (dest))
+                {
+                    juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                        "Export Failed", "Could not write to:\n" + dest.getFullPathName());
+                }
+            });
+        }
+        else if (result == 3)
+        {
+            for (auto& f : filesToDelete)
+            {
+                AssetLibrary::AssetItem it; it.file = f;
+                sp->library.removeAsset (it);
+            }
+            sp->refreshAssets();
+        }
+        else if (result == 4)
+        {
+            auto* alert = new juce::AlertWindow ("Edit Tags", "Enter tags separated by commas:", juce::AlertWindow::NoIcon);
+            alert->addTextEditor ("tags", asset.tags.joinIntoString (", "));
+            alert->addButton ("Save",   1, juce::KeyPress (juce::KeyPress::returnKey));
+            alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+            alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, asset, alert] (int r)
+            {
+                if (r == 1 && sp != nullptr)
+                {
+                    auto text = alert->getTextEditorContents ("tags");
+                    auto newTags = juce::StringArray::fromTokens (text, ",", "\"");
+                    newTags.trim();
+                    newTags.removeEmptyStrings (true);
+
+                    auto updated = asset;
+                    updated.tags = newTags;
+                    sp->library.saveMetadata (updated);
+                    sp->refreshAssets();
+                }
+            }));
+        }
+        else if (result == 5)
+        {
+            auto* alert = new juce::AlertWindow ("Rename", "Enter new name:", juce::AlertWindow::NoIcon);
+            alert->addTextEditor ("name", asset.name);
+            alert->addButton ("Rename", 1, juce::KeyPress (juce::KeyPress::returnKey));
+            alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+            alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, asset, alert] (int r)
+            {
+                if (r == 1 && sp != nullptr)
+                {
+                    auto newName = alert->getTextEditorContents ("name").trim();
+                    if (newName.isNotEmpty() && newName != asset.name)
+                    {
+                        sp->library.renameAsset (asset, newName);
+                        sp->refreshAssets();
+                    }
+                }
+            }));
+        }
+    });
 }
 

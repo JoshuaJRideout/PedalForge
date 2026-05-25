@@ -1,6 +1,7 @@
 #include "NodeGraphEditor.h"
 #include "LookAndFeel.h"
 #include "../dsp/DSPNodeLibrary.h"
+#include "../dsp/NodeCatalog.h"
 
 //==============================================================================
 // NodeGraphEditor
@@ -842,19 +843,111 @@ void NodeGraphEditor::GraphCanvas::itemDropped (const juce::DragAndDropTarget::S
     }
 }
 
+namespace
+{
+    // ── Catalog-driven menu builder ──────────────────────────────────────────
+    // Walks NodeCatalog::getEntries() once, splitting each entry's menuPath
+    // ("Effects/Filters", "Nodes/MIDI/Receive") into nested PopupMenu nodes.
+    // Each leaf carries an item ID equal to (catalog index + 1) so the click
+    // callback can recover the type string.
+
+    struct MenuNode
+    {
+        juce::String                 name;            // display label (empty for root)
+        std::vector<MenuNode>        children;        // submenus
+        std::vector<std::pair<int, juce::String>> items;  // {itemId, displayName}
+
+        MenuNode& getOrCreateChild (const juce::String& childName)
+        {
+            for (auto& c : children)
+                if (c.name == childName) return c;
+            children.push_back ({});
+            children.back().name = childName;
+            return children.back();
+        }
+    };
+
+    void buildMenuTree (MenuNode& root)
+    {
+        const auto& entries = NodeCatalog::getEntries();
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            const auto& e = entries[i];
+            if (! e.inAddNodeMenu) continue;
+
+            auto segments = juce::StringArray::fromTokens (e.menuPath, "/", {});
+            segments.removeEmptyStrings();
+            if (segments.isEmpty()) continue;
+
+            MenuNode* node = &root;
+            for (int s = 0; s < segments.size(); ++s)
+                node = & node->getOrCreateChild (segments[s]);
+
+            node->items.push_back ({ (int) i + 1, e.displayName });
+        }
+    }
+
+    void populatePopup (juce::PopupMenu& out, const MenuNode& node)
+    {
+        for (const auto& [id, name] : node.items)
+            out.addItem (id, name);
+
+        // Separator between leaf items and submenus only if both exist
+        if (! node.items.empty() && ! node.children.empty())
+            out.addSeparator();
+
+        for (const auto& child : node.children)
+        {
+            juce::PopupMenu sub;
+            populatePopup (sub, child);
+            out.addSubMenu (child.name, sub);
+        }
+    }
+}
+
 void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
+{
+    MenuNode tree;
+    buildMenuTree (tree);
+
+    juce::PopupMenu menu;
+    populatePopup (menu, tree);
+
+    float cx = cp.x, cy = cp.y;
+    menu.showMenuAsync ({}, [this, cx, cy] (int r)
+    {
+        if (r <= 0) return;
+        const auto& entries = NodeCatalog::getEntries();
+        int idx = r - 1;
+        if (idx < 0 || idx >= (int) entries.size()) return;
+        editor.addNodeAt (entries[(size_t) idx].type, cx, cy);
+    });
+}
+
+#if 0  // Legacy hand-coded menu — kept #if 0'd until the catalog has been verified end-to-end, then delete.
+void legacyShowAddNodeMenu_unused()
 {
     juce::PopupMenu menu;
     juce::PopupMenu effectsMenu;
     juce::PopupMenu nodesMenu;
-    
-    juce::PopupMenu io; 
+
+    juce::PopupMenu io;
     io.addItem(6, "MIDI Input"); io.addItem(7, "MIDI Output");
     io.addSeparator();
     io.addItem(350, "Expression Pedal"); io.addItem(351, "Footswitch");
     io.addSeparator();
     io.addItem(352, "CV Input"); io.addItem(353, "CV Output");
     nodesMenu.addSubMenu("I/O", io);
+
+    // Control-surface nodes — drop one in the graph and a matching control
+    // auto-spawns on the pedal face (see ControlSurfaceSync.h).
+    juce::PopupMenu ctrls;
+    ctrls.addItem(360, "Knob");
+    ctrls.addItem(361, "Fader");
+    ctrls.addItem(362, "Button");
+    ctrls.addItem(363, "Toggle");
+    ctrls.addItem(364, "Selector");
+    nodesMenu.addSubMenu("Controls", ctrls);
     
     juce::PopupMenu u; u.addItem(1,"Gain"); u.addItem(2,"Mix"); u.addItem(3,"Split"); nodesMenu.addSubMenu("Utility",u);
     
@@ -1030,11 +1123,16 @@ void NodeGraphEditor::GraphCanvas::showAddNodeMenu (juce::Point<float> cp)
             // I/O Peripherals
             case 350: t="io_expression"; break; case 351: t="io_footswitch"; break;
             case 352: t="io_cv_in"; break; case 353: t="io_cv_out"; break;
+            // Control-surface nodes (auto-spawn pedal-face controls)
+            case 360: t="ctrl_knob"; break; case 361: t="ctrl_fader"; break;
+            case 362: t="ctrl_button"; break; case 363: t="ctrl_toggle"; break;
+            case 364: t="ctrl_selector"; break;
             default: return;
         }
         editor.addNodeAt (t, cx, cy);
     });
 }
+#endif  // Legacy menu
 
 //==============================================================================
 // NodePropertiesPanel

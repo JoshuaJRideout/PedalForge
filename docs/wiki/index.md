@@ -23,6 +23,7 @@ Welcome to the PedalForge documentation. Use the sidebar to navigate between top
 - [[logic]] — AND, OR, NOT, Flip-Flops, Latches, Mux/Demux
 - [[math]] — Add, Multiply, Trig, Lerp, Bitwise operators
 - [[control]] — Knob, Fader, Button, XY Pad, Envelope Follower
+- [[control-surface]] — Knob/Fader/Button/Toggle nodes that auto-spawn pedal-face controls
 - [[midi-nodes]] — Note, CC, Pitch Bend, Clock, Program Change, Generators
 - [[memory]] — RAM, Sample & Hold, Edge Detect, Timer, Debounce
 - [[display]] — LED, VU Meter, Tuner, Scope, Pixel Display, Console, Shader
@@ -33,9 +34,20 @@ Welcome to the PedalForge documentation. Use the sidebar to navigate between top
 - [[ui-scripts]] — UI Script mode: drawing commands & live preview
 - [[dsp-expressions]] — DSP Expression mode: custom audio processing
 - [[graph-builder]] — FX Graph Builder: programmatic node creation
+- [[pedalboard-builder]] — Pedalboard Builder: boards-as-code
+- [[pedal-design-builder]] — Pedal Design Builder: pedals-as-code
+
+## Library
+- [[tone3000-signin]] — Browse and download NAM models / IRs from TONE3000
 
 ## Reference
 - [[engine-api]] — AudioGraphEngine method reference
 - [[dspgraph-api]] — DSPGraph method reference
+- [[expression-vm-functions]] — Built-in ExpressionVM functions (auto-generated)
 - [[pedal-design-schema]] — Full PedalDesign JSON schema
 - [[color-palette]] — LookAndFeel color palette & theming
+
+---
+
+> [!TIP]
+> **Adding a new feature?** Copy [`_template-feature.md`](_template-feature.md) and link it here. Every feature should land with its wiki page in the same PR.

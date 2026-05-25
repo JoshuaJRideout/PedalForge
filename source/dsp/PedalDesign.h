@@ -20,6 +20,10 @@ struct PedalDesign
 {
     //==========================================================================
     // Metadata
+    juce::String uuid;            // stable identity — survives renames; used by
+                                  // the inventory to deduplicate factory vs.
+                                  // user designs and to round-trip imports.
+                                  // Generated on first construction / load.
     juce::String name = "My Pedal";
     juce::String author = "User";
     juce::String description = "";
@@ -27,6 +31,8 @@ struct PedalDesign
     juce::StringArray tags;       // free-form tags, e.g. {"drive", "beginner", "tutorial"}
     int version = 1;
     bool isFactory = false;       // true = read-only, can't overwrite
+
+    PedalDesign() : uuid (juce::Uuid().toString()) {}
 
     //==========================================================================
     // Pedal Forge — Visual Layout
@@ -114,11 +120,27 @@ struct PedalDesign
     std::vector<StickyNote> fxNotes;     // Notes on the Code/DSP tab
 
     //==========================================================================
+    // User-authored scripts attached to this pedal design.
+    // Mode mirrors ScriptingTabComponent::ScriptMode (1=UI, 2=DSP, 3=GraphBuilder, 4=Board).
+    // Scripts live on the design (not the instance) so they travel with the asset
+    // when the pedal is exported, shared, or instantiated on another board.
+    // Mode 4 (Board) is engine-scoped and lives on AudioGraphEngine::engineScripts
+    // rather than per-pedal — it appears here only so the same struct can be reused.
+    struct Script
+    {
+        juce::String name;
+        int mode = 1;            // 1=UI, 2=DSP, 3=GraphBuilder, 4=Board
+        juce::String source;
+    };
+    std::vector<Script> scripts;
+
+    //==========================================================================
     // Serialization
 
     juce::var toJSON() const
     {
         auto* root = new juce::DynamicObject();
+        root->setProperty ("uuid",        uuid);
         root->setProperty ("name",        name);
         root->setProperty ("author",      author);
         root->setProperty ("description", description);
@@ -245,6 +267,18 @@ struct PedalDesign
         }
         root->setProperty ("canvasPages", cpArr);
 
+        // Scripts
+        juce::Array<juce::var> scriptArr;
+        for (const auto& s : scripts)
+        {
+            auto* so = new juce::DynamicObject();
+            so->setProperty ("name",   s.name);
+            so->setProperty ("mode",   s.mode);
+            so->setProperty ("source", s.source);
+            scriptArr.add (juce::var (so));
+        }
+        root->setProperty ("scripts", scriptArr);
+
         return juce::var (root);
     }
 
@@ -253,6 +287,12 @@ struct PedalDesign
         PedalDesign design;
         if (auto* root = json.getDynamicObject())
         {
+            // Older designs predate the UUID field — generate one on first load.
+            // The migration persists on the next save (saveToFile preserves uuid).
+            auto persisted = root->getProperty ("uuid").toString();
+            if (persisted.isNotEmpty()) design.uuid = persisted;
+            // else: keep the freshly-generated default from the constructor.
+
             design.name        = root->getProperty ("name").toString();
             design.author      = root->getProperty ("author").toString();
             if (root->hasProperty("description")) design.description = root->getProperty ("description").toString();
@@ -387,6 +427,23 @@ struct PedalDesign
                             }
                         }
                         design.canvasPages.push_back (cp);
+                    }
+                }
+            }
+
+            // Scripts
+            if (auto* arr = root->getProperty ("scripts").getArray())
+            {
+                for (const auto& sv : *arr)
+                {
+                    if (auto* so = sv.getDynamicObject())
+                    {
+                        Script s;
+                        s.name   = so->getProperty ("name").toString();
+                        s.mode   = (int) so->getProperty ("mode");
+                        s.source = so->getProperty ("source").toString();
+                        if (s.mode < 1 || s.mode > 4) s.mode = 1;
+                        design.scripts.push_back (s);
                     }
                 }
             }

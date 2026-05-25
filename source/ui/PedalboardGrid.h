@@ -53,6 +53,11 @@ public:
 
     //==========================================================================
     void addPedalAtGrid (const juce::String& pedalName, float boardX, float boardY);
+
+    /** Open a file save dialog and write the current engine state as a
+        self-contained .pfboard file (board layout + every PedalDesign inlined).
+        Recipients drag-and-drop the file to replace their board. */
+    void exportBoardToFile();
     void addPedalCopy (const PedalInstance& srcInst, float boardX, float boardY);
     void removePedal (AudioGraphEngine::NodeID nodeId);
     void rebuildFromEngine();
@@ -111,8 +116,10 @@ private:
     juce::TextButton btnInventory { "+ Add Pedal (Tab)" };
 
     // Multi-board / Page controls
-    juce::TextButton btnAddBoard { "+ Add Board" };
-    
+    juce::TextButton btnAddBoard    { "+ Add Board" };
+    juce::TextButton btnExportBoard { "Export..." };
+    std::unique_ptr<juce::FileChooser> exportBoardChooser;
+
     juce::TextButton btnToggleLeft { "List" };
     juce::TextButton btnToggleRight { "Panel" };
     juce::TextButton btnMaximizeRight { "[ ]" };

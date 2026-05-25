@@ -21,6 +21,7 @@ class PedalForgeProcessor;
 //==============================================================================
 class PedalForgeEditor : public juce::AudioProcessorEditor,
                          public juce::DragAndDropContainer,
+                         public juce::FileDragAndDropTarget,
                          public juce::Button::Listener,
                          public juce::KeyListener
 {
@@ -34,7 +35,11 @@ public:
     void buttonClicked (juce::Button* button) override;
 
     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
-    
+
+    // FileDragAndDropTarget — accept .pfpedal files dragged from Finder.
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
+
     void triggerUndo();
     void triggerRedo();
     void commitActiveTabState();

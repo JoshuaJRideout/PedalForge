@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include "Tone3000OAuth.h"
 
 #include <functional>
 #include <mutex>
@@ -56,13 +57,11 @@ struct ToneSearchResult
 class Tone3000Client : public juce::Thread
 {
 public:
-    Tone3000Client();
+    /** The client borrows a reference to a Tone3000OAuth instance for access
+        tokens. The OAuth manager owns the auth state; the client is purely the
+        REST surface. */
+    explicit Tone3000Client (Tone3000OAuth& oauth);
     ~Tone3000Client() override;
-
-    //==========================================================================
-    /** Set the publishable API key used for Bearer authentication. */
-    void setApiKey (const juce::String& key);
-
 
     //==========================================================================
     /** Search for tones matching the given parameters.
@@ -96,8 +95,7 @@ private:
 
     /** Build a URL string, appending only non-empty query parameters. */
     static juce::String buildSearchUrl (const juce::String& baseUrl,
-                                        const ToneSearchParams& params,
-                                        const juce::String& apiKey);
+                                        const ToneSearchParams& params);
 
     /** Parse a JSON tone object into a ToneResult. */
     static ToneResult parseToneObject (const juce::var& obj);
@@ -109,8 +107,8 @@ private:
     std::unique_ptr<juce::InputStream> createStreamForUrl (const juce::String& urlString);
 
     //==========================================================================
+    Tone3000OAuth& oauth;
     juce::String apiBaseUrl { "https://www.tone3000.com/api/v1" };
-    juce::String publishableKey;
 
     mutable std::mutex workMutex;
     std::vector<WorkItem> workQueue;

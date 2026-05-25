@@ -794,8 +794,8 @@ public:
 
     void reset() override { latchState = false; lastPressed = false; }
 
-    bool isControlSurface() const { return true; }
-    juce::String getControlType() const { return "footswitch"; }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "footswitch"; }
 
 private:
     bool latchState = false;

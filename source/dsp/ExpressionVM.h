@@ -98,6 +98,7 @@ public:
         bytecode.clear();
         constants.clear();
         errorMessage.clear();
+        errorPos = 0;
 
         src = source.toStdString();
         pos = 0;
@@ -325,6 +326,17 @@ public:
     const juce::String& getError() const { return errorMessage; }
     const juce::String& getSource() const { return sourceCode; }
 
+    /** 1-based line number where the last compile error occurred. 0 if no error. */
+    int getErrorLine() const
+    {
+        if (errorMessage.isEmpty()) return 0;
+        size_t at = juce::jmin (errorPos, src.size());
+        int line = 1;
+        for (size_t i = 0; i < at; ++i)
+            if (src[i] == '\n') ++line;
+        return line;
+    }
+
     bool compile_and_store (const juce::String& source)
     {
         sourceCode = source;
@@ -339,6 +351,13 @@ private:
     bool compiled = false;
     juce::String errorMessage;
     juce::String sourceCode;
+    size_t errorPos = 0;
+
+    void setError (const juce::String& msg)
+    {
+        errorMessage = msg;
+        errorPos = pos;
+    }
 
     void skipWhitespace()
     {
@@ -412,79 +431,129 @@ private:
         if (name == "twopi") { emitConst(juce::MathConstants<float>::twoPi); return -1; }
 
         int idx = registerVar(name);
-        if (idx == -1) { errorMessage = "Too many variables"; return -2; }
+        if (idx == -1) { setError ("Too many variables"); return -2; }
         return idx;
     }
 
+public:
+    // Single source of truth for the built-in function list.
+    // The wiki API reference page is generated from this same registry — see
+    // dumpFunctionsAsMarkdown().
+    struct FunctionInfo
+    {
+        const char* name;
+        int         opcode;
+        int         argCount;
+        const char* category;     // "Math", "Drawing", "Logic", "Params"
+        const char* signature;    // human-readable arg list
+        const char* description;
+    };
+
+    static const std::vector<FunctionInfo>& getFunctionRegistry()
+    {
+        static const std::vector<FunctionInfo> registry =
+        {
+            // Math — 1-arg
+            { "sin",   OP_SIN,   1, "Math", "sin(x)",   "Sine of x (radians)." },
+            { "cos",   OP_COS,   1, "Math", "cos(x)",   "Cosine of x (radians)." },
+            { "tan",   OP_TAN,   1, "Math", "tan(x)",   "Tangent of x (radians)." },
+            { "asin",  OP_ASIN,  1, "Math", "asin(x)",  "Arcsine, returns radians." },
+            { "acos",  OP_ACOS,  1, "Math", "acos(x)",  "Arccosine, returns radians." },
+            { "atan",  OP_ATAN,  1, "Math", "atan(x)",  "Arctangent, returns radians." },
+            { "abs",   OP_ABS,   1, "Math", "abs(x)",   "Absolute value." },
+            { "sign",  OP_SIGN,  1, "Math", "sign(x)",  "-1, 0, or 1 depending on sign of x." },
+            { "floor", OP_FLOOR, 1, "Math", "floor(x)", "Largest integer <= x." },
+            { "ceil",  OP_CEIL,  1, "Math", "ceil(x)",  "Smallest integer >= x." },
+            { "sqrt",  OP_SQRT,  1, "Math", "sqrt(x)",  "Square root." },
+            { "exp",   OP_EXP,   1, "Math", "exp(x)",   "e raised to x." },
+            { "log",   OP_LOG,   1, "Math", "log(x)",   "Natural logarithm." },
+            { "log2",  OP_LOG2,  1, "Math", "log2(x)",  "Base-2 logarithm." },
+            { "tanh",  OP_TANH,  1, "Math", "tanh(x)",  "Hyperbolic tangent — common soft-clip." },
+
+            // Math — 2-arg / 3-arg
+            { "min",   OP_MIN,   2, "Math", "min(a, b)",        "Minimum of a and b." },
+            { "max",   OP_MAX,   2, "Math", "max(a, b)",        "Maximum of a and b." },
+            { "mod",   OP_MOD,   2, "Math", "mod(a, b)",        "Floating-point remainder a % b." },
+            { "pow",   OP_POW,   2, "Math", "pow(base, exp)",   "Raise base to the power exp." },
+            { "clamp", OP_CLAMP, 3, "Math", "clamp(x, lo, hi)", "Constrain x to [lo, hi]." },
+            { "lerp",  OP_LERP,  3, "Math", "lerp(a, b, t)",    "Linear interpolation from a to b by t." },
+
+            // Conditionals
+            { "cond",  OP_COND,  3, "Logic", "cond(test, ifTrue, ifFalse)", "Branchless select; like a ternary." },
+
+            // Drawing
+            { "rect",       OP_DRAW_RECT,  5, "Drawing", "rect(x, y, w, h, color)",       "Stroke a rectangle outline." },
+            { "rectFill",   OP_FILL_RECT,  5, "Drawing", "rectFill(x, y, w, h, color)",   "Fill a rectangle." },
+            { "circle",     OP_DRAW_CIRCLE,4, "Drawing", "circle(x, y, r, color)",        "Stroke a circle outline." },
+            { "circleFill", OP_FILL_CIRCLE,4, "Drawing", "circleFill(x, y, r, color)",    "Fill a circle." },
+            { "line",       OP_DRAW_LINE,  6, "Drawing", "line(x1, y1, x2, y2, thickness, color)", "Draw a line segment." },
+            { "text",       OP_DRAW_TEXT,  5, "Drawing", "text(value, x, y, size, color)", "Draw a numeric value as text." },
+            { "image",      OP_DRAW_IMAGE, 5, "Drawing", "image(idx, x, y, w, h)",        "Draw the host-supplied image #idx in the given rect." },
+
+            // Param hooks
+            { "getParam", OP_GET_PARAM, 1, "Params", "getParam(idx)",       "Read a host-side parameter by index." },
+            { "setParam", OP_SET_PARAM, 2, "Params", "setParam(idx, val)",  "Write a host-side parameter by index." },
+
+            // Comparison
+            { "gt", OP_GT, 2, "Logic", "gt(a, b)", "1 if a > b, else 0." },
+            { "ge", OP_GE, 2, "Logic", "ge(a, b)", "1 if a >= b, else 0." },
+            { "lt", OP_LT, 2, "Logic", "lt(a, b)", "1 if a < b, else 0." },
+            { "le", OP_LE, 2, "Logic", "le(a, b)", "1 if a <= b, else 0." },
+            { "eq", OP_EQ, 2, "Logic", "eq(a, b)", "1 if a == b, else 0." },
+            { "ne", OP_NE, 2, "Logic", "ne(a, b)", "1 if a != b, else 0." },
+
+            // Logical
+            { "and", OP_AND, 2, "Logic", "and(a, b)", "1 if both non-zero." },
+            { "or",  OP_OR,  2, "Logic", "or(a, b)",  "1 if either non-zero." },
+            { "not", OP_NOT, 1, "Logic", "not(x)",    "1 if x is zero, else 0." },
+        };
+        return registry;
+    }
+
+    /** Render the function registry as a Markdown reference page. */
+    static juce::String dumpFunctionsAsMarkdown()
+    {
+        const auto& reg = getFunctionRegistry();
+
+        // Collect categories in insertion order
+        std::vector<juce::String> categoryOrder;
+        std::map<juce::String, std::vector<const FunctionInfo*>> byCategory;
+        for (const auto& f : reg)
+        {
+            juce::String cat (f.category);
+            if (! byCategory.count (cat)) categoryOrder.push_back (cat);
+            byCategory[cat].push_back (&f);
+        }
+
+        juce::String md;
+        md << "<!-- AUTO-GENERATED from ExpressionVM::dumpFunctionsAsMarkdown(). Do not edit by hand. -->\n\n";
+        md << "# ExpressionVM — Built-in Functions\n\n";
+        md << "Every function callable from a UI / DSP / FX Graph script. Generated from the registry in [ExpressionVM.h](../../source/dsp/ExpressionVM.h).\n\n";
+        for (const auto& cat : categoryOrder)
+        {
+            md << "## " << cat << "\n\n";
+            md << "| Function | Args | Description |\n";
+            md << "|----------|------|-------------|\n";
+            for (auto* f : byCategory[cat])
+                md << "| `" << f->signature << "` | " << f->argCount << " | " << f->description << " |\n";
+            md << "\n";
+        }
+        return md;
+    }
+
+private:
     int resolveFunc (const std::string& name)
     {
-        if (name == "sin")   return OP_SIN;
-        if (name == "cos")   return OP_COS;
-        if (name == "tan")   return OP_TAN;
-        if (name == "asin")  return OP_ASIN;
-        if (name == "acos")  return OP_ACOS;
-        if (name == "atan")  return OP_ATAN;
-        if (name == "abs")   return OP_ABS;
-        if (name == "sign")  return OP_SIGN;
-        if (name == "floor") return OP_FLOOR;
-        if (name == "ceil")  return OP_CEIL;
-        if (name == "sqrt")  return OP_SQRT;
-        if (name == "exp")   return OP_EXP;
-        if (name == "log")   return OP_LOG;
-        if (name == "log2")  return OP_LOG2;
-        if (name == "tanh")  return OP_TANH;
-        if (name == "min")   return OP_MIN;
-        if (name == "max")   return OP_MAX;
-        if (name == "clamp") return OP_CLAMP;
-        if (name == "lerp")  return OP_LERP;
-        if (name == "mod")   return OP_MOD;
-        if (name == "pow")   return OP_POW;
-        
-        // Custom UI Extensions
-        if (name == "cond")       return OP_COND;
-        if (name == "rect")       return OP_DRAW_RECT;
-        if (name == "rectFill")   return OP_FILL_RECT;
-        if (name == "circle")     return OP_DRAW_CIRCLE;
-        if (name == "circleFill") return OP_FILL_CIRCLE;
-        if (name == "line")       return OP_DRAW_LINE;
-        if (name == "text")       return OP_DRAW_TEXT;
-        if (name == "image")      return OP_DRAW_IMAGE;
-        if (name == "getParam")   return OP_GET_PARAM;
-        if (name == "setParam")   return OP_SET_PARAM;
-        
-        // Comparison & Logic Extensions
-        if (name == "gt")  return OP_GT;
-        if (name == "ge")  return OP_GE;
-        if (name == "lt")  return OP_LT;
-        if (name == "le")  return OP_LE;
-        if (name == "eq")  return OP_EQ;
-        if (name == "ne")  return OP_NE;
-        if (name == "and") return OP_AND;
-        if (name == "or")  return OP_OR;
-        if (name == "not") return OP_NOT;
-        
+        for (const auto& f : getFunctionRegistry())
+            if (name == f.name) return f.opcode;
         return -1;
     }
 
     int funcArgCount (int opcode)
     {
-        switch (opcode) {
-            case OP_DRAW_RECT: case OP_FILL_RECT: case OP_DRAW_IMAGE: case OP_DRAW_TEXT: return 5;
-            case OP_DRAW_CIRCLE: case OP_FILL_CIRCLE: return 4;
-            case OP_DRAW_LINE: return 6;
-            case OP_COND: return 3;
-            case OP_GET_PARAM: return 1;
-            case OP_SET_PARAM: return 2;
-            case OP_CLAMP: case OP_LERP: return 3;
-            case OP_MIN: case OP_MAX: case OP_MOD: case OP_POW: return 2;
-            
-            // Comparison & Logic
-            case OP_GT: case OP_GE: case OP_LT: case OP_LE: case OP_EQ: case OP_NE:
-            case OP_AND: case OP_OR: return 2;
-            case OP_NOT: return 1;
-            
-            default: return 1;
-        }
+        for (const auto& f : getFunctionRegistry())
+            if (f.opcode == opcode) return f.argCount;
+        return 1;
     }
 
     void emitOp (uint8_t op) { bytecode.push_back(op); }
@@ -580,7 +649,7 @@ private:
     bool parseAtom()
     {
         skipWhitespace();
-        if (pos >= src.size()) { errorMessage = "Unexpected end of expression"; return false; }
+        if (pos >= src.size()) { setError ("Unexpected end of expression"); return false; }
 
         if (std::isdigit(src[pos]) || (src[pos] == '.' && pos+1 < src.size() && std::isdigit(src[pos+1])))
         {
@@ -592,7 +661,7 @@ private:
         {
             pos++;
             if (! parseExpr()) return false;
-            if (! match(')')) { errorMessage = "Expected ')'"; return false; }
+            if (! match(')')) { setError ("Expected ')'"); return false; }
             return true;
         }
 
@@ -604,7 +673,7 @@ private:
             if (pos < src.size() && src[pos] == '(')
             {
                 int funcOp = resolveFunc(ident);
-                if (funcOp < 0) { errorMessage = "Unknown function: " + juce::String(ident); return false; }
+                if (funcOp < 0) { setError ("Unknown function: " + juce::String(ident)); return false; }
 
                 pos++; // skip '('
                 int expectedArgs = funcArgCount(funcOp);
@@ -612,10 +681,10 @@ private:
                 if (! parseExpr()) return false;
                 for (int a = 1; a < expectedArgs; ++a)
                 {
-                    if (! match(',')) { errorMessage = "Expected ',' in function " + juce::String(ident); return false; }
+                    if (! match(',')) { setError ("Expected ',' in function " + juce::String(ident)); return false; }
                     if (! parseExpr()) return false;
                 }
-                if (! match(')')) { errorMessage = "Expected ')' after function " + juce::String(ident); return false; }
+                if (! match(')')) { setError ("Expected ')' after function " + juce::String(ident)); return false; }
 
                 emitOp((uint8_t)funcOp);
                 return true;
@@ -628,7 +697,7 @@ private:
             return true;
         }
 
-        errorMessage = "Unexpected character: '" + juce::String(juce::String::charToString(src[pos])) + "'";
+        setError ("Unexpected character: '" + juce::String(juce::String::charToString(src[pos])) + "'");
         return false;
     }
 };
