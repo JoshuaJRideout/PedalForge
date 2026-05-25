@@ -44,13 +44,19 @@ void AudioGraphEngine::addBoard (const BoardConfig& boardIn)
     BoardConfig board = boardIn;
     if (board.engineNodeId == 0)
         board.engineNodeId = 0x424F0000 + (uint32_t)(board.id.hashCode() % 0xFFFF);
-    boards.push_back (board);
-    
+
+    {
+        const juce::ScopedLock sl (collectionLock);
+        boards.push_back (board);
+    }
+
     graph.addNode (std::make_unique<BoardMidiReceiverNode>(*this, board.id), NodeID { board.engineNodeId });
 }
 
 void AudioGraphEngine::removeBoard (const juce::String& boardId)
 {
+    const juce::ScopedLock sl (collectionLock);
+
     auto it = std::find_if (boards.begin(), boards.end(),
                             [&] (const BoardConfig& b) { return b.id == boardId; });
     if (it != boards.end())
@@ -133,50 +139,53 @@ void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
     if (!midi.isEmpty())
         mainMidiIn.store (true);
 
-    for (const auto meta : midi)
+    // MIDI-driven nav (page / track / Turing display) reads `boards` and
+    // `instances`. Use a try-lock so we never block the audio thread on a UI
+    // mutation; if we can't acquire, just skip nav for this block — next call
+    // (typically <10 ms later) will pick it up.
     {
-        auto msg = meta.getMessage();
-        if (msg.isController())
+        const juce::ScopedTryLock tryLock (collectionLock);
+        if (tryLock.isLocked())
         {
-            int cc = msg.getControllerNumber();
-            int val = msg.getControllerValue();
-            
-            if (val > 64) // button pressed
+            for (const auto meta : midi)
             {
+                auto msg = meta.getMessage();
+                if (! msg.isController()) continue;
+
+                int cc  = msg.getControllerNumber();
+                int val = msg.getControllerValue();
+                if (val <= 64) continue;   // only act on button-pressed transitions
+
                 if (appMidiConfig.turingPrevCC != -1 && cc == appMidiConfig.turingPrevCC)
-                    cycleTuringPedal(-1);
+                    cycleTuringPedal (-1);
                 else if (appMidiConfig.turingNextCC != -1 && cc == appMidiConfig.turingNextCC)
-                    cycleTuringPedal(1);
+                    cycleTuringPedal (1);
 
-                // Global page navigation
                 if (appMidiConfig.pageLeftCC != -1 && cc == appMidiConfig.pageLeftCC)
-                    cyclePage(-1);
+                    cyclePage (-1);
                 else if (appMidiConfig.pageRightCC != -1 && cc == appMidiConfig.pageRightCC)
-                    cyclePage(1);
+                    cyclePage (1);
 
-                // Global track navigation (pedal selection)
                 if (appMidiConfig.trackLeftCC != -1 && cc == appMidiConfig.trackLeftCC)
-                    cycleTrack(-1);
+                    cycleTrack (-1);
                 else if (appMidiConfig.trackRightCC != -1 && cc == appMidiConfig.trackRightCC)
-                    cycleTrack(1);
-                    
-                // Check board-specific CCs
+                    cycleTrack (1);
+
                 for (auto& board : boards)
                 {
                     if (board.prevPageCC != -1 && cc == board.prevPageCC)
                     {
-                        if (board.activePage > 0)
-                            board.activePage--;
+                        if (board.activePage > 0) board.activePage--;
                     }
                     else if (board.nextPageCC != -1 && cc == board.nextPageCC)
                     {
-                        if (board.activePage < board.numPages - 1)
-                            board.activePage++;
+                        if (board.activePage < board.numPages - 1) board.activePage++;
                     }
                 }
             }
         }
     }
+
     graph.processBlock (buffer, midi);
     
     if (numSamples > 0)
@@ -187,8 +196,12 @@ void AudioGraphEngine::processBlock (juce::AudioBuffer<float>& buffer,
     }
 }
 
-void AudioGraphEngine::cycleTuringPedal(int dir)
+void AudioGraphEngine::cycleTuringPedal (int dir)
 {
+    // juce::CriticalSection is recursive on POSIX, so the audio thread which
+    // already holds the lock under its TryLock can safely re-enter here.
+    const juce::ScopedLock sl (collectionLock);
+
     for (auto& board : boards)
     {
         if (board.assignToTuring)
@@ -216,6 +229,8 @@ void AudioGraphEngine::cycleTuringPedal(int dir)
 //==============================================================================
 void AudioGraphEngine::cyclePage (int dir)
 {
+    const juce::ScopedLock sl (collectionLock);
+
     for (auto& board : boards)
     {
         int newPage = board.activePage + dir;
@@ -226,6 +241,8 @@ void AudioGraphEngine::cyclePage (int dir)
 
 void AudioGraphEngine::cycleTrack (int dir)
 {
+    const juce::ScopedLock sl (collectionLock);
+
     // Collect pedals on the active page of the first board
     if (boards.empty()) return;
     auto& board = boards.front();
@@ -350,7 +367,10 @@ AudioGraphEngine::NodeID AudioGraphEngine::addPedal (
     if (gp != nullptr)
         gp->setMeters (instance.meters);
 
-    instances.push_back (instance);
+    {
+        const juce::ScopedLock sl (collectionLock);
+        instances.push_back (instance);
+    }
 
     return nodeId;
 }
@@ -360,6 +380,7 @@ void AudioGraphEngine::removePedal (NodeID nodeId)
     disconnectAll (nodeId);
     graph.removeNode (nodeId);
 
+    const juce::ScopedLock sl (collectionLock);
     instances.remove_if ([nodeId] (const PedalInstance& p) { return p.nodeID == nodeId; });
 }
 
@@ -385,18 +406,23 @@ AudioGraphEngine::NodeID AudioGraphEngine::addPedalOffBoard (
     instance.boardH  = 200.0f;
     instance.onBoard = false;
     instance.name    = node->getProcessor()->getName();
-    
+
     instance.meters = std::make_shared<PedalMeters>();
     if (gp != nullptr)
         gp->setMeters (instance.meters);
 
-    instances.push_back (instance);
+    {
+        const juce::ScopedLock sl (collectionLock);
+        instances.push_back (instance);
+    }
 
     return nodeId;
 }
 
 void AudioGraphEngine::autoRoutePedal (NodeID newNodeId)
 {
+    const juce::ScopedLock sl (collectionLock);
+
     auto* newInst = getPedalInstance(newNodeId);
     if (!newInst || !newInst->onBoard) return;
 
@@ -860,17 +886,33 @@ juce::String AudioGraphEngine::serialise() const
     }
     root->setProperty ("engineScripts", scriptArr);
 
+    // Rig snapshot UUID — generated lazily, preserved across export/import.
+    if (currentBoardSnapshotUuid.isEmpty())
+        currentBoardSnapshotUuid = juce::Uuid().toString();
+    root->setProperty ("pfboardUuid", currentBoardSnapshotUuid);
+
     return juce::JSON::toString (juce::var (root.release()));
 }
 
 void AudioGraphEngine::deserialise (const juce::String& jsonState)
 {
+    // Hold the collection lock for the whole bulk replacement so the audio
+    // thread (and MIDI input thread) can't iterate `instances`/`boards`
+    // mid-rebuild. Recursive lock means nested removePedal() calls below are
+    // safe even though they take the same lock.
+    const juce::ScopedLock sl (collectionLock);
+
     bool wasRestoring = isRestoringState;
     isRestoringState = true;
 
     auto parsed = juce::JSON::parse (jsonState);
     if (auto* root = parsed.getDynamicObject())
     {
+        // Restore the rig snapshot identity so a subsequent serialise() emits
+        // the same UUID — that's what lets re-import overwrite in place.
+        if (root->hasProperty ("pfboardUuid"))
+            currentBoardSnapshotUuid = root->getProperty ("pfboardUuid").toString();
+
         // 1. Clear all existing active pedals first
         std::vector<NodeID> idsToRemove;
         for (auto& inst : instances)
@@ -1167,6 +1209,8 @@ void AudioGraphEngine::deserialise (const juce::String& jsonState)
 //==============================================================================
 void AudioGraphEngine::autoRebuildIOConnections (int numInputs, int numOutputs)
 {
+    const juce::ScopedLock sl (collectionLock);
+
     // Find the first and last pedals on the board
     juce::String targetBoardId = boards.empty() ? "main" : boards.front().id;
     PedalInstance* firstPedal = nullptr;

@@ -164,12 +164,14 @@ LibraryComponent::LibraryComponent()
     localToggle.onClick = [this] { switchToCloudMode (false); };
 
     // Icon/Table view toggles — only meaningful for Pedals/Boards/Images.
+    loadViewModePrefs();
+
     addChildComponent (btnIconView);
     addChildComponent (btnTableView);
     btnIconView.setColour  (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
     btnTableView.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
-    btnIconView.onClick  = [this] { categoryShowsIcons[currentCategoryID] = true;  resized(); repaint(); };
-    btnTableView.onClick = [this] { categoryShowsIcons[currentCategoryID] = false; resized(); repaint(); };
+    btnIconView.onClick  = [this] { categoryShowsIcons[currentCategoryID] = true;  saveViewModePrefs(); resized(); repaint(); };
+    btnTableView.onClick = [this] { categoryShowsIcons[currentCategoryID] = false; saveViewModePrefs(); resized(); repaint(); };
     signInBtn.onClick = [this]
     {
         if (cloudAuth.isSignedIn())
@@ -1599,5 +1601,58 @@ void LibraryComponent::AssetTable::showRowContextMenu (int rowNumber)
             }));
         }
     });
+}
+
+//==============================================================================
+// View-mode preference persistence
+//
+// Lives in the same settings.json that holds the TONE3000 OAuth tokens, under
+// a "categoryViewModes" object whose keys are category IDs and whose values
+// are bools (true = icon view, false = table view).
+
+namespace
+{
+    juce::File librarySettingsFile()
+    {
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("PedalForge").getChildFile ("settings.json");
+    }
+}
+
+void LibraryComponent::loadViewModePrefs()
+{
+    auto file = librarySettingsFile();
+    if (! file.existsAsFile()) return;
+
+    auto json = juce::JSON::parse (file);
+    auto modes = json.getProperty ("categoryViewModes", juce::var());
+    if (auto* obj = modes.getDynamicObject())
+    {
+        for (const auto& prop : obj->getProperties())
+            categoryShowsIcons[prop.name.toString()] = (bool) prop.value;
+    }
+}
+
+void LibraryComponent::saveViewModePrefs() const
+{
+    auto file = librarySettingsFile();
+    file.getParentDirectory().createDirectory();
+
+    // Preserve other settings (OAuth tokens, etc.) — merge instead of overwriting.
+    juce::DynamicObject::Ptr root = new juce::DynamicObject();
+    if (file.existsAsFile())
+    {
+        auto existing = juce::JSON::parse (file);
+        if (auto* existingObj = existing.getDynamicObject())
+            for (const auto& p : existingObj->getProperties())
+                root->setProperty (p.name, p.value);
+    }
+
+    auto* modesObj = new juce::DynamicObject();
+    for (const auto& [cat, isIcons] : categoryShowsIcons)
+        modesObj->setProperty (cat, isIcons);
+    root->setProperty ("categoryViewModes", juce::var (modesObj));
+
+    file.replaceWithText (juce::JSON::toString (juce::var (root.get())));
 }
 

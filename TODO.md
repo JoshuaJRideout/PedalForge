@@ -199,6 +199,7 @@ Special nodes that bridge the effects graph to the pedal UI. Only things wired t
 | **Soon** | 4, 5 | C/C++ nodes + factory effects library |
 | **Next** | 7, 8 | Analog circuits + measurement tools |
 | **Ongoing** | 6 | Store can launch whenever there's content to sell |
+| **Launch gate** | 18 | Factory pedal visual polish — musician-first UX. Cannot launch broadly with the current "rough-pass" pedal art. |
 
 ---
 
@@ -329,3 +330,28 @@ Create a method for users to export individual pedals as standalone plugins:
 - [ ] **CMake Template**: A standalone JUCE AudioPlugin template that wraps the PedalInstance and its Faust DSP graph.
 - [ ] **Background Build Process**: Automate CMake/Ninja in the background to compile a ready-to-use VST3/AUv3 binary.
 - [ ] **Zero Shell Overhead**: The exported plugin functions entirely on its own in any host DAW without requiring the full PedalForge application shell.
+
+---
+
+## 18. 🎨 Factory Pedal Visual Polish — Musician-First UX
+
+The current factory pedals are a functional first pass: they exist, the DSP works, the controls are wired. But none of them are *visually polished* or use image-based chassis designs. PedalForge currently reads as a coder's tool; we need it to read as **a guitar player's tool first**. Without this, the broader audience won't engage no matter how good the DSP is.
+
+This block is gating before any major launch push.
+
+### Per-pedal visual treatment
+- [ ] Hire / commission proper chassis art for every factory pedal (or hand-craft per pedal)
+- [ ] Image-based backgrounds with realistic chassis textures (brushed aluminium, painted enclosures, screen-printed graphics)
+- [ ] Knob designs that match each pedal's aesthetic (chicken-head, skirted, top-hat, low-profile)
+- [ ] LED graphics with realistic glow / bloom
+- [ ] Footswitch art (3PDT-style stomps, soft-touch buttons)
+- [ ] Subtle wear / patina options for "vintage" pedals
+- [ ] Hand-tuned typography for labels per pedal style
+
+### Catalog organisation
+- [ ] Group factory pedals into "collections" with shared visual language (e.g. tutorial set, vintage drives, modern modulation)
+- [ ] Add proper one-line tag-lines and longer descriptions to factory pedals (currently mostly empty)
+- [ ] Author byline + version on each so users see provenance
+
+> [!IMPORTANT]
+> This is where the app crosses from "interesting tech demo" to "tool I'd actually use." Skinnable UI (§16) waits until *after* the feature set is finalized — there's no point letting users skin a half-built shell. Pedal polish here comes first.

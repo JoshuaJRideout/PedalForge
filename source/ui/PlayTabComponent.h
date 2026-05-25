@@ -25,6 +25,7 @@ public:
     void handleSlotSwapped (int sourceSlot, int targetSlot);
     
     void removeSlot (int slotIndex);
+    void clearSlot  (int slotIndex);   // remove pedal but keep the slot
     void visibilityChanged() override;
 
     std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
@@ -51,9 +52,20 @@ private:
     std::vector<std::unique_ptr<Slot>> slots;
 
     juce::ComboBox presetMenu;
+    juce::TextButton btnSavePreset { "Save..." };
     juce::TextButton addSlotButton { "+ Add Slot" };
     juce::Viewport viewport;
     juce::Component container;
+
+    // User-saved presets discovered on disk. Key = preset name, value = file path.
+    // Loaded alongside the built-in presets and shown in the same dropdown.
+    std::map<juce::String, juce::File> userPresets;
+
+    void rebuildPresetMenu();
+    void saveCurrentChainAsPreset();
+    void writePresetFile (const juce::String& name, const juce::File& target);
+    bool loadUserPreset (const juce::File& file);
+    static juce::File presetsDir();
     
     int lastPedalCount = 0;
     int activeSlotIndex = -1;

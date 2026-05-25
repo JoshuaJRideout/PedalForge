@@ -199,6 +199,11 @@ public:
     // Per-pedal scripts live on PedalDesign; board-wide scripts live here so they
     // survive across pedal swaps and project saves.
     std::vector<PedalDesign::Script> engineScripts;
+
+    // Stable identity for the current rig snapshot. Generated lazily on first
+    // serialise(); preserved across export → import round-trips so a re-import
+    // of the same .pfboard file overwrites the prior copy instead of duplicating.
+    mutable juce::String currentBoardSnapshotUuid;
     
     std::function<void()> onBoardConnectionsChanged;
 
@@ -242,6 +247,13 @@ private:
     std::list<BoardConfig> boards;
     std::vector<BoardRoutingConnection> boardConnections;
     std::vector<HardwareMidiDevice> hwMidiDevices;
+
+    // Protects `instances` and `boards` against concurrent mutation from the
+    // UI thread (add/remove pedal/board) while the audio thread is iterating
+    // them in processBlock / cycleTrack / cycleTuringPedal. The audio thread
+    // uses a try-lock and skips MIDI-driven nav for a block if it can't
+    // acquire — better one missed CC than a real-time stall on the UI thread.
+    juce::CriticalSection collectionLock;
 
     NodeID audioInputNodeID;
     NodeID audioOutputNodeID;

@@ -119,17 +119,38 @@ inline juce::File getBoardsDir()
     return dir;
 }
 
-/** Copy a .pfboard file into ~/Library/PedalForge/boards/ for later loading
-    via the Library tab. Returns the destination on success.
-    Filename is uniquified if a board with the same name already lives there;
-    no UUID dedup yet because BoardConfig doesn't carry one (TODO). */
+/** Copy a .pfboard file into ~/Library/PedalForge/boards/. Returns the
+    destination on success.
+
+    Dedup: if the incoming file carries a pfboardUuid that matches an existing
+    .pfboard already in boards/, overwrite that file in place — re-import of
+    the same rig should not produce MyRig_2, MyRig_3, etc. Otherwise the
+    filename is uniquified for hygiene only. */
 inline juce::File importBoardFile (const juce::File& source)
 {
     if (! source.existsAsFile()) return {};
 
-    auto boardsDir = getBoardsDir();
-    auto baseName  = source.getFileNameWithoutExtension();
-    auto target    = boardsDir.getChildFile (baseName + ".pfboard");
+    auto boardsDir   = getBoardsDir();
+    auto incomingTxt = source.loadFileAsString();
+    auto incomingUuid = juce::JSON::parse (incomingTxt).getProperty ("pfboardUuid", "").toString();
+
+    if (incomingUuid.isNotEmpty())
+    {
+        for (const auto& f : boardsDir.findChildFiles (juce::File::findFiles, false, "*.pfboard"))
+        {
+            auto existingUuid = juce::JSON::parse (f.loadFileAsString())
+                                    .getProperty ("pfboardUuid", "").toString();
+            if (existingUuid == incomingUuid)
+            {
+                source.copyFileTo (f);
+                return f;
+            }
+        }
+    }
+
+    // New rig — pick a non-colliding filename.
+    auto baseName = source.getFileNameWithoutExtension();
+    auto target   = boardsDir.getChildFile (baseName + ".pfboard");
 
     int suffix = 2;
     while (target.existsAsFile())

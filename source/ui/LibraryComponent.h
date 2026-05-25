@@ -197,6 +197,9 @@ private:
     juce::TextButton btnIconView  { "Icons" };
     juce::TextButton btnTableView { "Table" };
 
+    void loadViewModePrefs();
+    void saveViewModePrefs() const;
+
     // Cached PedalDesigns for the Pedals icon view — re-parsing every paint
     // would be expensive. Refilled by refreshAssets().
     std::map<juce::String, std::shared_ptr<PedalDesign>> pedalDesignCache;

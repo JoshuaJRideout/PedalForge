@@ -73,29 +73,39 @@ public:
 
     void mouseDown (const juce::MouseEvent& e) override
     {
-        if (pedalComponent == nullptr)
+        const bool isPopup = e.mods.isRightButtonDown() || e.mods.isCtrlDown();
+
+        if (isPopup)
         {
-            if (e.mods.isRightButtonDown() || e.mods.isCtrlDown())
+            juce::PopupMenu menu;
+            if (pedalComponent != nullptr)
             {
-                juce::PopupMenu menu;
-                menu.addItem (1, "Delete Slot");
-                
-                juce::Component::SafePointer<PlayTabComponent> sp (&parent);
-                int idx = index;
-                menu.showMenuAsync (juce::PopupMenu::Options(),
-                                    [sp, idx] (int result)
-                                    {
-                                        if (result == 1 && sp != nullptr)
-                                        {
-                                            sp->removeSlot (idx);
-                                        }
-                                    });
+                // Slot has a pedal — offer Remove (keep slot) and Delete Slot (remove both).
+                menu.addItem (1, "Remove Pedal (keep slot)");
+                menu.addItem (2, "Delete Slot");
             }
             else
             {
-                parent.handleSlotClicked (index);
+                // Empty slot — just Delete Slot.
+                menu.addItem (2, "Delete Slot");
             }
+
+            juce::Component::SafePointer<PlayTabComponent> sp (&parent);
+            int idx = index;
+            menu.showMenuAsync (juce::PopupMenu::Options(),
+                                [sp, idx] (int result)
+                                {
+                                    if (sp == nullptr) return;
+                                    if      (result == 1) sp->clearSlot  (idx);
+                                    else if (result == 2) sp->removeSlot (idx);
+                                });
+            return;
         }
+
+        // Left-click on an empty slot opens the inventory; left-click on a
+        // populated slot lets the underlying PedalComponent handle it.
+        if (pedalComponent == nullptr)
+            parent.handleSlotClicked (index);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
@@ -188,16 +198,14 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
     addSlot ("Reverb", "Reverb");
 
     addAndMakeVisible (presetMenu);
-    presetMenu.addItem ("Clean & Space", 1);
-    presetMenu.addItem ("Classic Rock", 2);
-    presetMenu.addItem ("High Gain Lead", 3);
-    presetMenu.addItem ("Ambient Shimmer", 4);
     presetMenu.setTextWhenNothingSelected ("Select a Preset...");
-    
-    presetMenu.onChange = [this] {
-        loadPreset (presetMenu.getText());
-    };
-    
+    presetMenu.onChange = [this] { loadPreset (presetMenu.getText()); };
+    rebuildPresetMenu();   // populates built-ins + any user-saved presets
+
+    addAndMakeVisible (btnSavePreset);
+    btnSavePreset.setTooltip ("Save the current pedal chain as a reusable preset");
+    btnSavePreset.onClick = [this] { saveCurrentChainAsPreset(); };
+
     addAndMakeVisible (addSlotButton);
     addSlotButton.onClick = [this] {
         auto s = std::make_unique<Slot>();
@@ -234,7 +242,7 @@ PlayTabComponent::~PlayTabComponent()
 void PlayTabComponent::paint (juce::Graphics& g)
 {
     g.fillAll (PedalForgeLookAndFeel::bgDark.darker(0.5f));
-    
+
     auto toolbarArea = getLocalBounds().removeFromTop (36);
     g.setGradientFill (juce::ColourGradient (
         PedalForgeLookAndFeel::bgMid.darker (0.1f), 0, (float)toolbarArea.getY(),
@@ -242,6 +250,19 @@ void PlayTabComponent::paint (juce::Graphics& g)
     g.fillRect (toolbarArea);
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float) getWidth());
+
+    // Empty-chain hint — when nothing's been added yet, the field of dashed
+    // empty cards is a bit cryptic for a new user. Drop a quiet caption above.
+    bool anyPedal = false;
+    for (const auto& s : slots) if (s->pedalId.uid != 0) { anyPedal = true; break; }
+    if (! anyPedal)
+    {
+        g.setColour (PedalForgeLookAndFeel::textSecondary);
+        g.setFont (juce::FontOptions (13.0f));
+        auto hintArea = getLocalBounds().removeFromTop (60).withTrimmedTop (38);
+        g.drawText ("Pick a preset above, click a slot to add a pedal, or press Tab to browse.",
+                    hintArea, juce::Justification::centred);
+    }
 }
 
 void PlayTabComponent::resized()
@@ -252,6 +273,8 @@ void PlayTabComponent::resized()
     topBar.reduce (8, 4);
     btnNotes.setBounds (topBar.removeFromLeft (60).withSizeKeepingCentre (60, 24));
     presetMenu.setBounds (topBar.removeFromLeft (200).withSizeKeepingCentre (200, 24));
+    topBar.removeFromLeft (4);
+    btnSavePreset.setBounds (topBar.removeFromLeft (80).withSizeKeepingCentre (80, 24));
     addSlotButton.setBounds (topBar.removeFromRight (120).withSizeKeepingCentre (120, 24));
 
     viewport.setBounds (bounds);
@@ -767,10 +790,20 @@ void PlayTabComponent::removeSlot (int slotIndex)
 
 void PlayTabComponent::loadPreset (const juce::String& presetName)
 {
+    // User-saved presets win — they may shadow a built-in name if the user
+    // deliberately saved over one.
+    auto userIt = userPresets.find (presetName);
+    if (userIt != userPresets.end())
+    {
+        loadUserPreset (userIt->second);
+        return;
+    }
+
     // Clear existing pedals from playEngine
     auto instances = playEngine.getPedalInstances(); // Copy so we can iterate safely
     for (auto& inst : instances)
-        playEngine.removePedal (inst.nodeID);
+        if (inst.boardId == "play_board")
+            playEngine.removePedal (inst.nodeID);
 
     auto addToSlot = [this](int slotIndex, const juce::String& pedalName) {
         handlePedalDropped (slotIndex, pedalName);
@@ -816,4 +849,159 @@ void PlayTabComponent::visibilityChanged()
         btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
         notesOverlay.setVisible (!playEngine.playNotes.empty());
     }
+}
+
+//==============================================================================
+// User-preset save/load
+//==============================================================================
+
+juce::File PlayTabComponent::presetsDir()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("PedalForge").getChildFile ("playpresets");
+    dir.createDirectory();
+    return dir;
+}
+
+void PlayTabComponent::rebuildPresetMenu()
+{
+    presetMenu.clear (juce::dontSendNotification);
+    userPresets.clear();
+
+    // Built-in presets first
+    presetMenu.addItem ("Clean & Space",   1);
+    presetMenu.addItem ("Classic Rock",    2);
+    presetMenu.addItem ("High Gain Lead",  3);
+    presetMenu.addItem ("Ambient Shimmer", 4);
+
+    // User-saved presets — scan ~/Library/PedalForge/playpresets/
+    auto dir = presetsDir();
+    if (dir.isDirectory())
+    {
+        auto files = dir.findChildFiles (juce::File::findFiles, false, "*.json");
+        if (! files.isEmpty())
+        {
+            presetMenu.addSeparator();
+            int idCounter = 100;
+            for (const auto& f : files)
+            {
+                auto name = f.getFileNameWithoutExtension();
+                userPresets[name] = f;
+                presetMenu.addItem (name, idCounter++);
+            }
+        }
+    }
+}
+
+void PlayTabComponent::clearSlot (int slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= (int) slots.size()) return;
+    if (slots[(size_t) slotIndex]->pedalId.uid != 0)
+    {
+        playEngine.removePedal (slots[(size_t) slotIndex]->pedalId);
+        slots[(size_t) slotIndex]->pedalId.uid = 0;
+    }
+    rebuildSlots();
+}
+
+void PlayTabComponent::saveCurrentChainAsPreset()
+{
+    // Default name based on the pedals on the chain.
+    juce::String suggestedName = "My Preset";
+    {
+        juce::StringArray names;
+        for (const auto& s : slots)
+        {
+            if (s->pedalId.uid != 0)
+                if (auto* inst = playEngine.getPedalInstance (s->pedalId))
+                    names.add (inst->name);
+        }
+        if (! names.isEmpty()) suggestedName = names.joinIntoString (" + ");
+    }
+
+    auto* alert = new juce::AlertWindow ("Save preset",
+        "Name this pedal chain. It'll appear in the preset dropdown.",
+        juce::AlertWindow::NoIcon);
+    alert->addTextEditor ("name", suggestedName);
+    alert->addButton ("Save",   1, juce::KeyPress (juce::KeyPress::returnKey));
+    alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    juce::Component::SafePointer<PlayTabComponent> sp (this);
+    alert->enterModalState (true, juce::ModalCallbackFunction::create (
+        [sp, alert] (int result)
+        {
+            if (sp == nullptr || result != 1) return;
+            auto name = alert->getTextEditorContents ("name").trim();
+            if (name.isEmpty()) return;
+
+            auto safe = name.replace ("/", "_").replace (":", "_");
+            auto target = sp->presetsDir().getChildFile (safe + ".json");
+
+            sp->writePresetFile (name, target);
+            sp->rebuildPresetMenu();
+            sp->presetMenu.setText (name, juce::dontSendNotification);
+        }));
+}
+
+void PlayTabComponent::writePresetFile (const juce::String& name, const juce::File& target)
+{
+    juce::DynamicObject::Ptr root = new juce::DynamicObject();
+    root->setProperty ("name", name);
+    root->setProperty ("formatVersion", 1);
+
+    juce::Array<juce::var> slotArr;
+    for (const auto& s : slots)
+    {
+        auto* obj = new juce::DynamicObject();
+        obj->setProperty ("category", s->recommendedCategory);
+        obj->setProperty ("label",    s->label);
+        juce::String pedalName;
+        if (s->pedalId.uid != 0)
+            if (auto* inst = playEngine.getPedalInstance (s->pedalId))
+                pedalName = inst->name;
+        obj->setProperty ("pedal", pedalName);   // empty if slot is unfilled
+        slotArr.add (juce::var (obj));
+    }
+    root->setProperty ("slots", slotArr);
+
+    target.replaceWithText (juce::JSON::toString (juce::var (root.get())));
+}
+
+bool PlayTabComponent::loadUserPreset (const juce::File& file)
+{
+    auto json = juce::JSON::parse (file);
+    if (! json.isObject()) return false;
+
+    auto slotsArr = json.getProperty ("slots", juce::var());
+    auto* arr = slotsArr.getArray();
+    if (arr == nullptr) return false;
+
+    // Clear current chain
+    auto current = playEngine.getPedalInstances();   // copy
+    for (auto& inst : current)
+        if (inst.boardId == "play_board")
+            playEngine.removePedal (inst.nodeID);
+
+    // Rebuild slots vector from the preset
+    slots.clear();
+    for (const auto& sv : *arr)
+    {
+        auto s = std::make_unique<Slot>();
+        s->recommendedCategory = sv.getProperty ("category", "Any").toString();
+        s->label                = sv.getProperty ("label",    "Pedal").toString();
+        slots.push_back (std::move (s));
+    }
+
+    rebuildSlots();
+
+    // Now drop each named pedal into its slot. Doing this after rebuildSlots
+    // so the slot wrappers exist for the drop targets.
+    for (int i = 0; i < arr->size(); ++i)
+    {
+        auto pedalName = arr->getUnchecked (i).getProperty ("pedal", "").toString();
+        if (pedalName.isNotEmpty())
+            handlePedalDropped (i, pedalName);
+    }
+
+    return true;
 }
