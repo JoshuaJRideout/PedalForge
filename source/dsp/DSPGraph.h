@@ -47,6 +47,11 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "ram")          return std::make_unique<RamNode>();
     if (type == "nam")          return std::make_unique<NAMNode>("nam", "NAM Amp");
     if (type == "plugin_host")  return std::make_unique<PluginHostNode>();
+    if (type == "aux_input")    return std::make_unique<AuxInputNode>();
+    if (type == "stereo_mixer") return std::make_unique<StereoMixerNode>();
+    if (type == "aux_output")   return std::make_unique<AuxOutputNode>();
+    if (type == "matrix_mixer") return std::make_unique<MatrixMixerNode>();
+    if (type == "matrix_mixer_xl") return std::make_unique<MatrixMixerXLNode>();
 
     if (type == "gain")         return std::make_unique<GainNode>();
     if (type == "mix")          return std::make_unique<MixNode>();
@@ -395,10 +400,11 @@ public:
             auto* node = getNode (nodeID);
             if (!node) continue;
 
-            // Special case: AudioInputNode — read from Left and Right channels
+            // Special case: AudioInputNode — read from all active output channels
             if (node->getType() == "audio_input")
             {
-                for (int ch = 0; ch < 2; ++ch)
+                int numChannelsToCopy = (int)node->getOutputPorts().size();
+                for (int ch = 0; ch < numChannelsToCopy; ++ch)
                 {
                     auto key = std::make_pair(nodeID, ch);
                     if (portBufferMap.count(key))
@@ -406,6 +412,27 @@ public:
                         if (ch < buffer.getNumChannels())
                             std::copy (buffer.getReadPointer(ch),
                                        buffer.getReadPointer(ch) + numSamples,
+                                       bufferPool[portBufferMap[key]].data());
+                        else
+                            std::fill (bufferPool[portBufferMap[key]].data(),
+                                       bufferPool[portBufferMap[key]].data() + numSamples, 0.0f);
+                    }
+                }
+                continue;
+            }
+
+            // Special case: AuxInputNode — read from Left and Right channels of secondary input bus (channels 2 & 3)
+            if (node->getType() == "aux_input")
+            {
+                for (int ch = 0; ch < 2; ++ch)
+                {
+                    auto key = std::make_pair(nodeID, ch);
+                    if (portBufferMap.count(key))
+                    {
+                        int actualCh = ch + 2;
+                        if (actualCh < buffer.getNumChannels())
+                            std::copy (buffer.getReadPointer(actualCh),
+                                       buffer.getReadPointer(actualCh) + numSamples,
                                        bufferPool[portBufferMap[key]].data());
                         else
                             std::fill (bufferPool[portBufferMap[key]].data(),
@@ -471,10 +498,11 @@ public:
             for (int i = 0; i < numOutputs; ++i)
                 node->lastOutputValues[(size_t) i] = scratchOutPtrs[i] != nullptr ? scratchOutPtrs[i][numSamples - 1] : 0.0f;
 
-            // Special case: AudioOutputNode — write to Left and Right channels
+            // Special case: AudioOutputNode — write to all active channels
             if (node->getType() == "audio_output")
             {
-                for (int ch = 0; ch < 2; ++ch)
+                int numChannelsToCopy = (int)node->getInputPorts().size();
+                for (int ch = 0; ch < numChannelsToCopy; ++ch)
                 {
                     if (ch < numInputs && scratchInPtrs[ch] != nullptr && ch < buffer.getNumChannels())
                     {
@@ -491,6 +519,24 @@ public:
                             {
                                 dest[i] += src[i];
                             }
+                        }
+                    }
+                }
+            }
+
+            // Special case: AuxOutputNode — write to channels 2 and 3 (FX Send)
+            if (node->getType() == "aux_output")
+            {
+                for (int ch = 0; ch < 2; ++ch)
+                {
+                    if (ch < numInputs && scratchInPtrs[ch] != nullptr && (ch + 2) < buffer.getNumChannels())
+                    {
+                        int actualCh = ch + 2;
+                        auto* dest = buffer.getWritePointer(actualCh);
+                        const auto* src = scratchInPtrs[ch];
+                        for (int i = 0; i < numSamples; ++i)
+                        {
+                            dest[i] = src[i];
                         }
                     }
                 }

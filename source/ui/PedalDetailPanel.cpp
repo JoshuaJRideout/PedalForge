@@ -359,17 +359,28 @@ void PedalDetailPanel::rebuildKnobs()
                     {
                         // Library loader — trigger onOpenLibrary callback
                         juce::String categoryToLoad = ctrl.libraryCategory.isNotEmpty() ? ctrl.libraryCategory : "NAM";
-                        fe.button->onClick = [this, targetNodeID, categoryToLoad]() {
+                        auto* inst = selectedInstance;
+                        fe.button->onClick = [this, targetNodeID, categoryToLoad, inst]() {
                             if (onOpenLibrary)
                             {
                                 auto safeEngineRef = engineRef;
-                                auto safeNodeID = selectedInstance->nodeID;
-                                onOpenLibrary(categoryToLoad, [safeEngineRef, safeNodeID, targetNodeID](const juce::File& file) {
+                                auto safeNodeID = inst->nodeID;
+                                auto safeDesign = inst->design;
+                                juce::Component::SafePointer<PedalDetailPanel> sp(this);
+                                onOpenLibrary(categoryToLoad, [safeEngineRef, safeNodeID, targetNodeID, inst, safeDesign, sp](const juce::File& file) {
                                     if (auto* node = safeEngineRef->getGraph().getNodeForId (safeNodeID))
                                     {
                                         if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
+                                        {
                                             graphProc->setNodeFilePath (targetNodeID, file.getFullPathName());
+                                            if (safeDesign != nullptr)
+                                                safeDesign->effectsGraph = graphProc->getDSPGraph().toJSON();
+                                        }
                                     }
+                                    if (safeDesign != nullptr)
+                                        updateDisplayForFilePath (*safeDesign, inst->controlTexts, targetNodeID, file.getFullPathName());
+                                    if (sp != nullptr)
+                                        sp->repaint();
                                 });
                             }
                         };
@@ -395,6 +406,8 @@ void PedalDetailPanel::rebuildKnobs()
                                     if (auto* node = safeEngineRef->getGraph().getNodeForId(safeNodeID)) {
                                         if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
                                             graphProc->setNodeFilePath(targetNodeID, desc.fileOrIdentifier);
+                                            if (safeInst->design != nullptr)
+                                                safeInst->design->effectsGraph = graphProc->getDSPGraph().toJSON();
                                             safeInst->controlTexts[ctrl.controlID] = desc.name;
                                             repaint();
                                         }
@@ -408,16 +421,22 @@ void PedalDetailPanel::rebuildKnobs()
                         // Standard file loader — open OS file picker
                         auto safeEngineRef = engineRef;
                         auto safeNodeID = selectedInstance->nodeID;
-                        fe.button->onClick = [this, safeEngineRef, safeNodeID, targetNodeID]() {
+                        auto* inst = selectedInstance;
+                        fe.button->onClick = [this, safeEngineRef, safeNodeID, targetNodeID, inst]() {
                             fileChooser = std::make_unique<juce::FileChooser> ("Select File", juce::File{}, "*.nam;*.wav;*.mp3;*.aif;*.flac;*.vst3;*.component");
                             auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-                            fileChooser->launchAsync (chooserFlags, [this, safeEngineRef, safeNodeID, targetNodeID](const juce::FileChooser& fc) {
+                            fileChooser->launchAsync (chooserFlags, [this, safeEngineRef, safeNodeID, targetNodeID, inst](const juce::FileChooser& fc) {
                                 if (fc.getResult().existsAsFile()) {
                                     if (auto* node = safeEngineRef->getGraph().getNodeForId(safeNodeID)) {
                                         if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
                                             graphProc->setNodeFilePath(targetNodeID, fc.getResult().getFullPathName());
+                                            if (inst->design != nullptr)
+                                                inst->design->effectsGraph = graphProc->getDSPGraph().toJSON();
                                         }
                                     }
+                                    if (inst->design != nullptr)
+                                        updateDisplayForFilePath (*inst->design, inst->controlTexts, targetNodeID, fc.getResult().getFullPathName());
+                                    repaint();
                                 }
                             });
                         };

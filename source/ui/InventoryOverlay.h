@@ -41,7 +41,6 @@ public:
     
     std::function<void(const juce::String&)> onPedalClicked;
 
-private:
     //==========================================================================
     // Data model for items in the grid
     //==========================================================================
@@ -62,6 +61,8 @@ private:
         // For hardware items
         juce::String hardwareType; // "knob", "switch", etc.
     };
+
+private:
 
     //==========================================================================
     // Left panel — category tree + search

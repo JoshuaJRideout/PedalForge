@@ -1,0 +1,1 @@
+"        if (controlID == \"midi_editor_display\")\n        {\n            paintMidiEditor (g);\n            return;\n        }"

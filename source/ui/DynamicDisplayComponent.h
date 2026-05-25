@@ -8,7 +8,7 @@
 #include "../dsp/PedalDesign.h"
 #include "../dsp/MidiEditorNode.h"
 
-class DynamicDisplayComponent : public juce::Component, public juce::Timer
+class DynamicDisplayComponent : public juce::Component, public juce::Timer, public juce::TextEditor::Listener
 {
 public:
     DynamicDisplayComponent (juce::Component* parentOverlay, PedalInstance* inst, AudioGraphEngine* eng, const juce::String& cid)
@@ -53,11 +53,23 @@ public:
         addAndMakeVisible (statusLabel.get());
 
         // Load saved script or setup default
-        if (controlID == "midi_editor_display")
+        if (controlID == "matrix_mixer_xl_display")
         {
-            toggleModeBtn->setVisible (false);
+            cellValueEditor = std::make_unique<juce::TextEditor>();
+            cellValueEditor->setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xFF1F2937));
+            cellValueEditor->setColour (juce::TextEditor::textColourId, juce::Colours::white);
+            cellValueEditor->setColour (juce::TextEditor::outlineColourId, juce::Colour (0xFF4B5563));
+            cellValueEditor->setColour (juce::TextEditor::focusedOutlineColourId, juce::Colour (0xFFEC4899));
+            cellValueEditor->setFont (juce::FontOptions ("Sans", 10.0f, juce::Font::bold));
+            cellValueEditor->addListener (this);
+            cellValueEditor->setVisible (true);
+            addAndMakeVisible (cellValueEditor.get());
+            
+            if (auto* node = getMatrixMixerXLNode())
+                cellValueEditor->setText (juce::String (node->getGain (selectedRowMatrix, selectedColMatrix), 2), false);
         }
-        else if (targetInstance)
+
+        if (targetInstance)
         {
             juce::String savedScript = targetInstance->controlTexts[controlID + "_script"];
             if (savedScript.isEmpty() || savedScript.contains (">=") || savedScript.contains ("<="))
@@ -130,13 +142,24 @@ public:
     {
         editScriptMode = !editScriptMode;
         
-        toggleModeBtn->setButtonText (editScriptMode ? "SEQUENCER GRID" : "SCRIPT EDITOR");
+        if (controlID == "matrix_mixer_xl_display")
+            toggleModeBtn->setButtonText (editScriptMode ? "MATRIX GRID" : "SCRIPT EDITOR");
+        else if (controlID == "midi_editor_display")
+            toggleModeBtn->setButtonText (editScriptMode ? "MIDI EDITOR" : "SCRIPT EDITOR");
+        else
+            toggleModeBtn->setButtonText (editScriptMode ? "SEQUENCER GRID" : "SCRIPT EDITOR");
+            
         toggleModeBtn->setColour (juce::TextButton::buttonColourId, 
             editScriptMode ? juce::Colour (0xFFEC4899) : juce::Colour (0xFF312E81)); // Pink vs Indigo
 
         scriptEditor->setVisible (editScriptMode);
         compileBtn->setVisible (editScriptMode);
         statusLabel->setVisible (editScriptMode);
+        
+        if (controlID == "matrix_mixer_xl_display" && cellValueEditor)
+        {
+            cellValueEditor->setVisible (!editScriptMode);
+        }
 
         resized();
         repaint();
@@ -166,7 +189,15 @@ public:
         // Bind parameter getters/setters
         vm.getParamCallback = [this](int idx) -> float {
             auto* node = getGridSequencerNode();
-            if (!node) return 0.0f;
+            if (!node)
+            {
+                // Return sensible defaults so XY pad dot is visible
+                if (idx == 0) return 3.0f;   // div  — centers dot_x
+                if (idx == 1) return 16.0f;  // len
+                if (idx == 2) return 64.0f;  // val1 — centers dot_y
+                if (idx == 3) return 100.0f; // val2
+                return 0.0f;
+            }
             juce::String tr = "tr" + juce::String (selectedTrack);
             if (idx == 0) return node->getParam (tr + "_div")->get();
             if (idx == 1) return node->getParam (tr + "_len")->get();
@@ -228,8 +259,20 @@ public:
         
         if (controlID == "midi_editor_display")
         {
-            paintMidiEditor (g);
-            return;
+            if (!editScriptMode)
+            {
+                paintMidiEditor (g);
+                return;
+            }
+        }
+
+        if (controlID == "matrix_mixer_xl_display")
+        {
+            if (!editScriptMode)
+            {
+                paintMatrixMixerXL (g);
+                return;
+            }
         }
 
         if (editScriptMode)
@@ -540,12 +583,18 @@ public:
     void mouseDown (const juce::MouseEvent& e) override
     {
         mouseInteraction (e, true, true, false);
+        if (editScriptMode) return;
+
         if (controlID == "midi_editor_display")
         {
             mouseDownMidiEditor (e);
             return;
         }
-        if (editScriptMode) return;
+        if (controlID == "matrix_mixer_xl_display")
+        {
+            mouseDownMatrixMixerXL (e);
+            return;
+        }
 
         auto* seqNode = getGridSequencerNode();
         if (!seqNode) return;
@@ -658,6 +707,17 @@ public:
         mouseInteraction (e, true, false, true);
         if (editScriptMode) return;
 
+        if (controlID == "midi_editor_display")
+        {
+            mouseDragMidiEditor (e);
+            return;
+        }
+        if (controlID == "matrix_mixer_xl_display")
+        {
+            mouseDragMatrixMixerXL (e);
+            return;
+        }
+
         auto* seqNode = getGridSequencerNode();
         if (!seqNode) return;
 
@@ -714,6 +774,18 @@ public:
     void mouseUp (const juce::MouseEvent& e) override
     {
         mouseInteraction (e, false, false, false);
+        if (editScriptMode) return;
+
+        if (controlID == "midi_editor_display")
+        {
+            mouseUpMidiEditor (e);
+            return;
+        }
+        if (controlID == "matrix_mixer_xl_display")
+        {
+            mouseUpMatrixMixerXL (e);
+            return;
+        }
         
         draggedBPM = false;
         draggedBoundaryTrack = -1;
@@ -727,6 +799,17 @@ public:
         if (editScriptMode)
         {
             repaint();
+            return;
+        }
+
+        if (controlID == "midi_editor_display")
+        {
+            mouseMoveMidiEditor (e);
+            return;
+        }
+        if (controlID == "matrix_mixer_xl_display")
+        {
+            mouseMoveMatrixMixerXL (e);
             return;
         }
 
@@ -836,6 +919,24 @@ private:
         {
             if (dspNode && dspNode->getType() == "midi_editor")
                 return dynamic_cast<MidiEditorNode*> (dspNode.get());
+        }
+        return nullptr;
+    }
+
+    MatrixMixerXLNode* getMatrixMixerXLNode()
+    {
+        if (!targetInstance || !engine) return nullptr;
+        
+        auto* node = engine->getGraph().getNodeForId (targetInstance->nodeID);
+        if (!node) return nullptr;
+        
+        auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor());
+        if (!graphProc) return nullptr;
+        
+        for (const auto& [id, dspNode] : graphProc->getDSPGraph().getNodes())
+        {
+            if (dspNode && dspNode->getType() == "matrix_mixer_xl")
+                return dynamic_cast<MatrixMixerXLNode*> (dspNode.get());
         }
         return nullptr;
     }
@@ -1182,6 +1283,508 @@ private:
         return 0.25;
     }
 
+    // ── Matrix Mixer XL Drawing & Mouse Interaction ──────────────────────────
+    void paintMatrixMixerXL (juce::Graphics& g)
+    {
+        auto bounds = getLocalBounds().toFloat();
+        auto* node = getMatrixMixerXLNode();
+        if (!node)
+        {
+            g.setColour (juce::Colours::white);
+            g.setFont (juce::FontOptions ("Sans", 16.0f, juce::Font::bold));
+            g.drawText ("Matrix Mixer XL Node Not Found", bounds, juce::Justification::centred);
+            return;
+        }
+
+        // Draw deep panel backdrop (Dark premium space theme)
+        g.setColour (juce::Colour (0xFF0E0B16)); // extremely dark purple/black
+        g.fillRoundedRectangle (bounds, 6.0f);
+        g.setColour (juce::Colour (0xFF312E81).withAlpha (0.4f)); // subtle glowing indigo border
+        g.drawRoundedRectangle (bounds, 6.0f, 1.5f);
+
+        // Header Background
+        float topBarH = 45.0f;
+        g.setColour (juce::Colour (0xFF1A1726)); // deep slate-indigo
+        g.fillRect (0.0f, 0.0f, bounds.getWidth(), topBarH);
+        g.setColour (juce::Colour (0xFF312E81)); // separator
+        g.drawHorizontalLine ((int)topBarH, 0.0f, bounds.getWidth());
+
+        // 1. Draw Title
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions ("Sans", 13.0f, juce::Font::bold));
+        g.drawText ("MATRIX MIXER XL", 15.0f, 8.0f, 180.0f, 28.0f, juce::Justification::centredLeft);
+
+        int activeSize = juce::jlimit (1, 32, (int) node->getParam ("size")->get());
+        float masterVol = node->getParam ("master_vol")->get();
+
+        // 2. Draw Resizing Segment Buttons: 4x4, 8x8, 16x16, 32x32
+        g.setFont (juce::FontOptions ("Sans", 10.0f, juce::Font::bold));
+        g.setColour (juce::Colour (0xFF9CA3AF));
+        g.drawText ("SIZE:", 190.0f, 8.0f, 35.0f, 28.0f, juce::Justification::centredLeft);
+
+        xlBtn4x4 = juce::Rectangle<float> (230.0f, 8.0f, 38.0f, 28.0f);
+        xlBtn8x8 = juce::Rectangle<float> (272.0f, 8.0f, 38.0f, 28.0f);
+        xlBtn16x16 = juce::Rectangle<float> (314.0f, 8.0f, 44.0f, 28.0f);
+        xlBtn32x32 = juce::Rectangle<float> (362.0f, 8.0f, 44.0f, 28.0f);
+
+        auto drawBtn = [&](const juce::Rectangle<float>& r, int sizeVal, const juce::String& text) {
+            bool active = (activeSize == sizeVal);
+            g.setColour (active ? juce::Colour (0xFFEC4899) : juce::Colour (0xFF312E81)); // active pink vs idle indigo
+            g.fillRoundedRectangle (r, 3.0f);
+            g.setColour (juce::Colours::white);
+            g.setFont (juce::FontOptions ("Sans", 9.0f, juce::Font::bold));
+            g.drawText (text, r, juce::Justification::centred);
+        };
+
+        drawBtn (xlBtn4x4, 4, "4x4");
+        drawBtn (xlBtn8x8, 8, "8x8");
+        drawBtn (xlBtn16x16, 16, "16x16");
+        drawBtn (xlBtn32x32, 32, "32x32");
+
+        // 3. Action Buttons
+        btnSetDiagonal = juce::Rectangle<float> (420.0f, 8.0f, 95.0f, 28.0f);
+        btnClearAll = juce::Rectangle<float> (520.0f, 8.0f, 75.0f, 28.0f);
+
+        auto drawActionBtn = [&](const juce::Rectangle<float>& r, const juce::String& text, bool isDanger) {
+            g.setColour (isDanger ? juce::Colour (0xFFEF4444).withAlpha (0.8f) : juce::Colour (0xFF10B981).withAlpha (0.8f)); // red vs green
+            g.fillRoundedRectangle (r, 3.0f);
+            g.setColour (juce::Colours::white);
+            g.setFont (juce::FontOptions ("Sans", 9.0f, juce::Font::bold));
+            g.drawText (text, r, juce::Justification::centred);
+        };
+
+        drawActionBtn (btnSetDiagonal, "RESET DIAGONAL", false);
+        drawActionBtn (btnClearAll, "CLEAR ALL", true);
+
+        // 4. Master Volume Slider
+        g.setColour (juce::Colour (0xFF9CA3AF));
+        g.setFont (juce::FontOptions ("Sans", 10.0f, juce::Font::bold));
+        g.drawText ("MASTER VOL:", 610.0f, 8.0f, 80.0f, 28.0f, juce::Justification::centredLeft);
+
+        masterVolRect = juce::Rectangle<float> (695.0f, 15.0f, 100.0f, 14.0f);
+        g.setColour (juce::Colour (0xFF1F2937)); // bar backdrop
+        g.fillRoundedRectangle (masterVolRect, 4.0f);
+        
+        float masterFillW = (masterVol / 2.0f) * masterVolRect.getWidth();
+        juce::Rectangle<float> masterFillRect (masterVolRect.getX(), masterVolRect.getY(), masterFillW, masterVolRect.getHeight());
+        g.setColour (juce::Colour (0xFF10B981)); // green fill
+        g.fillRoundedRectangle (masterFillRect, 4.0f);
+
+        g.setColour (juce::Colours::white);
+        g.drawRoundedRectangle (masterVolRect, 4.0f, 1.0f);
+        g.setFont (juce::FontOptions ("Sans", 8.0f, juce::Font::bold));
+        g.drawText (juce::String (masterVol, 2) + "x", masterVolRect, juce::Justification::centred);
+
+        // Position editor
+        if (cellValueEditor)
+        {
+            cellValueEditor->setBounds (805, 8, 45, 28);
+            cellValueEditor->setVisible (true);
+        }
+
+        // 5. Draw Row & Column labels and grid
+        float gridX = leftMargin;
+        float gridY = topBarH + topMargin;
+        float gridW = bounds.getWidth() - leftMargin - rightMargin;
+        float gridH = bounds.getHeight() - gridY - bottomMargin;
+        
+        float rowH = gridH / (float) activeSize;
+        float colW = gridW / (float) activeSize;
+
+        g.setFont (juce::FontOptions ("Sans", 9.0f, juce::Font::bold));
+        
+        // Draw column labels
+        for (int c = 0; c < activeSize; ++c)
+        {
+            float cx = gridX + c * colW;
+            juce::Rectangle<float> colLabelRect (cx, topBarH + 5.0f, colW, 15.0f);
+            
+            bool highlight = (c == hoverColMatrix || c == selectedColMatrix);
+            g.setColour (highlight ? juce::Colour (0xFFEC4899) : juce::Colour (0xFF9CA3AF));
+            
+            juce::String labelStr = juce::String (c + 1);
+            if (activeSize <= 16) labelStr = "OUT " + labelStr;
+            g.drawText (labelStr, colLabelRect, juce::Justification::centred);
+            
+            if (c == hoverColMatrix)
+            {
+                g.setColour (juce::Colour (0xFFEC4899).withAlpha (0.05f));
+                g.fillRect (cx, gridY, colW, gridH);
+            }
+        }
+
+        // Draw row labels
+        for (int r = 0; r < activeSize; ++r)
+        {
+            float cy = gridY + r * rowH;
+            juce::Rectangle<float> rowLabelRect (10.0f, cy, leftMargin - 15.0f, rowH);
+            
+            bool highlight = (r == hoverRowMatrix || r == selectedRowMatrix);
+            g.setColour (highlight ? juce::Colour (0xFFEC4899) : juce::Colour (0xFF9CA3AF));
+            
+            juce::String labelStr = juce::String (r + 1);
+            if (activeSize <= 16) labelStr = "IN " + labelStr;
+            g.drawText (labelStr, rowLabelRect, juce::Justification::centredRight);
+            
+            if (r == hoverRowMatrix)
+            {
+                g.setColour (juce::Colour (0xFFEC4899).withAlpha (0.05f));
+                g.fillRect (gridX, cy, gridW, rowH);
+            }
+        }
+
+        // Draw grid cells
+        for (int r = 0; r < activeSize; ++r)
+        {
+            for (int c = 0; c < activeSize; ++c)
+            {
+                float cx = gridX + c * colW;
+                float cy = gridY + r * rowH;
+                juce::Rectangle<float> cellRect (cx + 1.0f, cy + 1.0f, colW - 2.0f, rowH - 2.0f);
+                
+                float gain = node->getGain (r, c);
+                
+                juce::Colour cellColour;
+                if (gain <= 0.001f)
+                {
+                    cellColour = juce::Colour (0xFF1E2937).withAlpha (0.4f);
+                }
+                else if (gain <= 1.0f)
+                {
+                    float t = gain;
+                    cellColour = juce::Colour (
+                        (juce::uint8) (0x1E + t * (0x63 - 0x1E)),
+                        (juce::uint8) (0x29 + t * (0x66 - 0x29)),
+                        (juce::uint8) (0x37 + t * (0xF1 - 0x37))
+                    );
+                }
+                else
+                {
+                    float t = (gain - 1.0f);
+                    cellColour = juce::Colour (
+                        (juce::uint8) (0x63 + t * (0xEC - 0x63)),
+                        (juce::uint8) (0x66 + t * (0x48 - 0x66)),
+                        (juce::uint8) (0xF1 + t * (0x99 - 0xF1))
+                    );
+                }
+                
+                g.setColour (cellColour);
+                g.fillRoundedRectangle (cellRect, 2.0f);
+                
+                if (r == c && gain > 0.9f && gain < 1.1f)
+                {
+                    g.setColour (juce::Colours::white.withAlpha (0.4f));
+                    g.fillEllipse (cellRect.getCentreX() - 1.5f, cellRect.getCentreY() - 1.5f, 3.0f, 3.0f);
+                }
+
+                if (activeSize <= 8)
+                {
+                    g.setColour (gain > 0.5f ? juce::Colours::white : juce::Colour (0xFF9CA3AF));
+                    g.setFont (juce::FontOptions ("Sans", 8.0f, juce::Font::bold));
+                    g.drawText (juce::String (gain, 2), cellRect, juce::Justification::centred);
+                }
+
+                if (r == selectedRowMatrix && c == selectedColMatrix)
+                {
+                    g.setColour (juce::Colour (0xFFEC4899));
+                    g.drawRoundedRectangle (cellRect, 2.0f, 1.5f);
+                }
+            }
+        }
+
+        // Draw grid lines
+        g.setColour (juce::Colour (0xFF374151).withAlpha (0.5f));
+        for (int i = 0; i <= activeSize; ++i)
+        {
+            float cx = gridX + i * colW;
+            g.drawVerticalLine ((int)cx, gridY, gridY + gridH);
+            
+            float cy = gridY + i * rowH;
+            g.drawHorizontalLine ((int)cy, gridX, gridX + gridW);
+        }
+
+        // Tooltip
+        juce::String tooltipStr = "Selected: IN " + juce::String (selectedRowMatrix + 1) + " -> OUT " + juce::String (selectedColMatrix + 1) + ": " + juce::String (node->getGain (selectedRowMatrix, selectedColMatrix), 2);
+        if (hoverRowMatrix >= 0 && hoverColMatrix >= 0)
+        {
+            tooltipStr = "Hover: IN " + juce::String (hoverRowMatrix + 1) + " -> OUT " + juce::String (hoverColMatrix + 1) + ": " + juce::String (node->getGain (hoverRowMatrix, hoverColMatrix), 2);
+        }
+        g.setFont (juce::FontOptions ("Sans", 10.0f, juce::Font::bold));
+        g.setColour (juce::Colour (0xFFEC4899));
+        g.drawText (tooltipStr, gridX, gridY + gridH + 1.0f, gridW, 14.0f, juce::Justification::centredRight);
+    }
+
+    void mouseDownMatrixMixerXL (const juce::MouseEvent& e)
+    {
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+        int activeSize = juce::jlimit (1, 32, (int) node->getParam ("size")->get());
+
+        if (xlBtn4x4.contains (e.position)) { setMatrixSize (4); return; }
+        if (xlBtn8x8.contains (e.position)) { setMatrixSize (8); return; }
+        if (xlBtn16x16.contains (e.position)) { setMatrixSize (16); return; }
+        if (xlBtn32x32.contains (e.position)) { setMatrixSize (32); return; }
+
+        if (btnSetDiagonal.contains (e.position))
+        {
+            for (int r = 0; r < 32; ++r)
+                for (int c = 0; c < 32; ++c)
+                    node->setGain (r, c, (r == c) ? 1.0f : 0.0f);
+            updateEditorValue();
+            if (onParamChanged) onParamChanged();
+            repaint();
+            return;
+        }
+
+        if (btnClearAll.contains (e.position))
+        {
+            for (int r = 0; r < 32; ++r)
+                for (int c = 0; c < 32; ++c)
+                    node->setGain (r, c, 0.0f);
+            updateEditorValue();
+            if (onParamChanged) onParamChanged();
+            repaint();
+            return;
+        }
+
+        if (masterVolRect.contains (e.position))
+        {
+            isDraggingMasterVol = true;
+            dragStartMasterVolVal = node->getParam ("master_vol")->get();
+            dragStartMatrixPos = e.position;
+            return;
+        }
+
+        float leftMargin = 55.0f;
+        float topMargin = 25.0f;
+        float topBarH = 45.0f;
+        float rightMargin = 15.0f;
+        float bottomMargin = 15.0f;
+        
+        auto bounds = getLocalBounds().toFloat();
+        float gridX = leftMargin;
+        float gridY = topBarH + topMargin;
+        float gridW = bounds.getWidth() - leftMargin - rightMargin;
+        float gridH = bounds.getHeight() - gridY - bottomMargin;
+
+        if (e.x >= gridX && e.x <= gridX + gridW && e.y >= gridY && e.y <= gridY + gridH)
+        {
+            float rowH = gridH / (float) activeSize;
+            float colW = gridW / (float) activeSize;
+
+            int r = (int) ((e.y - gridY) / rowH);
+            int c = (int) ((e.x - gridX) / colW);
+
+            r = juce::jlimit (0, activeSize - 1, r);
+            c = juce::jlimit (0, activeSize - 1, c);
+
+            selectedRowMatrix = r;
+            selectedColMatrix = c;
+
+            isDraggingMatrixGain = true;
+            dragStartGainVal = node->getGain (r, c);
+            dragStartMatrixPos = e.position;
+
+            updateEditorValue();
+            if (cellValueEditor)
+            {
+                cellValueEditor->grabKeyboardFocus();
+                cellValueEditor->selectAll();
+            }
+            repaint();
+        }
+    }
+
+    void mouseDragMatrixMixerXL (const juce::MouseEvent& e)
+    {
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+
+        if (isDraggingMasterVol)
+        {
+            float dragSensitivity = 100.0f;
+            float deltaY = dragStartMatrixPos.y - e.position.y;
+            float newVal = dragStartMasterVolVal + (deltaY / dragSensitivity);
+            newVal = juce::jlimit (0.0f, 2.0f, newVal);
+
+            juce::String targetParamID = juce::String (node->getNodeID()) + "_master_vol";
+            if (targetInstance && engine)
+            {
+                if (auto* parentNode = engine->getGraph().getNodeForId (targetInstance->nodeID))
+                {
+                    if (auto* proc = parentNode->getProcessor())
+                    {
+                        for (auto* p : proc->getParameters())
+                        {
+                            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                            {
+                                if (matchMappingParam (targetParamID, ranged->getParameterID()))
+                                {
+                                    ranged->setValueNotifyingHost (ranged->convertTo0to1 (newVal));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            repaint();
+            return;
+        }
+
+        if (isDraggingMatrixGain)
+        {
+            float dragSensitivity = 150.0f;
+            float deltaY = dragStartMatrixPos.y - e.position.y;
+            float newVal = dragStartGainVal + (deltaY / dragSensitivity);
+            newVal = juce::jlimit (0.0f, 2.0f, newVal);
+
+            node->setGain (selectedRowMatrix, selectedColMatrix, newVal);
+            updateEditorValue();
+            repaint();
+        }
+    }
+
+    void mouseUpMatrixMixerXL (const juce::MouseEvent& e)
+    {
+        juce::ignoreUnused (e);
+        if (isDraggingMatrixGain || isDraggingMasterVol)
+        {
+            isDraggingMatrixGain = false;
+            isDraggingMasterVol = false;
+            if (onParamChanged) onParamChanged();
+            repaint();
+        }
+    }
+
+    void mouseMoveMatrixMixerXL (const juce::MouseEvent& e)
+    {
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+        int activeSize = juce::jlimit (1, 32, (int) node->getParam ("size")->get());
+
+        float leftMargin = 55.0f;
+        float topMargin = 25.0f;
+        float topBarH = 45.0f;
+        float rightMargin = 15.0f;
+        float bottomMargin = 15.0f;
+        
+        auto bounds = getLocalBounds().toFloat();
+        float gridX = leftMargin;
+        float gridY = topBarH + topMargin;
+        float gridW = bounds.getWidth() - leftMargin - rightMargin;
+        float gridH = bounds.getHeight() - gridY - bottomMargin;
+
+        if (e.x >= gridX && e.x <= gridX + gridW && e.y >= gridY && e.y <= gridY + gridH)
+        {
+            float rowH = gridH / (float) activeSize;
+            float colW = gridW / (float) activeSize;
+
+            int r = (int) ((e.y - gridY) / rowH);
+            int c = (int) ((e.x - gridX) / colW);
+
+            hoverRowMatrix = juce::jlimit (0, activeSize - 1, r);
+            hoverColMatrix = juce::jlimit (0, activeSize - 1, c);
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+        }
+        else if (xlBtn4x4.contains (e.position) || xlBtn8x8.contains (e.position) ||
+                 xlBtn16x16.contains (e.position) || xlBtn32x32.contains (e.position) ||
+                 btnSetDiagonal.contains (e.position) || btnClearAll.contains (e.position))
+        {
+            hoverRowMatrix = -1;
+            hoverColMatrix = -1;
+            setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        }
+        else if (masterVolRect.contains (e.position))
+        {
+            hoverRowMatrix = -1;
+            hoverColMatrix = -1;
+            setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        }
+        else
+        {
+            hoverRowMatrix = -1;
+            hoverColMatrix = -1;
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+        }
+        repaint();
+    }
+
+    void setMatrixSize (int sizeVal)
+    {
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+        
+        juce::String targetParamID = juce::String (node->getNodeID()) + "_size";
+        if (targetInstance && engine)
+        {
+            if (auto* parentNode = engine->getGraph().getNodeForId (targetInstance->nodeID))
+            {
+                if (auto* proc = parentNode->getProcessor())
+                {
+                    for (auto* p : proc->getParameters())
+                    {
+                        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+                        {
+                            if (matchMappingParam (targetParamID, ranged->getParameterID()))
+                            {
+                                ranged->setValueNotifyingHost (ranged->convertTo0to1 ((float) sizeVal));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        selectedRowMatrix = juce::jlimit (0, sizeVal - 1, selectedRowMatrix);
+        selectedColMatrix = juce::jlimit (0, sizeVal - 1, selectedColMatrix);
+        updateEditorValue();
+        if (onParamChanged) onParamChanged();
+        repaint();
+    }
+
+    void updateEditorValue()
+    {
+        if (controlID != "matrix_mixer_xl_display" || !cellValueEditor) return;
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+        
+        cellValueEditor->setText (juce::String (node->getGain (selectedRowMatrix, selectedColMatrix), 2), false);
+    }
+
+    void updateSelectedCellFromEditor()
+    {
+        if (controlID != "matrix_mixer_xl_display" || !cellValueEditor) return;
+        auto* node = getMatrixMixerXLNode();
+        if (!node) return;
+
+        float val = cellValueEditor->getText().getFloatValue();
+        val = juce::jlimit (0.0f, 2.0f, val);
+        node->setGain (selectedRowMatrix, selectedColMatrix, val);
+        if (targetInstance)
+            targetInstance->controlTexts[controlID + "_gain_" + juce::String (selectedRowMatrix) + "_" + juce::String (selectedColMatrix)] = juce::String (val, 2);
+        
+        if (onParamChanged) onParamChanged();
+        repaint();
+    }
+
+    void textEditorReturnKeyPressed (juce::TextEditor& editor) override
+    {
+        if (&editor == cellValueEditor.get())
+        {
+            updateSelectedCellFromEditor();
+        }
+    }
+
+    void textEditorFocusLost (juce::TextEditor& editor) override
+    {
+        if (&editor == cellValueEditor.get())
+        {
+            updateSelectedCellFromEditor();
+        }
+    }
+
     void paintMidiEditor (juce::Graphics& g)
     {
         auto bounds = getLocalBounds().toFloat();
@@ -1381,7 +1984,7 @@ private:
                     
                     juce::ColourGradient grad (colourStart, noteRect.getX(), noteRect.getY(), 
                                                colourEnd, noteRect.getRight(), noteRect.getBottom(), false);
-                    g.setBrush (grad);
+                    g.setGradientFill (grad);
                     g.fillRoundedRectangle (noteRect, 3.0f);
                     
                     // Borders
@@ -1624,7 +2227,7 @@ private:
                     dragStartPos = e.position;
 
                     // Double click to delete
-                    if (e.mods.isDoubleClick())
+                    if (e.getNumberOfClicks() >= 2)
                     {
                         notes.erase (notes.begin() + i);
                         selectedNoteIndex = -1;
@@ -1869,4 +2472,32 @@ private:
     bool isEditingVelocity = false;
     int noteWithActiveVelocityDrag = -1;
     int activePreviewNote = -1;
+
+    // ── Matrix Mixer XL State ────────────────────────────────────────────────
+    int selectedRowMatrix = 0;
+    int selectedColMatrix = 0;
+    bool isDraggingMatrixGain = false;
+    float dragStartGainVal = 0.0f;
+    juce::Point<float> dragStartMatrixPos;
+    int hoverRowMatrix = -1;
+    int hoverColMatrix = -1;
+    
+    std::unique_ptr<juce::TextEditor> cellValueEditor;
+    
+    juce::Rectangle<float> xlBtn4x4;
+    juce::Rectangle<float> xlBtn8x8;
+    juce::Rectangle<float> xlBtn16x16;
+    juce::Rectangle<float> xlBtn32x32;
+    
+    juce::Rectangle<float> masterVolRect;
+    bool isDraggingMasterVol = false;
+    float dragStartMasterVolVal = 1.0f;
+    
+    juce::Rectangle<float> btnClearAll;
+    juce::Rectangle<float> btnSetDiagonal;
+    
+    float leftMargin = 55.0f;
+    float topMargin = 25.0f;
+    float rightMargin = 15.0f;
+    float bottomMargin = 15.0f;
 };

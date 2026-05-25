@@ -222,10 +222,30 @@ inline std::vector<PedalInfo> getFactoryPedals()
           [] { return GraphPedalFactory::createPluginHost(); },
           [] { return loadDesignOrDefault("VST/AU Host", FactoryDesigns::createPluginHost); } },
 
+        { "Mixer",        "Utility",    1, 2, 3,
+          juce::Colour (0xFF4F46E5),    // deep premium indigo
+          [] { return GraphPedalFactory::createMixerPedal(); },
+          [] { return loadDesignOrDefault("Mixer", FactoryDesigns::createMixerPedal); } },
+
+        { "Matrix Mixer", "Utility",    2, 2, 16,
+          juce::Colour (0xFF1E293B),    // dark graphite
+          [] { return GraphPedalFactory::createMatrixMixerPedal(); },
+          [] { return loadDesignOrDefault("Matrix Mixer", FactoryDesigns::createMatrixMixerPedal); } },
+
+        { "Matrix Mixer XL", "Utility", 1, 2, 2,
+          juce::Colour (0xFF1E1B4B),    // Dark indigo/purple
+          [] { return GraphPedalFactory::createMatrixMixerXLPedal(); },
+          [] { return loadDesignOrDefault("Matrix Mixer XL", FactoryDesigns::createMatrixMixerXLPedal); } },
+
         { "NAM Amp",      "Amp Sim",    1, 2, 2,
           juce::Colour (0xFF333333),    // dark grey
           [] { return GraphPedalFactory::createNAMAmp(); },
           [] { return loadDesignOrDefault("NAM Amp", FactoryDesigns::createNAMAmp); } },
+
+        { "Aether Rig",   "Amp Sim",    2, 2, 11,
+          juce::Colour (0xFF1A1A2E),    // deep midnight blue
+          [] { return GraphPedalFactory::createAetherRig(); },
+          [] { return loadDesignOrDefault("Aether Rig", FactoryDesigns::createAetherRig); } },
 
         { "IR Cabinet",   "Amp/Cab",    1, 2, 2,
           juce::Colour (0xff555555),

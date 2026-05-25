@@ -29,6 +29,7 @@ public:
         juce::int64  sizeBytes = 0;
         juce::Time   dateAdded;
         juce::StringArray tags;       // Custom metatags
+        juce::String tone3000Id;      // Non-empty if sourced from TONE3000 cloud
     };
 
     //==========================================================================
@@ -224,6 +225,8 @@ public:
                 }
                 if (obj->hasProperty("subcategory"))
                     item.subcategory = obj->getProperty("subcategory").toString();
+                if (obj->hasProperty("tone3000Id"))
+                    item.tone3000Id = obj->getProperty("tone3000Id").toString();
             }
         }
     }
@@ -240,6 +243,9 @@ public:
         
         if (item.subcategory.isNotEmpty())
             obj->setProperty("subcategory", item.subcategory);
+
+        if (item.tone3000Id.isNotEmpty())
+            obj->setProperty("tone3000Id", item.tone3000Id);
 
         metaFile.replaceWithText(juce::JSON::toString(juce::var(obj.get())));
     }

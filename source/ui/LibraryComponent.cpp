@@ -132,6 +132,68 @@ LibraryComponent::LibraryComponent()
 
     if (auto* first = root->getSubItem(0))
         first->setSelected(true, true);
+
+    // ── TONE3000 Cloud Integration ──
+    auto savedKey = loadApiKey();
+    if (savedKey.isNotEmpty())
+        cloudClient.setApiKey (savedKey);
+
+    addChildComponent (cloudToggle);
+    addChildComponent (localToggle);
+    addChildComponent (apiKeyBtn);
+    cloudToggle.setVisible (true);
+    localToggle.setVisible (true);
+
+    cloudToggle.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    localToggle.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
+    apiKeyBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+
+    cloudToggle.onClick = [this] { switchToCloudMode (true); };
+    localToggle.onClick = [this] { switchToCloudMode (false); };
+    apiKeyBtn.onClick = [this] { promptForApiKey ([this] { performCloudSearch(); }); };
+
+    // Gear filter buttons
+    for (auto* btn : { &filterAll, &filterAmps, &filterPedals, &filterRigs, &filterIRs })
+    {
+        btn->setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+        addChildComponent (*btn);
+    }
+    filterAll.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
+
+    filterAll.onClick    = [this] { setGearFilter (""); };
+    filterAmps.onClick   = [this] { setGearFilter ("amp"); };
+    filterPedals.onClick = [this] { setGearFilter ("pedal"); };
+    filterRigs.onClick   = [this] { setGearFilter ("full-rig"); };
+    filterIRs.onClick    = [this] { setGearFilter ("ir"); };
+
+    // Pagination
+    addChildComponent (prevPageBtn);
+    addChildComponent (nextPageBtn);
+    addChildComponent (pageLabel);
+    pageLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textMuted);
+    pageLabel.setJustificationType (juce::Justification::centred);
+    pageLabel.setFont (juce::FontOptions (11.0f));
+
+    prevPageBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    nextPageBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    prevPageBtn.onClick = [this] { if (cloudCurrentPage > 1) { --cloudCurrentPage; performCloudSearch(); } };
+    nextPageBtn.onClick = [this] { if (cloudCurrentPage < cloudTotalPages) { ++cloudCurrentPage; performCloudSearch(); } };
+
+    // Search button (visible in cloud mode)
+    searchBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
+    searchBtn.onClick = [this] { cloudCurrentPage = 1; performCloudSearch(); };
+    addChildComponent (searchBtn);
+
+    // Enter key support for the search box
+    searchBox.onReturnKey = [this]
+    {
+        if (showingCloud)
+        {
+            stopTimer(); // Cancel any pending debounce
+            cloudCurrentPage = 1;
+            performCloudSearch();
+        }
+    };
 }
 
 //==============================================================================
@@ -174,7 +236,19 @@ void LibraryComponent::resized()
     // Toolbar layout
     toolbar.reduce (12, 4);
     searchBox.setBounds (toolbar.removeFromLeft (200).withSizeKeepingCentre (200, 24));
-    toolbar.removeFromLeft (8);
+    toolbar.removeFromLeft (4);
+
+    // Show search button next to the search box in cloud mode
+    if (showingCloud)
+    {
+        searchBtn.setVisible (true);
+        searchBtn.setBounds (toolbar.removeFromLeft (70).withSizeKeepingCentre (70, 24));
+    }
+    else
+    {
+        searchBtn.setVisible (false);
+    }
+    toolbar.removeFromLeft (4);
 
     bool showSubcat = (currentCategoryID == "Images");
     subcategoryCombo.setVisible (showSubcat);
@@ -187,6 +261,57 @@ void LibraryComponent::resized()
     }
 
     importBtn.setBounds (toolbar.removeFromRight (80).withSizeKeepingCentre (80, 24));
+
+    // Cloud / Local toggle buttons + API Key button
+    int toggleW = showingCloud ? 280 : 170;
+    auto toggleArea = toolbar.removeFromRight (toggleW);
+
+    if (showingCloud)
+    {
+        apiKeyBtn.setVisible (true);
+        apiKeyBtn.setBounds (toggleArea.removeFromLeft (80).withSizeKeepingCentre (80, 24));
+        toggleArea.removeFromLeft (4);
+    }
+    else
+    {
+        apiKeyBtn.setVisible (false);
+    }
+
+    cloudToggle.setBounds (toggleArea.removeFromRight (90).withSizeKeepingCentre (90, 24));
+    toggleArea.removeFromRight (4);
+    localToggle.setBounds (toggleArea.removeFromRight (70).withSizeKeepingCentre (70, 24));
+
+    // Cloud-specific: filter row + pagination
+    if (showingCloud)
+    {
+        auto filterRow = bounds.removeFromTop (32);
+        filterRow.reduce (8, 4);
+        int fbw = 60;
+        for (auto* btn : { &filterAll, &filterAmps, &filterPedals, &filterRigs, &filterIRs })
+        {
+            btn->setVisible (true);
+            btn->setBounds (filterRow.removeFromLeft (fbw).withSizeKeepingCentre (fbw, 22));
+            filterRow.removeFromLeft (2);
+        }
+
+        // Pagination at the right of the filter row
+        prevPageBtn.setVisible (true);
+        nextPageBtn.setVisible (true);
+        pageLabel.setVisible (true);
+        nextPageBtn.setBounds (filterRow.removeFromRight (30).withSizeKeepingCentre (30, 22));
+        filterRow.removeFromRight (2);
+        pageLabel.setBounds (filterRow.removeFromRight (80).withSizeKeepingCentre (80, 22));
+        filterRow.removeFromRight (2);
+        prevPageBtn.setBounds (filterRow.removeFromRight (30).withSizeKeepingCentre (30, 22));
+    }
+    else
+    {
+        for (auto* btn : { &filterAll, &filterAmps, &filterPedals, &filterRigs, &filterIRs })
+            btn->setVisible (false);
+        prevPageBtn.setVisible (false);
+        nextPageBtn.setVisible (false);
+        pageLabel.setVisible (false);
+    }
 
     auto gridBounds = bounds.reduced (8);
     gridViewport.setBounds (gridBounds);
@@ -278,6 +403,95 @@ void LibraryComponent::AssetGrid::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff111111));
 
+    // ── CLOUD MODE ──
+    if (parent.showingCloud)
+    {
+        auto& results = parent.cloudResults;
+
+        if (results.empty())
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.4f));
+            g.setFont (18.0f);
+            g.drawText ("Search TONE3000 for NAM captures and IRs", getLocalBounds(), juce::Justification::centred);
+            return;
+        }
+
+        int iw = currentItemW(), ih = currentItemH();
+        int cols = juce::jmax (1, (getWidth() - padding) / (iw + padding));
+
+        for (int i = 0; i < (int) results.size(); ++i)
+        {
+            int col = i % cols;
+            int row = i / cols;
+            int x = padding + col * (iw + padding);
+            int y = padding + row * (ih + padding);
+
+            auto itemBounds = juce::Rectangle<int> (x, y, iw, ih);
+            bool isSel = selectedIndices.count(i) > 0;
+            bool isDownloading = parent.downloadingIds.count(results[i].id) > 0;
+
+            // Card background with subtle gradient
+            g.setColour (isSel ? juce::Colour (0xff2a2a4a) : juce::Colour (0xff1e1e2e));
+            g.fillRoundedRectangle (itemBounds.toFloat(), 6.0f);
+
+            // Border
+            g.setColour (isDownloading ? juce::Colour (0xffffff44) : 
+                         isSel ? PedalForgeLookAndFeel::accent : juce::Colour (0xff333344));
+            g.drawRoundedRectangle (itemBounds.toFloat().reduced (0.5f), 6.0f, isSel ? 2.0f : 1.0f);
+
+            // Gear type icon
+            auto iconArea = itemBounds.removeFromLeft (ih);
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.2f));
+            g.fillRoundedRectangle (iconArea.reduced (8).toFloat(), 4.0f);
+            g.setColour (PedalForgeLookAndFeel::accent);
+            g.setFont (20.0f);
+            juce::String icon = results[i].gearType == "amp"      ? juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa1")) :
+                                results[i].gearType == "pedal"    ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x8e\xb8")) :
+                                results[i].gearType == "full-rig" ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x8e\x9b")) :
+                                results[i].gearType == "ir"       ? juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x94\x8a")) :
+                                                                    juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa1"));
+            g.drawText (icon, iconArea.reduced (8), juce::Justification::centred);
+
+            auto textArea = juce::Rectangle<int> (iconArea.getRight() + 4, itemBounds.getY(), iw - ih - 8, ih);
+
+            // Tone name
+            g.setColour (juce::Colours::white.withAlpha (0.95f));
+            g.setFont (13.0f);
+            g.drawText (results[i].name, textArea.removeFromTop (18).reduced (0, 2), juce::Justification::centredLeft, true);
+
+            // Author + downloads
+            g.setColour (PedalForgeLookAndFeel::textMuted);
+            g.setFont (10.0f);
+            juce::String meta = results[i].author;
+            if (results[i].downloads > 0)
+                meta += juce::String (juce::CharPointer_UTF8 ("  \xe2\xac\x87 ")) + juce::String (results[i].downloads);
+            g.drawText (meta, textArea.removeFromTop (14), juce::Justification::centredLeft, true);
+
+            // Model size badge + download indicator
+            auto badgeArea = textArea;
+            if (results[i].modelSize.isNotEmpty())
+            {
+                auto badge = badgeArea.removeFromLeft (60).withHeight (14);
+                g.setColour (juce::Colour (0xff333355));
+                g.fillRoundedRectangle (badge.toFloat(), 3.0f);
+                g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.8f));
+                g.setFont (9.0f);
+                g.drawText (results[i].modelSize.toUpperCase(), badge, juce::Justification::centred);
+                badgeArea.removeFromLeft (4);
+            }
+
+            // Download status
+            if (isDownloading)
+            {
+                g.setColour (juce::Colour (0xffffff44));
+                g.setFont (9.0f);
+                g.drawText ("Downloading...", badgeArea, juce::Justification::centredLeft);
+            }
+        }
+        return;
+    }
+
+    // ── LOCAL MODE ──
     auto& assets = parent.filteredAssets;
 
     if (assets.empty())
@@ -398,6 +612,32 @@ void LibraryComponent::AssetGrid::mouseDown (const juce::MouseEvent& e)
     grabKeyboardFocus();
     int idx = getItemAtPosition (e.getPosition());
 
+    // ── Cloud mode: double-click to download ──
+    if (parent.showingCloud)
+    {
+        if (idx >= 0 && idx < (int) parent.cloudResults.size())
+        {
+            if (e.getNumberOfClicks() >= 2)
+            {
+                parent.triggerCloudDownload (parent.cloudResults[(size_t) idx]);
+            }
+            else
+            {
+                if (!e.mods.isShiftDown() && !e.mods.isCommandDown())
+                    selectedIndices.clear();
+                selectedIndices.insert(idx);
+            }
+            repaint();
+        }
+        else
+        {
+            selectedIndices.clear();
+            repaint();
+        }
+        return;
+    }
+
+    // ── Local mode ──
     if (idx >= 0 && idx < (int) parent.filteredAssets.size())
     {
         auto& asset = parent.filteredAssets[(size_t) idx];
@@ -655,3 +895,258 @@ void LibraryComponent::rebuildSubcategoryCombo()
             subcategoryCombo.setSelectedId (idx + 2, juce::dontSendNotification);
     }
 }
+
+//==============================================================================
+// TONE3000 Cloud Integration
+//==============================================================================
+
+void LibraryComponent::switchToCloudMode (bool cloud)
+{
+    showingCloud = cloud;
+
+    // Update toggle button colours
+    cloudToggle.setColour (juce::TextButton::buttonColourId,
+        cloud ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+    localToggle.setColour (juce::TextButton::buttonColourId,
+        cloud ? PedalForgeLookAndFeel::bgLight : PedalForgeLookAndFeel::accent);
+
+    if (cloud)
+    {
+        // Switch search to cloud mode — debounce to avoid per-keystroke requests
+        searchBox.setTextToShowWhenEmpty ("Search TONE3000...", juce::Colours::grey);
+        searchBox.onTextChange = [this]
+        {
+            cloudCurrentPage = 1;
+            scheduleCloudSearch();
+        };
+
+        // Hide local sidebar
+        categoryTree.setVisible (false);
+        sidebarVisible = false;
+
+        // Trigger initial search if search box has text
+        if (searchBox.getText().trim().isNotEmpty())
+            performCloudSearch();
+    }
+    else
+    {
+        // Switch back to local mode
+        stopTimer();
+        searchBox.setTextToShowWhenEmpty ("Search library...", juce::Colours::grey);
+        searchBox.onTextChange = [this] { applyFilter(); };
+
+        categoryTree.setVisible (true);
+        sidebarVisible = true;
+
+        // Clear cloud results
+        cloudResults.clear();
+        refreshAssets();
+    }
+
+    resized();
+    assetGrid.repaint();
+}
+
+void LibraryComponent::setGearFilter (const juce::String& filter)
+{
+    activeGearFilter = filter;
+
+    // Update button highlighting
+    filterAll.setColour    (juce::TextButton::buttonColourId, filter.isEmpty()       ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+    filterAmps.setColour   (juce::TextButton::buttonColourId, filter == "amp"        ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+    filterPedals.setColour (juce::TextButton::buttonColourId, filter == "pedal"      ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+    filterRigs.setColour   (juce::TextButton::buttonColourId, filter == "full-rig"   ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+    filterIRs.setColour    (juce::TextButton::buttonColourId, filter == "ir"         ? PedalForgeLookAndFeel::accent : PedalForgeLookAndFeel::bgLight);
+
+    cloudCurrentPage = 1;
+    performCloudSearch();
+}
+
+void LibraryComponent::performCloudSearch()
+{
+    // Verify API Key exists before executing search
+    if (loadApiKey().isEmpty())
+    {
+        promptForApiKey ([this] { performCloudSearch(); });
+        return;
+    }
+
+    ToneSearchParams params;
+    params.query = searchBox.getText().trim();
+    params.platform = "nam"; // Default to NAM captures
+    params.gearFilter = activeGearFilter;
+    params.page = cloudCurrentPage;
+    params.pageSize = 25;
+    params.sort = params.query.isEmpty() ? "trending" : "best-match";
+
+    if (activeGearFilter == "ir")
+        params.platform = "ir";
+
+    juce::Component::SafePointer<LibraryComponent> sp (this);
+
+    cloudClient.search (params, [sp] (ToneSearchResult result)
+    {
+        if (sp == nullptr) return;
+
+        // Handle error responses from API search
+        if (result.errorMessage.isNotEmpty())
+        {
+            juce::Logger::writeToLog ("[Tone3000] Search failed: " + result.errorMessage);
+
+            // If authorization or key error is returned, prompt to re-enter
+            if (result.errorMessage.containsIgnoreCase ("Authorization") 
+                || result.errorMessage.containsIgnoreCase ("key") 
+                || result.errorMessage.containsIgnoreCase ("unauthorized"))
+            {
+                sp->saveApiKey ("");
+                sp->cloudClient.setApiKey ("");
+
+                juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                    "TONE3000 Authentication Failed", 
+                    "Your TONE3000 API Key appears to be invalid or expired. Please re-enter it.");
+
+                sp->promptForApiKey ([sp] { sp->performCloudSearch(); });
+            }
+            else
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                    "TONE3000 Search Error", result.errorMessage);
+            }
+            return;
+        }
+
+        sp->cloudResults = std::move (result.tones);
+        sp->cloudTotalPages = result.totalPages;
+        sp->cloudCurrentPage = result.currentPage > 0 ? result.currentPage : sp->cloudCurrentPage;
+
+        // Update pagination label
+        sp->pageLabel.setText (
+            "Page " + juce::String (sp->cloudCurrentPage) + " of " + juce::String (juce::jmax (1, sp->cloudTotalPages)),
+            juce::dontSendNotification);
+
+        sp->prevPageBtn.setEnabled (sp->cloudCurrentPage > 1);
+        sp->nextPageBtn.setEnabled (sp->cloudCurrentPage < sp->cloudTotalPages);
+
+        sp->assetGrid.updateSize (sp->gridViewport.getWidth());
+        sp->assetGrid.repaint();
+    });
+}
+
+void LibraryComponent::triggerCloudDownload (const ToneResult& tone)
+{
+    if (downloadingIds.count (tone.id) > 0) return; // Already downloading
+
+    downloadingIds.insert (tone.id);
+    assetGrid.repaint();
+
+    // Determine target directory based on platform
+    juce::String category = tone.platform == "ir" ? "IR_CAB" : "NAM";
+    auto targetDir = library.getCategoryDir (category);
+
+    juce::Component::SafePointer<LibraryComponent> sp (this);
+    juce::String toneId = tone.id;
+    juce::String toneName = tone.name;
+    juce::String toneT3kId = tone.id;
+
+    cloudClient.downloadTone (tone, targetDir, [sp, toneId, toneName, toneT3kId, category] (juce::File downloadedFile, bool success)
+    {
+        if (sp == nullptr) return;
+
+        sp->downloadingIds.erase (toneId);
+
+        if (success && downloadedFile.existsAsFile())
+        {
+            // Save TONE3000 metadata
+            AssetLibrary::AssetItem item;
+            item.name = downloadedFile.getFileNameWithoutExtension();
+            item.category = category;
+            item.file = downloadedFile;
+            item.extension = downloadedFile.getFileExtension();
+            item.sizeBytes = downloadedFile.getSize();
+            item.dateAdded = juce::Time::getCurrentTime();
+            item.tone3000Id = toneT3kId;
+            item.tags.add ("TONE3000");
+            sp->library.saveMetadata (item);
+
+            juce::Logger::writeToLog ("[TONE3000] Downloaded: " + toneName + " -> " + downloadedFile.getFullPathName());
+        }
+        else
+        {
+            juce::Logger::writeToLog ("[TONE3000] Download failed for: " + toneName);
+        }
+
+        sp->assetGrid.repaint();
+    });
+}
+
+void LibraryComponent::timerCallback()
+{
+    stopTimer();
+    performCloudSearch();
+}
+
+void LibraryComponent::scheduleCloudSearch()
+{
+    startTimer (500); // 500ms debounce
+}
+
+juce::String LibraryComponent::loadApiKey()
+{
+    auto file = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                    .getChildFile ("PedalForge")
+                    .getChildFile ("settings.json");
+    if (file.existsAsFile())
+    {
+        auto json = juce::JSON::parse (file);
+        if (json.isObject())
+            return json.getProperty ("tone3000ApiKey", "").toString();
+    }
+    return {};
+}
+
+void LibraryComponent::saveApiKey (const juce::String& key)
+{
+    auto file = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                    .getChildFile ("PedalForge")
+                    .getChildFile ("settings.json");
+    file.getParentDirectory().createDirectory();
+
+    juce::DynamicObject::Ptr obj = new juce::DynamicObject();
+    obj->setProperty ("tone3000ApiKey", key);
+
+    file.replaceWithText (juce::JSON::toString (juce::var (obj.get())));
+}
+
+void LibraryComponent::promptForApiKey (std::function<void()> onSuccessCallback)
+{
+    juce::AlertWindow* alert = new juce::AlertWindow ("TONE3000 API Key Required",
+        "To search and download from TONE3000, please enter your Secret API Key (starts with 't3k_cs_') OR your Legacy API Key (from the bottom of the Settings -> API Keys page).\n\n"
+        "Your key is saved strictly on your local machine and will never be committed to Git or shared on GitHub.",
+        juce::AlertWindow::NoIcon);
+
+    alert->addTextEditor ("key", loadApiKey());
+    alert->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    alert->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    juce::Component::SafePointer<LibraryComponent> sp (this);
+    alert->enterModalState (true, juce::ModalCallbackFunction::create ([sp, alert, onSuccessCallback] (int r)
+    {
+        if (r == 1 && sp != nullptr)
+        {
+            auto enteredKey = alert->getTextEditorContents ("key").trim();
+            if (enteredKey.isEmpty())
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                    "API Key Required", "The API key cannot be empty.");
+                return;
+            }
+
+            sp->saveApiKey (enteredKey);
+            sp->cloudClient.setApiKey (enteredKey);
+
+            if (onSuccessCallback)
+                onSuccessCallback();
+        }
+    }));
+}
+

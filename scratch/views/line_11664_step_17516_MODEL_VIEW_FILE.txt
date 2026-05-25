@@ -1,0 +1,46 @@
+Created At: 2026-05-24T20:10:16Z
+Completed At: 2026-05-24T20:10:16Z
+File Path: `file:///Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h`
+Total Lines: 2402
+Total Bytes: 100945
+Showing lines 1913 to 1950
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1913:         }
+1914:     }
+1915: 
+1916:     // ── Matrix Mixer XL Drawing & Mouse Interaction ──────────────────────────
+1917:     void paintMatrixMixerXL (juce::Graphics& g)
+1918:     {
+1919:         auto bounds = getLocalBounds().toFloat();
+1920:         auto* node = getMatrixMixerXLNode();
+1921:         if (!node)
+1922:         {
+1923:             g.setColour (juce::Colours::white);
+1924:             g.setFont (16.0f);
+1925:             g.drawText ("Matrix Mixer XL Node Not Found", bounds, juce::Justification::centred);
+1926:             return;
+1927:         }
+1928: 
+1929:         // Draw deep panel backdrop (Dark premium space theme)
+1930:         g.setColour (juce::Colour (0xFF0B0F19)); // ultra deep navy/black
+1931:         g.fillRoundedRectangle (bounds, 6.0f);
+1932:         g.setColour (juce::Colour (0xFF312E81).withAlpha (0.4f)); // subtle glowing indigo border
+1933:         g.drawRoundedRectangle (bounds, 6.0f, 1.5f);
+1934: 
+1935:         // Header Background
+1936:         float topBarH = 45.0f;
+1937:         g.setColour (juce::Colour (0xFF111827)); // slate-900
+1938:         g.fillRect (0.0f, 0.0f, bounds.getWidth(), topBarH);
+1939:         g.setColour (juce::Colour (0xFF334155)); // separator
+1940:         g.drawHorizontalLine ((int)topBarH, 0.0f, bounds.getWidth());
+1941: 
+1942:         // 1. Draw Title
+1943:         g.setColour (juce::Colours::white);
+1944:         g.setFont (juce::FontOptions ("Sans", 13.0f, juce::Font::bold));
+1945:         g.drawText ("MATRIX MIXER XL", 15.0f, 8.0f, 180.0f, 28.0f, juce::Justification::centredLeft);
+1946: 
+1947:         int activeSize = juce::jlimit (1, 32, (int) node->getParam ("size")->get());
+1948:         float masterVol = node->getParam ("master_vol")->get();
+1949: 
+1950:         // 2. Draw Resizing Segment Buttons: 4x4, 8x8, 16x16, 32x32
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

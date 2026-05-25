@@ -1,0 +1,1 @@
+"        addChildComponent (toggleModeBtn.get());\n        toggleModeBtn->setVisible (false);"

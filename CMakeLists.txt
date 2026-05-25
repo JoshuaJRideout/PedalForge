@@ -5,6 +5,13 @@ project(PedalForge VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ─── Default Build Type ───────────────────────────────────────────
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+
 # ─── Fetch JUCE ────────────────────────────────────────────────────
 include(FetchContent)
 FetchContent_Declare(
@@ -69,6 +76,8 @@ target_sources(PedalForge PRIVATE
     source/pedals/FactoryDesigns.h
 
     # UI
+    source/ui/AutocompletePanelComponent.h
+    source/ui/AutocompletePanelComponent.cpp
     source/ui/LookAndFeel.h
     source/ui/LookAndFeel.cpp
     source/ui/PedalboardGrid.h
@@ -121,6 +130,10 @@ target_sources(PedalForge PRIVATE
     # MIDI
     source/midi/MidiLearn.h
     source/midi/MidiLearn.cpp
+
+    # Network
+    source/network/Tone3000Client.h
+    source/network/Tone3000Client.cpp
 
     # NAM
     ${NAM_SOURCES}

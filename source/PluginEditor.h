@@ -13,6 +13,8 @@
 #include "ui/CanvasOverlay.h"
 #include "ui/TuringRenderer.h"
 #include "ui/MidiSettingsPanel.h"
+#include "ui/ScriptingTabComponent.h"
+#include "ui/WikiTabComponent.h"
 
 class PedalForgeProcessor;
 
@@ -52,6 +54,8 @@ private:
     juce::TextButton tabRoute   { "Route" };
     juce::TextButton tabPedal   { "Pedal" };
     juce::TextButton tabFX      { "FX" };
+    juce::TextButton tabScript  { "Script" };
+    juce::TextButton tabWiki    { "Wiki" };
     juce::TextButton tabLibrary { "Library" };
     juce::TextButton tabStore   { "Store" };
     juce::TextButton tabMidi    { "MIDI" };
@@ -67,6 +71,8 @@ private:
     RoutingGraphEditor* routingEditor = nullptr;  // created in constructor (needs engine ref)
     LibraryComponent libraryView;    // Will become the full asset manager
     MidiSettingsPanel midiSettingsPanel;
+    ScriptingTabComponent scriptingTab;
+    WikiTabComponent wikiTab;
 
     // Q-menu style inventory overlay
     InventoryOverlay inventory;

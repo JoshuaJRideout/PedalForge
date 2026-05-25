@@ -634,11 +634,26 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
     else if (type == "text_screen") { juce::StringArray d {"Ready"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "console")     { juce::StringArray d {"[log]"}; drawTextScreen (g, area, d, -1, custom); }
     else if (type == "pixel_display") drawPixelDisplay (g, area, nullptr, 32, 16, false, custom);
-    else if (type == "file_loader" || type == "plugin_browser") { 
-        g.setColour (juce::Colours::grey.darker()); g.fillRoundedRectangle (area, 4.0f);
-        g.setColour (juce::Colours::white); g.drawRoundedRectangle (area, 4.0f, 1.0f);
+    else if (type == "file_loader" || type == "file_browser" || type == "plugin_browser") {
+        g.setColour (juce::Colour(0xFF333333)); g.fillRoundedRectangle (area, 4.0f);
+        g.setColour (juce::Colour(0x55FFFFFF)); g.drawRoundedRectangle (area, 4.0f, 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
         g.setFont (juce::FontOptions(area.getHeight() * 0.4f).withStyle("Bold"));
-        g.drawText("LOAD", area, juce::Justification::centred);
+        g.drawText("Load...", area, juce::Justification::centred);
+    }
+    else if (type == "library_loader") {
+        g.setColour (juce::Colour(0xFF3A2A5A)); g.fillRoundedRectangle (area, 4.0f);
+        g.setColour (juce::Colour(0x88AAAAFF)); g.drawRoundedRectangle (area, 4.0f, 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.setFont (juce::FontOptions(area.getHeight() * 0.4f).withStyle("Bold"));
+        g.drawText("Library", area, juce::Justification::centred);
+    }
+    else if (type == "overlay_launcher") {
+        g.setColour (juce::Colour(0xFF555555)); g.fillRoundedRectangle (area, 2.0f);
+        g.setColour (juce::Colour(0x88FFFFFF)); g.drawRoundedRectangle (area, 2.0f, 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.setFont (juce::FontOptions(area.getHeight() * 0.4f).withStyle("Bold"));
+        g.drawText("Press", area, juce::Justification::centred);
     }
     else if (type == "graphic")     drawGraphic (g, area, custom);
     else if (type == "label")       { /* In PedalPainter it draws its own label, but here we can draw it as a preview */ drawTextLabel (g, area, "LABEL", custom); }

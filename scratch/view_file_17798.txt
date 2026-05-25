@@ -1,0 +1,92 @@
+Created At: 2026-05-24T20:19:22Z
+Completed At: 2026-05-24T20:19:22Z
+File Path: `file:///Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h`
+Total Lines: 2482
+Total Bytes: 104434
+Showing lines 240 to 350
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+240:         }
+241:         repaint();
+242:     }
+243: 
+244:     void paint (juce::Graphics& g) override
+245:     {
+246:         auto bounds = getLocalBounds().toFloat();
+247:         
+248:         if (controlID == "midi_editor_display")
+249:         {
+250:             paintMidiEditor (g);
+251:             return;
+252:         }
+253: 
+254:         if (controlID == "matrix_mixer_xl_display")
+255:         {
+256:             paintMatrixMixerXL (g);
+257:             return;
+258:         }
+259: 
+260:         if (editScriptMode)
+261:         {
+262:             // Draw background for Editor Mode
+263:             g.setColour (juce::Colour (0xFF0E0B16));
+264:             g.fillAll();
+265:             
+266:             // Draw Transport Header
+267:             g.setColour (juce::Colour (0xFF1A1726));
+268:             g.fillRect (0.0f, 0.0f, bounds.getWidth(), 40.0f);
+269:             g.setColour (juce::Colour (0xFF312E81));
+270:             g.drawHorizontalLine (40, 0.0f, bounds.getWidth());
+271: 
+272:             g.setColour (juce::Colours::white);
+273:             g.setFont (juce::FontOptions ("Sans", 12.0f, juce::Font::bold));
+274:             g.drawText ("LUA / EXPRESSION UI SCRIPT EDITOR", 15.0f, 8.0f, 300.0f, 28.0f, juce::Justification::centredLeft);
+275: 
+276:             // Draw Real-time Canvas Frame on the right
+277:             float canvasX = bounds.getWidth() / 2 + 10.0f;
+278:             float canvasY = 45.0f;
+279:             float canvasW = bounds.getWidth() / 2 - 25.0f;
+280:             float canvasH = bounds.getHeight() - 60.0f;
+281:             
+282
+<truncated 1596 bytes>
+")] = isMouseClickedState ? 1.0f : 0.0f;
+312:                 vm.vars[vm.getVarIndex("mouse_drag")]  = isMouseDraggedState ? 1.0f : 0.0f;
+313:                 
+314:                 vm.vars[vm.getVarIndex("selected_track")] = (float)selectedTrack;
+315:                 
+316:                 auto* seqNode = getGridSequencerNode();
+317:                 vm.vars[vm.getVarIndex("playhead")] = seqNode ? (float)seqNode->getCurrentStep (selectedTrack) : 0.0f;
+318:                 vm.vars[vm.getVarIndex("bpm")]      = seqNode ? seqNode->getParam("bpm")->get() : 120.0f;
+319:                 vm.vars[vm.getVarIndex("run")]      = seqNode ? seqNode->getParam("run")->get() : 0.0f;
+320:                 
+321:                 vm.vars[vm.getVarIndex("time")] = (float)(juce::Time::getMillisecondCounter() % 100000) / 1000.0f;
+322:                 vm.vars[vm.getVarIndex("t")]    = vm.vars[vm.getVarIndex("time")];
+323: 
+324:                 // Bind current graphics context
+325:                 vm.currentGraphics = &g;
+326:                 
+327:                 // Evaluate!
+328:                 vm.evaluate();
+329:                 
+330:                 // Reset click state after evaluation
+331:                 isMouseClickedState = false;
+332:             }
+333:             else
+334:             {
+335:                 g.setColour (juce::Colour (0xFFEF4444));
+336:                 g.setFont (juce::FontOptions ("Sans", 12.0f, juce::Font::italic));
+337:                 g.drawText ("Script Not Compiled or Has Errors", canvasRect, juce::Justification::centred);
+338:             }
+339:         }
+340:         else
+341:         {
+342:             paintSequencer (g);
+343:         }
+344:     }
+345: 
+346:     void paintSequencer (juce::Graphics& g)
+347:     {
+348:         auto bounds = getLocalBounds().toFloat();
+349:         
+350:         // Draw deep panel backdrop
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

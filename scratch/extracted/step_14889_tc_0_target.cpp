@@ -1,0 +1,1 @@
+"                    // Double click to delete\n                    if (e.mods.isDoubleClick())\n                    {\n                        notes.erase (notes.begin() + i);\n                        selectedNoteIndex = -1;\n                        repaint();\n                        return;\n                    }\n"

@@ -1,5 +1,6 @@
 #include "InventoryOverlay.h"
 #include "LookAndFeel.h"
+#include <algorithm>
 #include "HardwareDrawing.h"
 #include "PedalPainter.h"
 #include "../dsp/PedalDesign.h"
@@ -726,6 +727,11 @@ void InventoryOverlay::buildItemDatabase()
     filterItems();
 }
 
+static bool compareInventoryItems (const InventoryOverlay::InventoryItem* a, const InventoryOverlay::InventoryItem* b)
+{
+    return a->displayName.compareIgnoreCase (b->displayName) < 0;
+}
+
 void InventoryOverlay::filterItems()
 {
     filteredItems.clear();
@@ -759,6 +765,9 @@ void InventoryOverlay::filterItems()
 
         filteredItems.push_back (&item);
     }
+
+    // Sort items alphabetically by display name
+    std::sort (filteredItems.begin(), filteredItems.end(), compareInventoryItems);
 
     itemGrid.setItems (filteredItems);
 }

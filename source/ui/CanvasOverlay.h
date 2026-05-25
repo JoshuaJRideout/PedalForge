@@ -581,6 +581,8 @@ public:
         }
     }
 
+    std::function<void (const juce::String& category, std::function<void(const juce::File&)> cb)> onOpenLibrary;
+
 private:
     AudioGraphEngine* engine = nullptr;
     MidiLearnManager* midiLearn = nullptr;

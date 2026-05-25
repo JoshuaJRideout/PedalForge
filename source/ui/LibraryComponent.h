@@ -2,6 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_graphics/juce_graphics.h>
 #include "../library/AssetLibrary.h"
+#include "../network/Tone3000Client.h"
 #include <functional>
 #include <set>
 #include <map>
@@ -12,7 +13,8 @@
  * Left sidebar: categories. Right: grid of assets.
  * Supports import and selection callbacks.
  */
-class LibraryComponent : public juce::Component
+class LibraryComponent : public juce::Component,
+                         private juce::Timer
 {
 public:
     LibraryComponent();
@@ -88,7 +90,8 @@ private:
         {
             int iw = currentItemW(), ih = currentItemH();
             int cols = juce::jmax (1, (viewportWidth - padding) / (iw + padding));
-            int rows = ((int) parent.filteredAssets.size() + cols - 1) / juce::jmax (1, cols);
+            int numItems = parent.showingCloud ? (int) parent.cloudResults.size() : (int) parent.filteredAssets.size();
+            int rows = (numItems + cols - 1) / juce::jmax (1, cols);
             int totalH = juce::jmax (100, padding + rows * (ih + padding));
             setSize (viewportWidth, totalH);
         }
@@ -121,6 +124,50 @@ private:
     void clearThumbnailCache() { thumbnailCache.clear(); }
 
     void rebuildSubcategoryCombo();
+
+    //==========================================================================
+    // TONE3000 Cloud Integration
+    Tone3000Client cloudClient;
+    bool showingCloud = false;
+
+    juce::TextButton cloudToggle { juce::String(juce::CharPointer_UTF8("\xe2\x98\x81")) + " TONE3000" };
+    juce::TextButton localToggle { juce::String(juce::CharPointer_UTF8("\xf0\x9f\x93\x81")) + " Local" };
+
+    // Cloud filter buttons
+    juce::TextButton filterAll { "All" };
+    juce::TextButton filterAmps { "Amps" };
+    juce::TextButton filterPedals { "Pedals" };
+    juce::TextButton filterRigs { "Full Rigs" };
+    juce::TextButton filterIRs { "IRs" };
+    juce::String activeGearFilter; // e.g. "amp", "pedal", "full-rig", "ir"
+
+    std::vector<ToneResult> cloudResults;
+    int cloudTotalPages = 0;
+    int cloudCurrentPage = 1;
+    juce::TextButton prevPageBtn { juce::String(juce::CharPointer_UTF8("\xe2\x97\x80")) };
+    juce::TextButton nextPageBtn { juce::String(juce::CharPointer_UTF8("\xe2\x96\xb6")) };
+    juce::Label pageLabel;
+    
+    // Downloading state
+    std::set<juce::String> downloadingIds;  // tone IDs currently downloading
+
+    void performCloudSearch();
+    void triggerCloudDownload (const ToneResult& tone);
+    void switchToCloudMode (bool cloud);
+    void setGearFilter (const juce::String& filter);
+
+    // Search button visible in cloud mode
+    juce::TextButton searchBtn { juce::String(juce::CharPointer_UTF8("\xf0\x9f\x94\x8d")) + " Search" };
+    juce::TextButton apiKeyBtn { "Cloud Key" };
+
+    // API Key settings load/save helpers
+    juce::String loadApiKey();
+    void saveApiKey (const juce::String& key);
+    void promptForApiKey (std::function<void()> onSuccessCallback);
+
+    // Debounce timer for cloud auto-search
+    void timerCallback() override;
+    void scheduleCloudSearch();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LibraryComponent)
 };

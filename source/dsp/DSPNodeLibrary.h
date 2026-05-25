@@ -15,10 +15,18 @@
 class AudioInputNode : public DSPNode
 {
 public:
-    AudioInputNode() : DSPNode ("audio_input", "Audio In")
+    AudioInputNode (int numChannels = 2) : DSPNode ("audio_input", "Audio In")
     {
-        addOutput ("left");
-        addOutput ("right");
+        if (numChannels == 2)
+        {
+            addOutput ("left");
+            addOutput ("right");
+        }
+        else
+        {
+            for (int i = 0; i < numChannels; ++i)
+                addOutput ("ch" + juce::String (i + 1));
+        }
     }
 
     void process (const float**, int, float** out, int numOut, int n) override
@@ -30,10 +38,18 @@ public:
 class AudioOutputNode : public DSPNode
 {
 public:
-    AudioOutputNode() : DSPNode ("audio_output", "Audio Out")
+    AudioOutputNode (int numChannels = 2) : DSPNode ("audio_output", "Audio Out")
     {
-        addInput ("left");
-        addInput ("right");
+        if (numChannels == 2)
+        {
+            addInput ("left");
+            addInput ("right");
+        }
+        else
+        {
+            for (int i = 0; i < numChannels; ++i)
+                addInput ("ch" + juce::String (i + 1));
+        }
     }
 
     void process (const float** in, int, float** out, int numOut, int n) override
@@ -2041,6 +2057,272 @@ public:
 private:
     int tickCount = 0;
     bool isRunning = false;
+};
+
+//==============================================================================
+// ─── MIXING / UTILITY FOR MULTI-PATH ─────────────────────────────────────────
+
+class AuxInputNode : public DSPNode
+{
+public:
+    AuxInputNode() : DSPNode ("aux_input", "Aux In")
+    {
+        addOutput ("left");
+        addOutput ("right");
+    }
+
+    void process (const float**, int, float** out, int numOut, int n) override
+    {
+        (void) out; (void) numOut; (void) n;
+    }
+};
+
+class StereoMixerNode : public DSPNode
+{
+public:
+    StereoMixerNode() : DSPNode ("stereo_mixer", "Stereo Mixer")
+    {
+        addInput ("in1_l"); addInput ("in1_r");
+        addInput ("in2_l"); addInput ("in2_r");
+        addOutput ("out_l"); addOutput ("out_r");
+        addParam ("vol1", "Volume 1", -60.0f, 6.0f, 0.0f);
+        addParam ("vol2", "Volume 2", -60.0f, 6.0f, 0.0f);
+        addParam ("master", "Master", -60.0f, 6.0f, 0.0f);
+    }
+
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        float g1 = std::pow (10.0f, getParam("vol1")->get() / 20.0f);
+        float g2 = std::pow (10.0f, getParam("vol2")->get() / 20.0f);
+        float gm = std::pow (10.0f, getParam("master")->get() / 20.0f);
+
+        for (int i = 0; i < n; ++i)
+        {
+            float ch1_l = (numIn > 0 && in[0]) ? in[0][i] : 0.0f;
+            float ch1_r = (numIn > 1 && in[1]) ? in[1][i] : 0.0f;
+            float ch2_l = (numIn > 2 && in[2]) ? in[2][i] : 0.0f;
+            float ch2_r = (numIn > 3 && in[3]) ? in[3][i] : 0.0f;
+
+            if (numOut > 0 && out[0])
+                out[0][i] = (ch1_l * g1 + ch2_l * g2) * gm;
+            if (numOut > 1 && out[1])
+                out[1][i] = (ch1_r * g1 + ch2_r * g2) * gm;
+        }
+    }
+};
+
+class AuxOutputNode : public DSPNode
+{
+public:
+    AuxOutputNode() : DSPNode ("aux_output", "Aux Out")
+    {
+        addInput ("left");
+        addInput ("right");
+    }
+
+    void process (const float**, int, float**, int, int) override {}
+};
+
+class MatrixMixerNode : public DSPNode
+{
+public:
+    MatrixMixerNode() : DSPNode ("matrix_mixer", "Matrix Mixer")
+    {
+        addInput ("in1"); addInput ("in2"); addInput ("in3"); addInput ("in4");
+        addOutput ("out1"); addOutput ("out2"); addOutput ("out3"); addOutput ("out4");
+
+        // 16 crosspoints g_in_out
+        for (int in = 1; in <= 4; ++in)
+        {
+            for (int out = 1; out <= 4; ++out)
+            {
+                juce::String id = "g" + juce::String (in) + juce::String (out);
+                juce::String name = "In " + juce::String (in) + " -> Out " + juce::String (out);
+                float defVal = (in == out) ? 1.0f : 0.0f; // default to diagonal pass-through
+                addParam (id, name, 0.0f, 1.0f, defVal);
+            }
+        }
+    }
+
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        // Fetch the 4x4 matrix gain coefficients (linear values 0.0 to 1.0)
+        float g[4][4];
+        for (int r = 0; r < 4; ++r)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                juce::String id = "g" + juce::String (r + 1) + juce::String (c + 1);
+                g[r][c] = getParam (id)->get();
+            }
+        }
+
+        // Process block
+        for (int i = 0; i < n; ++i)
+        {
+            // Gather input samples
+            float inS[4];
+            for (int ch = 0; ch < 4; ++ch)
+                inS[ch] = (numIn > ch && in[ch]) ? in[ch][i] : 0.0f;
+
+            // Compute mixed outputs
+            for (int outCh = 0; outCh < 4; ++outCh)
+            {
+                if (numOut > outCh && out[outCh])
+                {
+                    out[outCh][i] = inS[0] * g[0][outCh] +
+                                    inS[1] * g[1][outCh] +
+                                    inS[2] * g[2][outCh] +
+                                    inS[3] * g[3][outCh];
+                }
+            }
+        }
+    }
+};
+
+class MatrixMixerXLNode : public DSPNode
+{
+public:
+    MatrixMixerXLNode() : DSPNode ("matrix_mixer_xl", "Matrix Mixer XL")
+    {
+        // Add 32 inputs
+        for (int i = 0; i < 32; ++i)
+            addInput ("in" + juce::String (i + 1));
+
+        // Add 32 outputs
+        for (int i = 0; i < 32; ++i)
+            addOutput ("out" + juce::String (i + 1));
+
+        // Active matrix size: 1 to 32 (default 8.0)
+        addParam ("size", "Matrix Size", 1.0f, 32.0f, 8.0f);
+        
+        // Master Volume: 0.0 to 2.0 (default 1.0)
+        addParam ("master_vol", "Master Volume", 0.0f, 2.0f, 1.0f);
+
+        // Initialize gains to diagonal unity
+        for (int r = 0; r < 32; ++r)
+        {
+            for (int c = 0; c < 32; ++c)
+            {
+                float defVal = (r == c) ? 1.0f : 0.0f;
+                gains[r][c].store (defVal, std::memory_order_relaxed);
+            }
+        }
+    }
+
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        // Read parameters
+        int activeSize = juce::jlimit (1, 32, (int) getParam ("size")->get());
+        float masterVol = getParam ("master_vol")->get();
+
+        // Local cache of gains to avoid atomic overhead inside sample loop
+        float localGains[32][32];
+        for (int r = 0; r < activeSize; ++r)
+        {
+            for (int c = 0; c < activeSize; ++c)
+            {
+                localGains[r][c] = gains[r][c].load (std::memory_order_relaxed);
+            }
+        }
+
+        // Process block sample-by-sample
+        for (int i = 0; i < n; ++i)
+        {
+            // Gather input samples for active size
+            float inS[32];
+            for (int ch = 0; ch < activeSize; ++ch)
+            {
+                inS[ch] = (numIn > ch && in[ch]) ? in[ch][i] : 0.0f;
+            }
+
+            // Compute mixed outputs for active size
+            for (int outCh = 0; outCh < activeSize; ++outCh)
+            {
+                if (numOut > outCh && out[outCh])
+                {
+                    float sum = 0.0f;
+                    for (int inCh = 0; inCh < activeSize; ++inCh)
+                    {
+                        sum += inS[inCh] * localGains[inCh][outCh];
+                    }
+                    out[outCh][i] = sum * masterVol;
+                }
+            }
+
+            // Clear extra output channels to avoid garbage/unprocessed data
+            for (int outCh = activeSize; outCh < numOut; ++outCh)
+            {
+                if (out[outCh])
+                {
+                    out[outCh][i] = 0.0f;
+                }
+            }
+        }
+    }
+
+    juce::var toJSON() const override
+    {
+        auto obj = DSPNode::toJSON();
+        if (auto* dict = obj.getDynamicObject())
+        {
+            juce::Array<juce::var> gainRows;
+            for (int r = 0; r < 32; ++r)
+            {
+                juce::Array<juce::var> gainCols;
+                for (int c = 0; c < 32; ++c)
+                {
+                    gainCols.add ((double) gains[r][c].load (std::memory_order_relaxed));
+                }
+                gainRows.add (gainCols);
+            }
+            dict->setProperty ("matrix_gains", gainRows);
+        }
+        return obj;
+    }
+
+    void fromJSON (const juce::var& json) override
+    {
+        DSPNode::fromJSON (json);
+        if (auto* dict = json.getDynamicObject())
+        {
+            if (dict->hasProperty ("matrix_gains"))
+            {
+                if (auto* rows = dict->getProperty ("matrix_gains").getArray())
+                {
+                    for (int r = 0; r < std::min (32, rows->size()); ++r)
+                    {
+                        if (auto* cols = (*rows)[r].getArray())
+                        {
+                            for (int c = 0; c < std::min (32, cols->size()); ++c)
+                            {
+                                float val = (float)(double)(*cols)[c];
+                                gains[r][c].store (val, std::memory_order_relaxed);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    float getGain (int r, int c) const
+    {
+        if (r >= 0 && r < 32 && c >= 0 && c < 32)
+            return gains[r][c].load (std::memory_order_relaxed);
+        return 0.0f;
+    }
+
+    void setGain (int r, int c, float val)
+    {
+        if (r >= 0 && r < 32 && c >= 0 && c < 32)
+        {
+            gains[r][c].store (juce::jlimit (0.0f, 2.0f, val), std::memory_order_relaxed);
+        }
+    }
+
+private:
+    std::atomic<float> gains[32][32];
 };
 
 #include "SynthNodeLibrary.h"

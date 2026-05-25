@@ -786,7 +786,20 @@ juce::String AudioGraphEngine::serialise() const
         obj->setProperty ("routeY",    inst.routeY);
 
         if (inst.design != nullptr)
+        {
+            auto* nonConstSelf = const_cast<AudioGraphEngine*> (this);
+            if (auto* node = nonConstSelf->graph.getNodeForId (inst.nodeID))
+            {
+                if (auto* proc = node->getProcessor())
+                {
+                    if (auto* gProc = dynamic_cast<GraphPedalProcessor*> (proc))
+                    {
+                        const_cast<PedalDesign*>(inst.design.get())->effectsGraph = gProc->getDSPGraph().toJSON();
+                    }
+                }
+            }
             obj->setProperty ("design", inst.design->toJSON());
+        }
 
         // Control values
         auto ctrlValObj = std::make_unique<juce::DynamicObject>();
@@ -1003,7 +1016,62 @@ void AudioGraphEngine::deserialise (const juce::String& jsonState)
                                 if (auto* ctrlValObj = obj->getProperty ("controlValues").getDynamicObject())
                                 {
                                     for (const auto& prop : ctrlValObj->getProperties())
-                                        inst->controlValues[prop.name.toString()] = (float) (double) prop.value;
+                                    {
+                                        juce::String cid = prop.name.toString();
+                                        float val = (float) (double) prop.value;
+                                        inst->controlValues[cid] = val;
+
+                                        juce::Logger::writeToLog("AudioGraphEngine: Syncing control " + cid + " to value " + juce::String(val));
+
+                                        // Sync parameter value directly to the processor
+                                        if (auto* node = graph.getNodeForId (addedId))
+                                        {
+                                            if (auto* proc = node->getProcessor())
+                                            {
+                                                juce::String mappedParamID;
+                                                if (inst->design != nullptr)
+                                                {
+                                                    for (const auto& m : inst->design->mappings)
+                                                    {
+                                                        if (m.controlID == cid)
+                                                        {
+                                                            mappedParamID = m.nodeParam;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                if (mappedParamID.isNotEmpty())
+                                                {
+                                                    juce::Logger::writeToLog("AudioGraphEngine: Found mapped parameter ID " + mappedParamID);
+                                                    for (auto* param : proc->getParameters())
+                                                    {
+                                                        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
+                                                        {
+                                                            if (matchMappingParam (mappedParamID, rp->getParameterID()))
+                                                            {
+                                                                juce::Logger::writeToLog("AudioGraphEngine: Setting parameter " + rp->getParameterID() + " via setValueNotifyingHost");
+                                                                rp->setValueNotifyingHost (val);
+                                                                juce::Logger::writeToLog("AudioGraphEngine: Parameter set successful");
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    juce::Logger::writeToLog("AudioGraphEngine: No mapped parameter ID found for " + cid);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                juce::Logger::writeToLog("AudioGraphEngine: WARNING node processor is null for addedId " + juce::String(addedId.uid));
+                                            }
+                                        }
+                                        else
+                                        {
+                                            juce::Logger::writeToLog("AudioGraphEngine: WARNING node is null for addedId " + juce::String(addedId.uid));
+                                        }
+                                    }
                                 }
                             }
 

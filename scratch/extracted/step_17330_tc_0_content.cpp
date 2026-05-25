@@ -1,0 +1,1 @@
+"        if (controlID == \"midi_editor_display\")\n        {\n            paintMidiEditor (g);\n            return;\n        }\n\n        if (controlID == \"matrix_mixer_xl_display\")\n        {\n            paintMatrixMixerXL (g);\n            return;\n        }"

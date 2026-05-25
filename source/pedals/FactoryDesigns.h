@@ -227,9 +227,17 @@ namespace FactoryDesigns
         PedalDesign::Control swPlay; swPlay.type = "footswitch"; swPlay.controlID = "sw_play"; swPlay.label = "RUN"; swPlay.x = 35.0f; swPlay.y = 250.0f; swPlay.width = 60; swPlay.height = 60; d->controls.push_back(swPlay);
         PedalDesign::Control swClr; swClr.type = "footswitch"; swClr.controlID = "sw_clr"; swClr.label = "CLEAR"; swClr.x = 185.0f; swClr.y = 250.0f; swClr.width = 60; swClr.height = 60; d->controls.push_back(swClr);
 
+        // Button to launch the visual arpeggiator/piano-roll grid editor
+        PedalDesign::Control btnOverlay;
+        btnOverlay.type = "overlay_launcher"; btnOverlay.width = 160; btnOverlay.height = 30;
+        btnOverlay.x = 60.0f; btnOverlay.y = 180.0f;
+        btnOverlay.label = "OPEN PIANO ROLL"; btnOverlay.controlID = "btn_grid";
+        btnOverlay.overlayPage = "MIDI Editor Grid";
+        d->controls.push_back(btnOverlay);
+
         // Grid Overlay Screen Configuration
-        PedalDesign::OverlayPage gridPage;
-        gridPage.name = "MIDI Editor Grid";
+        PedalDesign::CanvasPage gridPage;
+        gridPage.pageName = "MIDI Editor Grid";
         gridPage.width = 1000.0f;
         gridPage.height = 600.0f;
         gridPage.backgroundColour = juce::Colour(0xFF110B1C); // Very dark indigo
@@ -906,6 +914,11 @@ namespace FactoryDesigns
         c2->setProperty("srcNode", 2); c2->setProperty("srcPort", 0);
         c2->setProperty("dstNode", 1); c2->setProperty("dstPort", 0);
         conns.add(c2);
+        
+        auto c3 = new juce::DynamicObject();
+        c3->setProperty("srcNode", 2); c3->setProperty("srcPort", 0);
+        c3->setProperty("dstNode", 1); c3->setProperty("dstPort", 1);
+        conns.add(c3);
 
         graph->setProperty("connections", conns);
         d->effectsGraph = juce::var(graph.release());
@@ -1636,6 +1649,572 @@ namespace FactoryDesigns
 
         addStandardPorts (*d);
         addBypassAndLED (*d);
+        d->isFactory = true;
+        return d;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // AETHER RIG — Complete NAM Channel Strip
+    // ─────────────────────────────────────────────────────────────────────────────
+    inline std::shared_ptr<PedalDesign> createAetherRig()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Aether Rig";
+        d->category = "Amp Sim";
+        d->chassisW = 300.0f;
+        d->chassisH = 280.0f;
+        d->chassisColour = juce::Colour(0xFF1A1A2E);  // Deep midnight blue
+
+        addBypassAndLED(*d);
+
+        // ── Row 1: Top knobs (Gate, Drive, Input, Output, Cab Vol) ──
+        PedalDesign::Control gateKnob;
+        gateKnob.type = "knob"; gateKnob.label = "Gate";
+        gateKnob.controlID = "gate_knob";
+        gateKnob.x = 15; gateKnob.y = 30; gateKnob.width = 40; gateKnob.height = 40;
+
+        PedalDesign::Control driveKnob;
+        driveKnob.type = "knob"; driveKnob.label = "Drive";
+        driveKnob.controlID = "drive_knob";
+        driveKnob.x = 70; driveKnob.y = 30; driveKnob.width = 40; driveKnob.height = 40;
+
+        PedalDesign::Control inputKnob;
+        inputKnob.type = "knob"; inputKnob.label = "Input";
+        inputKnob.controlID = "input_knob";
+        inputKnob.x = 125; inputKnob.y = 30; inputKnob.width = 40; inputKnob.height = 40;
+
+        PedalDesign::Control outputKnob;
+        outputKnob.type = "knob"; outputKnob.label = "Output";
+        outputKnob.controlID = "output_knob";
+        outputKnob.x = 180; outputKnob.y = 30; outputKnob.width = 40; outputKnob.height = 40;
+
+        PedalDesign::Control cabGainKnob;
+        cabGainKnob.type = "knob"; cabGainKnob.label = "Cab Vol";
+        cabGainKnob.controlID = "cab_gain_knob";
+        cabGainKnob.x = 235; cabGainKnob.y = 30; cabGainKnob.width = 40; cabGainKnob.height = 40;
+
+        // ── Row 2: EQ & Reverb knobs ──
+        PedalDesign::Control bassKnob;
+        bassKnob.type = "knob"; bassKnob.label = "Bass";
+        bassKnob.controlID = "bass_knob";
+        bassKnob.x = 15; bassKnob.y = 85; bassKnob.width = 35; bassKnob.height = 35;
+
+        PedalDesign::Control midKnob;
+        midKnob.type = "knob"; midKnob.label = "Mid";
+        midKnob.controlID = "mid_knob";
+        midKnob.x = 60; midKnob.y = 85; midKnob.width = 35; midKnob.height = 35;
+
+        PedalDesign::Control trebleKnob;
+        trebleKnob.type = "knob"; trebleKnob.label = "Treble";
+        trebleKnob.controlID = "treble_knob";
+        trebleKnob.x = 105; trebleKnob.y = 85; trebleKnob.width = 35; trebleKnob.height = 35;
+
+        PedalDesign::Control revMixKnob;
+        revMixKnob.type = "knob"; revMixKnob.label = "Reverb Mix";
+        revMixKnob.controlID = "rev_mix_knob";
+        revMixKnob.x = 170; revMixKnob.y = 85; revMixKnob.width = 35; revMixKnob.height = 35;
+
+        PedalDesign::Control revSizeKnob;
+        revSizeKnob.type = "knob"; revSizeKnob.label = "Room Size";
+        revSizeKnob.controlID = "rev_size_knob";
+        revSizeKnob.x = 215; revSizeKnob.y = 85; revSizeKnob.width = 35; revSizeKnob.height = 35;
+
+        PedalDesign::Control cabMixKnob;
+        cabMixKnob.type = "knob"; cabMixKnob.label = "Cab Mix";
+        cabMixKnob.controlID = "cab_mix_knob";
+        cabMixKnob.x = 260; cabMixKnob.y = 85; cabMixKnob.width = 35; cabMixKnob.height = 35;
+
+        // ── NAM Model display ──
+        PedalDesign::Control namDisplay;
+        namDisplay.type = "text_screen";
+        namDisplay.label = "AETHER RIG\nNo Model Loaded";
+        namDisplay.numLines = 2;
+        namDisplay.fontSize = 8.0f;
+        namDisplay.controlID = "nam_display";
+        namDisplay.x = 15; namDisplay.y = 135; namDisplay.width = 130; namDisplay.height = 25;
+
+        // ── IR Cab display ──
+        PedalDesign::Control irDisplay;
+        irDisplay.type = "text_screen";
+        irDisplay.label = "Cabinet IR (Convolver)\nNo IR Loaded";
+        irDisplay.numLines = 2;
+        irDisplay.fontSize = 8.0f;
+        irDisplay.controlID = "ir_display";
+        irDisplay.x = 155; irDisplay.y = 135; irDisplay.width = 130; irDisplay.height = 25;
+
+        // ── Action buttons ──
+        PedalDesign::Control namBrowseBtn;
+        namBrowseBtn.type = "file_loader";
+        namBrowseBtn.label = "NAM...";
+        namBrowseBtn.controlID = "nam_loader";
+        namBrowseBtn.x = 15; namBrowseBtn.y = 168; namBrowseBtn.width = 60; namBrowseBtn.height = 18;
+
+        PedalDesign::Control namLibBtn;
+        namLibBtn.type = "library_loader";
+        namLibBtn.label = "Library";
+        namLibBtn.controlID = "nam_library";
+        namLibBtn.libraryCategory = "NAM";
+        namLibBtn.x = 80; namLibBtn.y = 168; namLibBtn.width = 60; namLibBtn.height = 18;
+
+        PedalDesign::Control irBrowseBtn;
+        irBrowseBtn.type = "file_loader";
+        irBrowseBtn.label = "Cab IR...";
+        irBrowseBtn.controlID = "ir_loader";
+        irBrowseBtn.x = 155; irBrowseBtn.y = 168; irBrowseBtn.width = 60; irBrowseBtn.height = 18;
+
+        PedalDesign::Control irLibBtn;
+        irLibBtn.type = "library_loader";
+        irLibBtn.label = "Cab Lib";
+        irLibBtn.controlID = "ir_library";
+        irLibBtn.libraryCategory = "IR_CAB";
+        irLibBtn.x = 220; irLibBtn.y = 168; irLibBtn.width = 60; irLibBtn.height = 18;
+
+        // Push all controls
+        d->controls.push_back(gateKnob);
+        d->controls.push_back(driveKnob);
+        d->controls.push_back(inputKnob);
+        d->controls.push_back(outputKnob);
+        d->controls.push_back(cabGainKnob);
+        d->controls.push_back(bassKnob);
+        d->controls.push_back(midKnob);
+        d->controls.push_back(trebleKnob);
+        d->controls.push_back(revMixKnob);
+        d->controls.push_back(revSizeKnob);
+        d->controls.push_back(cabMixKnob);
+        d->controls.push_back(namDisplay);
+        d->controls.push_back(irDisplay);
+        d->controls.push_back(namBrowseBtn);
+        d->controls.push_back(namLibBtn);
+        d->controls.push_back(irBrowseBtn);
+        d->controls.push_back(irLibBtn);
+
+        // ── Mappings ──
+        // Node IDs: 2=gate, 3=softclip, 4=nam, 5=ir, 6=tonestack, 7=reverb
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"gate_knob",     "2_threshold"});
+        d->mappings.push_back({"drive_knob",    "3_drive"});
+        d->mappings.push_back({"input_knob",    "4_gain"});
+        d->mappings.push_back({"output_knob",   "4_out_level"});
+        d->mappings.push_back({"cab_gain_knob", "5_gain"});
+        d->mappings.push_back({"cab_mix_knob",  "5_mix"});
+        d->mappings.push_back({"bass_knob",     "6_bass"});
+        d->mappings.push_back({"mid_knob",      "6_mid"});
+        d->mappings.push_back({"treble_knob",   "6_treble"});
+        d->mappings.push_back({"rev_mix_knob",  "7_mix"});
+        d->mappings.push_back({"rev_size_knob", "7_size"});
+        d->mappings.push_back({"nam_display:1", "4_filepath"});
+        d->mappings.push_back({"ir_display:1",  "5_filepath"});
+        d->mappings.push_back({"nam_loader",    "4_filepath"});
+        d->mappings.push_back({"nam_library",   "4_filepath"});
+        d->mappings.push_back({"ir_loader",     "5_filepath"});
+        d->mappings.push_back({"ir_library",    "5_filepath"});
+
+        // ── Internal graph (JSON) ──
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+
+        auto mkNode = [&](int id, const char* type, const char* name) {
+            auto* n = new juce::DynamicObject();
+            n->setProperty("id", id);
+            n->setProperty("type", juce::String(type));
+            n->setProperty("name", juce::String(name));
+            return n;
+        };
+
+        nodes.add(mkNode(0, "audio_input",  "Audio In"));
+        nodes.add(mkNode(1, "audio_output", "Audio Out"));
+
+        // Gate (node 2)
+        auto* gateN = mkNode(2, "noisegate", "Gate");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "threshold"); p1->setProperty("value", -50.0); p.add(p1);
+          gateN->setProperty("params", p); }
+        nodes.add(gateN);
+
+        // Boost/OD (node 3)
+        auto* odN = mkNode(3, "softclip", "Boost");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "drive"); p1->setProperty("value", 1.0); p.add(p1);
+          odN->setProperty("params", p); }
+        nodes.add(odN);
+
+        // NAM (node 4)
+        auto* namN = mkNode(4, "nam", "NAM Amp");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "gain"); p1->setProperty("value", 0.0); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "out_level"); p2->setProperty("value", 0.0); p.add(p2);
+          namN->setProperty("params", p); }
+        nodes.add(namN);
+
+        // IR Cab (node 5)
+        auto* irN = mkNode(5, "ir", "Cabinet IR");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "mix"); p1->setProperty("value", 1.0); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "gain"); p2->setProperty("value", 1.0); p.add(p2);
+          irN->setProperty("params", p); }
+        nodes.add(irN);
+
+        // Tone Stack EQ (node 6)
+        auto* eqN = mkNode(6, "tonestack", "EQ");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "bass"); p1->setProperty("value", 0.0); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "mid"); p2->setProperty("value", 0.0); p.add(p2);
+          auto* p3 = new juce::DynamicObject(); p3->setProperty("id", "treble"); p3->setProperty("value", 0.0); p.add(p3);
+          eqN->setProperty("params", p); }
+        nodes.add(eqN);
+
+        // Reverb (node 7)
+        auto* revN = mkNode(7, "reverb", "Reverb");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "size"); p1->setProperty("value", 0.5); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "mix"); p2->setProperty("value", 0.0); p.add(p2);
+          auto* p3 = new juce::DynamicObject(); p3->setProperty("id", "damping"); p3->setProperty("value", 0.5); p.add(p3);
+          revN->setProperty("params", p); }
+        nodes.add(revN);
+
+        // Tone Stack EQ Right (node 8)
+        auto* eqRN = mkNode(8, "tonestack", "EQ Right");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "bass"); p1->setProperty("value", 0.0); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "mid"); p2->setProperty("value", 0.0); p.add(p2);
+          auto* p3 = new juce::DynamicObject(); p3->setProperty("id", "treble"); p3->setProperty("value", 0.0); p.add(p3);
+          eqRN->setProperty("params", p); }
+        nodes.add(eqRN);
+
+        // Reverb Right (node 9)
+        auto* revRN = mkNode(9, "reverb", "Reverb Right");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "size"); p1->setProperty("value", 0.5); p.add(p1);
+          auto* p2 = new juce::DynamicObject(); p2->setProperty("id", "mix"); p2->setProperty("value", 0.0); p.add(p2);
+          auto* p3 = new juce::DynamicObject(); p3->setProperty("id", "damping"); p3->setProperty("value", 0.5); p.add(p3);
+          revRN->setProperty("params", p); }
+        nodes.add(revRN);
+
+        // Add / Summer (node 10)
+        auto* addN = mkNode(10, "add", "Input Summer");
+        { juce::Array<juce::var> p;
+          auto* p1 = new juce::DynamicObject(); p1->setProperty("id", "value"); p1->setProperty("value", 0.0); p.add(p1);
+          addN->setProperty("params", p); }
+        nodes.add(addN);
+
+        graph->setProperty("nodes", nodes);
+
+        // ── Connections ──
+        juce::Array<juce::var> conns;
+        auto mkConn = [&](int sN, int sP, int dN, int dP) {
+            auto* c = new juce::DynamicObject();
+            c->setProperty("srcNode", sN); c->setProperty("srcPort", sP);
+            c->setProperty("dstNode", dN); c->setProperty("dstPort", dP);
+            conns.add(c);
+        };
+
+        mkConn(0, 0, 10, 0);  // In L → Sum a
+        mkConn(0, 1, 10, 1);  // In R → Sum b
+        mkConn(10, 0, 2, 0);  // Sum → Gate
+        mkConn(2, 0, 3, 0);   // Gate → Boost
+        mkConn(3, 0, 4, 0);   // Boost → NAM
+        mkConn(4, 0, 5, 0);   // NAM → IR in_l
+        mkConn(4, 0, 5, 1);   // NAM → IR in_r
+        mkConn(5, 0, 6, 0);   // IR out_l → EQ L
+        mkConn(6, 0, 7, 0);   // EQ L → Reverb L
+        mkConn(7, 0, 1, 0);   // Reverb L → Out L
+        
+        mkConn(5, 1, 8, 0);   // IR out_r → EQ R
+        mkConn(8, 0, 9, 0);   // EQ R → Reverb R
+        mkConn(9, 0, 1, 1);   // Reverb R → Out R
+
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        addStandardPorts(*d);
+        d->isFactory = true;
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createMixerPedal()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Mixer";
+        d->category = "Utility";
+        d->tags = { "mixer", "utility", "combine", "parallel" };
+        d->chassisW = 140.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF4F46E5); // Deep Indigo
+        
+        addBypassAndLED(*d);
+
+        // Define three knobs
+        // 1. Vol 1 (mapped to mixerNode vol1)
+        PedalDesign::Control k1;
+        k1.type = "knob";
+        k1.width = 35; k1.height = 35;
+        k1.x = 20.0f; k1.y = 40.0f;
+        k1.label = "Vol 1";
+        k1.controlID = "vol1_knob";
+        d->controls.push_back(k1);
+
+        // 2. Vol 2 (mapped to mixerNode vol2)
+        PedalDesign::Control k2;
+        k2.type = "knob";
+        k2.width = 35; k2.height = 35;
+        k2.x = 85.0f; k2.y = 40.0f;
+        k2.label = "Vol 2";
+        k2.controlID = "vol2_knob";
+        d->controls.push_back(k2);
+
+        // 3. Master (mapped to mixerNode master)
+        PedalDesign::Control k3;
+        k3.type = "knob";
+        k3.width = 40; k3.height = 40;
+        k3.x = d->chassisW / 2.0f - 20.0f;
+        k3.y = 100.0f;
+        k3.label = "Master";
+        k3.controlID = "master_knob";
+        d->controls.push_back(k3);
+
+        // Setup effectsGraph in JSON matching the C++ factory
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject(); n0->setProperty("id", 0); n0->setProperty("type", "audio_input"); n0->setProperty("name", "Audio In"); nodes.add(n0);
+        auto n1 = new juce::DynamicObject(); n1->setProperty("id", 1); n1->setProperty("type", "audio_output"); n1->setProperty("name", "Audio Out"); nodes.add(n1);
+        auto n2 = new juce::DynamicObject(); n2->setProperty("id", 2); n2->setProperty("type", "aux_input"); n2->setProperty("name", "Aux In"); nodes.add(n2);
+        
+        auto n3 = new juce::DynamicObject(); n3->setProperty("id", 3); n3->setProperty("type", "stereo_mixer"); n3->setProperty("name", "Stereo Mixer");
+        juce::Array<juce::var> params;
+        auto p1 = new juce::DynamicObject(); p1->setProperty("id", "vol1"); p1->setProperty("value", 0.0); params.add(p1);
+        auto p2 = new juce::DynamicObject(); p2->setProperty("id", "vol2"); p2->setProperty("value", 0.0); params.add(p2);
+        auto p3 = new juce::DynamicObject(); p3->setProperty("id", "master"); p3->setProperty("value", 0.0); params.add(p3);
+        n3->setProperty("params", params);
+        nodes.add(n3);
+        
+        graph->setProperty("nodes", nodes);
+        
+        // Connections matching createMixerPedal C++
+        juce::Array<juce::var> conns;
+        auto mkConn = [&](int sN, int sP, int dN, int dP) {
+            auto* c = new juce::DynamicObject();
+            c->setProperty("srcNode", sN); c->setProperty("srcPort", sP);
+            c->setProperty("dstNode", dN); c->setProperty("dstPort", dP);
+            conns.add(c);
+        };
+        
+        mkConn(0, 0, 3, 0); // Audio Input L -> Mixer In 1 L
+        mkConn(0, 1, 3, 1); // Audio Input R -> Mixer In 1 R
+        mkConn(2, 0, 3, 2); // Aux Input L -> Mixer In 2 L
+        mkConn(2, 1, 3, 3); // Aux Input R -> Mixer In 2 R
+        
+        mkConn(3, 0, 1, 0); // Mixer Out L -> Audio Output L
+        mkConn(3, 1, 1, 1); // Mixer Out R -> Audio Output R
+        
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        // Parameter mappings
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->mappings.push_back({"vol1_knob", "3_vol1"});
+        d->mappings.push_back({"vol2_knob", "3_vol2"});
+        d->mappings.push_back({"master_knob", "3_master"});
+
+        addStandardPorts(*d);
+        d->isFactory = true;
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createMatrixMixerPedal()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Matrix Mixer";
+        d->category = "Utility";
+        d->tags = { "matrix", "mixer", "utility", "routing", "parallel" };
+        d->chassisW = 240.0f;
+        d->chassisH = 280.0f;
+        d->chassisColour = juce::Colour(0xFF1E293B); // Dark graphite
+        
+        addBypassAndLED(*d);
+
+        // Define the 4x4 matrix of crosspoint knobs
+        float xStart = 25.0f;
+        float xGap = 50.0f;
+        float yStart = 40.0f;
+        float yGap = 35.0f;
+
+        for (int row = 1; row <= 4; ++row)
+        {
+            for (int col = 1; col <= 4; ++col)
+            {
+                PedalDesign::Control k;
+                k.type = "knob";
+                k.width = 24; k.height = 24;
+                k.x = xStart + (col - 1) * xGap;
+                k.y = yStart + (row - 1) * yGap;
+                k.label = juce::String (row) + "->" + juce::String (col);
+                k.controlID = "k_g" + juce::String (row) + juce::String (col);
+                
+                // Unity gain defaults for diagonals, 0 for others
+                k.defaultValue = (row == col) ? 1.0f : 0.0f;
+                d->controls.push_back(k);
+
+                // Map to matrix mixer (node ID 4)
+                d->mappings.push_back ({ k.controlID, "4_g" + juce::String (row) + juce::String (col) });
+            }
+        }
+
+        // Setup effectsGraph in JSON matching the C++ factory
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject(); n0->setProperty("id", 0); n0->setProperty("type", "audio_input"); n0->setProperty("name", "Audio In"); nodes.add(n0);
+        auto n1 = new juce::DynamicObject(); n1->setProperty("id", 1); n1->setProperty("type", "audio_output"); n1->setProperty("name", "Audio Out"); nodes.add(n1);
+        auto n2 = new juce::DynamicObject(); n2->setProperty("id", 2); n2->setProperty("type", "aux_input"); n2->setProperty("name", "Aux In"); nodes.add(n2);
+        auto n3 = new juce::DynamicObject(); n3->setProperty("id", 3); n3->setProperty("type", "aux_output"); n3->setProperty("name", "Aux Out"); nodes.add(n3);
+        
+        auto n4 = new juce::DynamicObject(); n4->setProperty("id", 4); n4->setProperty("type", "matrix_mixer"); n4->setProperty("name", "Matrix Mixer");
+        juce::Array<juce::var> params;
+        for (int r = 1; r <= 4; ++r)
+        {
+            for (int c = 1; c <= 4; ++c)
+            {
+                auto p = new juce::DynamicObject();
+                p->setProperty ("id", "g" + juce::String (r) + juce::String (c));
+                p->setProperty ("value", (r == c) ? 1.0 : 0.0);
+                params.add (p);
+            }
+        }
+        n4->setProperty("params", params);
+        nodes.add(n4);
+        
+        graph->setProperty("nodes", nodes);
+        
+        // Connections
+        juce::Array<juce::var> conns;
+        auto mkConn = [&](int sN, int sP, int dN, int dP) {
+            auto* c = new juce::DynamicObject();
+            c->setProperty("srcNode", sN); c->setProperty("srcPort", sP);
+            c->setProperty("dstNode", dN); c->setProperty("dstPort", dP);
+            conns.add(c);
+        };
+        
+        // Connect inputs to Matrix
+        mkConn(0, 0, 4, 0); // Main In L -> Matrix In 1
+        mkConn(0, 1, 4, 1); // Main In R -> Matrix In 2
+        mkConn(2, 0, 4, 2); // Aux In L  -> Matrix In 3
+        mkConn(2, 1, 4, 3); // Aux In R  -> Matrix In 4
+        
+        // Connect Matrix to outputs
+        mkConn(4, 0, 1, 0); // Matrix Out 1 -> Main Out L
+        mkConn(4, 1, 1, 1); // Matrix Out 2 -> Main Out R
+        mkConn(4, 2, 3, 0); // Matrix Out 3 -> Aux Out L
+        mkConn(4, 3, 3, 1); // Matrix Out 4 -> Aux Out R
+        
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+
+        d->mappings.push_back({"bypass_switch", "bypass"});
+
+        addStandardPorts(*d);
+        d->isFactory = true;
+        return d;
+    }
+
+    inline std::shared_ptr<PedalDesign> createMatrixMixerXLPedal()
+    {
+        auto d = std::make_shared<PedalDesign>();
+        d->name = "Matrix Mixer XL";
+        d->category = "Utility";
+        d->tags = { "matrix", "mixer", "utility", "routing", "multichannel", "parallel" };
+        d->chassisW = 120.0f;
+        d->chassisH = 200.0f;
+        d->chassisColour = juce::Colour(0xFF0F172A); // Midnight blue-slate
+        
+        addBypassAndLED(*d);
+
+        // Master volume control knob
+        PedalDesign::Control kMaster;
+        kMaster.type = "knob";
+        kMaster.width = 42; kMaster.height = 42;
+        kMaster.x = 39.0f; kMaster.y = 50.0f;
+        kMaster.label = "MASTER";
+        kMaster.controlID = "k_master";
+        kMaster.defaultValue = 1.0f;
+        d->controls.push_back (kMaster);
+        
+        d->mappings.push_back ({ "k_master", "4_master_vol" });
+
+        // Launcher button for overlay grid
+        PedalDesign::Control btnOverlay;
+        btnOverlay.type = "overlay_launcher";
+        btnOverlay.width = 90; btnOverlay.height = 25;
+        btnOverlay.x = 15.0f; btnOverlay.y = 110.0f;
+        btnOverlay.label = "OPEN MATRIX";
+        btnOverlay.controlID = "btn_grid";
+        btnOverlay.overlayPage = "Matrix Mixer XL Grid";
+        d->controls.push_back (btnOverlay);
+
+        // Create overlay canvas page
+        PedalDesign::CanvasPage gridPage;
+        gridPage.pageName = "Matrix Mixer XL Grid";
+        gridPage.width = 1000.0f;
+        gridPage.height = 600.0f;
+        gridPage.backgroundColour = juce::Colour(0xFF0B0F19);
+        
+        PedalDesign::Control gridDisplay;
+        gridDisplay.type = "custom_display";
+        gridDisplay.controlID = "matrix_mixer_xl_display";
+        gridDisplay.x = 10.0f; gridDisplay.y = 10.0f;
+        gridDisplay.width = 980.0f; gridDisplay.height = 580.0f;
+        gridPage.controls.push_back (gridDisplay);
+        
+        d->canvasPages.push_back (gridPage);
+
+        // JSON Graph template
+        auto graph = std::make_unique<juce::DynamicObject>();
+        juce::Array<juce::var> nodes;
+        
+        auto n0 = new juce::DynamicObject();
+        n0->setProperty("id", 0);
+        n0->setProperty("type", "audio_input");
+        n0->setProperty("name", "Audio In");
+        nodes.add(n0);
+        
+        auto n1 = new juce::DynamicObject();
+        n1->setProperty("id", 1);
+        n1->setProperty("type", "audio_output");
+        n1->setProperty("name", "Audio Out");
+        nodes.add(n1);
+        
+        auto n4 = new juce::DynamicObject();
+        n4->setProperty("id", 4);
+        n4->setProperty("type", "matrix_mixer_xl");
+        n4->setProperty("name", "Matrix Mixer XL");
+        
+        juce::Array<juce::var> params;
+        auto pSize = new juce::DynamicObject(); pSize->setProperty("id", "size"); pSize->setProperty("value", 8.0); params.add(pSize);
+        auto pVol = new juce::DynamicObject(); pVol->setProperty("id", "master_vol"); pVol->setProperty("value", 1.0); params.add(pVol);
+        n4->setProperty("params", params);
+        nodes.add(n4);
+        
+        graph->setProperty("nodes", nodes);
+        
+        juce::Array<juce::var> conns;
+        for (int ch = 0; ch < 32; ++ch)
+        {
+            auto* c1 = new juce::DynamicObject();
+            c1->setProperty("srcNode", 0); c1->setProperty("srcPort", ch);
+            c1->setProperty("dstNode", 4); c1->setProperty("dstPort", ch);
+            conns.add(c1);
+            
+            auto* c2 = new juce::DynamicObject();
+            c2->setProperty("srcNode", 4); c2->setProperty("srcPort", ch);
+            c2->setProperty("dstNode", 1); c2->setProperty("dstPort", ch);
+            conns.add(c2);
+        }
+        
+        graph->setProperty("connections", conns);
+        d->effectsGraph = juce::var(graph.release());
+        
+        d->mappings.push_back({"bypass_switch", "bypass"});
+        addStandardPorts(*d);
         d->isFactory = true;
         return d;
     }

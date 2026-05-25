@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Change setBrush to setGradientFill for JUCE compatibility\"",
+  "EndLine": "1401",
+  "Instruction": "\"Replace g.setBrush with g.setGradientFill in paintMidiEditor\"",
+  "ReplacementContent": "\"                    juce::ColourGradient grad (colourStart, noteRect.getX(), noteRect.getY(), \\n                                               colourEnd, noteRect.getRight(), noteRect.getBottom(), false);\\n                    g.setGradientFill (grad);\\n                    g.fillRoundedRectangle (noteRect, 3.0f);\\n\"",
+  "StartLine": "1397",
+  "TargetContent": "\"                    juce::ColourGradient grad (colourStart, noteRect.getX(), noteRect.getY(), \\n                                               colourEnd, noteRect.getRight(), noteRect.getBottom(), false);\\n                    g.setBrush (grad);\\n                    g.fillRoundedRectangle (noteRect, 3.0f);\\n\"",
+  "TargetFile": "\"/Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h\"",
+  "toolAction": "\"Changing setBrush to setGradientFill\"",
+  "toolSummary": "\"Change setBrush to setGradientFill\""
+}

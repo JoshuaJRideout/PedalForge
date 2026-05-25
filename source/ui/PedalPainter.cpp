@@ -141,6 +141,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
                 
             styles.fontSize = ctrl.fontSize > 0 ? (ctrl.fontSize * sc) : 0.0f;
             HardwareDrawing::drawTextScreen (g, ctrlBounds, lines, -1, &styles);
+            continue; // Text is already shown inside the screen — no label below
         }
         else if (ctrl.type == "pixel_display")
         {

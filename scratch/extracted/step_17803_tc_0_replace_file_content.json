@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Hide toggleModeBtn inside DynamicDisplayComponent constructor\"",
+  "EndLine": "25",
+  "Instruction": "\"Change addAndMakeVisible for toggleModeBtn to addChildComponent and set visible false\"",
+  "ReplacementContent": "\"        addChildComponent (toggleModeBtn.get());\\n        toggleModeBtn->setVisible (false);\"",
+  "StartLine": "25",
+  "TargetContent": "\"        addAndMakeVisible (toggleModeBtn.get());\"",
+  "TargetFile": "\"/Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h\"",
+  "toolAction": "\"Hiding toggleModeBtn in constructor\"",
+  "toolSummary": "\"Edit DynamicDisplayComponent.h\""
+}

@@ -1,0 +1,143 @@
+--- source/ui/ScriptingTabComponent.h
++++ source/ui/ScriptingTabComponent.h
+@@ -28,7 +28,8 @@
+     //==============================================================================
+     BlockColoredCodeEditor (juce::CodeDocument& doc, juce::CodeTokeniser* tokeniser)
+         : juce::CodeEditorComponent (doc, tokeniser)
+     {
+         setOpaque (true);
+         setScrollbarThickness (10);
+@@ -107,6 +108,7 @@
+ class ScriptingTabComponent : public juce::Component,
+                               public juce::Button::Listener,
+                               public juce::ComboBox::Listener,
++                              public juce::KeyListener,
+                               private juce::Timer
+ {
+ public:
+@@ -140,6 +142,7 @@
+     ScriptingTabComponent (ProjectPedal* p) : pedal(p), codeDocument(), codeEditor(codeDocument, &tokeniser)
+     {
+         setOpaque (true);
++        codeEditor.addKeyListener(this);
+ 
+         // ── Mode Selector ──────────────────────────────────────────────
+         modeSelector.addItem ("UI Script (Canvas)", (int) ScriptMode::UI);
+@@ -212,6 +215,22 @@
+             // TODO: dispatch to wiki tab
+             logToConsole ("Opening Wiki: " + link);
+         };
++        
++        // ── Inline Popup ───────────────────────────────────────────────
++        inlinePopup = std::make_unique<InlineAutocompletePopup>(autocompletePanel.getDatabase());
++        addChildComponent (inlinePopup.get());
++        
++        inlinePopup->onInsertCompletion = [this] (const juce::String& text) {
++            // Delete the current prefix typed so far
++            juce::String prefix = inlinePopup->getCurrentPrefix();
++            if (prefix.isNotEmpty())
++            {
++                auto pos = codeEditor.getCaretPos();
++                codeEditor.setSelection(juce::CodeDocument::Position(codeDocument, pos.getLineNumber(), pos.getIndexInLine() - prefix.length()), pos);
++                codeEditor.insertTextAtCaret("");
++            }
++            codeEditor.insertTextAtCaret (text);
++            codeEditor.grabKeyboardFocus();
++        };
+ 
+         // Load default UI script
+         loadDefaultScript (ScriptMode::UI);
+@@ -298,6 +317,7 @@
+ 
+         auto editorArea = content.removeFromLeft (editorW);
+         codeEditor.setBounds (editorArea);
++        // inlinePopup bounds are set dynamically based on caret
+ 
+         if (sidebarVisible)
+         {
+@@ -351,6 +371,76 @@
+         }
+     }
+ 
++    // ── KeyListener ────────────────────────────────────────────────────
++    bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override
++    {
++        if (originatingComponent == &codeEditor)
++        {
++            if (inlinePopup->handleKeyPress(key))
++                return true;
++                
++            // Handle normal typing and update popup filter
++            if ((key.isKeyCode(juce::KeyPress::backspaceKey) || key.isKeyCode(juce::KeyPress::deleteKey) ||
++                 key.getTextCharacter() != 0))
++            {
++                // We must process this asynchronously or after a tiny delay so the codeDocument updates first
++                juce::MessageManager::callAsync([this]() {
++                    updateInlinePopup();
++                });
++            }
++            else
++            {
++                // Arrow keys etc should probably just hide it or update position
++                juce::MessageManager::callAsync([this]() {
++                    if (!inlinePopup->isVisible()) return;
++                    updateInlinePopup();
++                });
++            }
++        }
++        return false;
++    }
++    
++    void updateInlinePopup()
++    {
++        if (!codeEditor.hasKeyboardFocus(false))
++        {
++            inlinePopup->hide();
++            return;
++        }
++        
++        auto pos = codeEditor.getCaretPos();
++        juce::String lineText = codeDocument.getLine(pos.getLineNumber());
++        int col = pos.getIndexInLine();
++        
++        // Extract word behind caret
++        int startCol = col - 1;
++        while (startCol >= 0 && (juce::CharacterFunctions::isLetterOrDigit(lineText[startCol]) || lineText[startCol] == '_'))
++        {
++            startCol--;
++        }
++        startCol++;
++        
++        juce::String prefix = lineText.substring(startCol, col);
++        
++        if (prefix.length() >= 2)
++        {
++            inlinePopup->updateFilter(prefix);
++            if (inlinePopup->isVisible())
++            {
++                // Calculate caret position on screen
++                // We don't have a direct getCaretPositionOnScreen(), but we can estimate
++                // or use codeEditor.getTextBounds() if available.
++                // For now, let's just place it at top-left of editor + some padding
++                // Actually, JUCE CodeEditorComponent has `getTextBounds` or we can approximate using line height.
++                // line height is font height.
++                // This is a naive approximation for now.
++                inlinePopup->showAt(codeEditor.getBounds().getTopLeft().translated(10, 10)); // TODO: accurate pos
++            }
++        }
++        else
++        {
++            inlinePopup->hide();
++        }
++    }
++
+     void comboBoxChanged (juce::ComboBox* box) override
+     {
+@@ -421,6 +511,7 @@
+     juce::TextEditor consoleOutput;
+     AutocompletePanelComponent autocompletePanel;
+     bool sidebarVisible = false;
++    std::unique_ptr<InlineAutocompletePopup> inlinePopup;
+ 
+     // ── VM for UI Script mode ──────────────────────────────────────────
+     ExpressionVM vm;

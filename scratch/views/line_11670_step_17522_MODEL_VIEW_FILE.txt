@@ -1,0 +1,49 @@
+Created At: 2026-05-24T20:10:24Z
+Completed At: 2026-05-24T20:10:24Z
+File Path: `file:///Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h`
+Total Lines: 2402
+Total Bytes: 100945
+Showing lines 2110 to 2150
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+2110:         // Draw a floating vector drag tooltip box
+2111:         if (activeDragRowMatrix >= 0 && activeDragRowMatrix < activeSize && activeDragColMatrix >= 0 && activeDragColMatrix < activeSize)
+2112:         {
+2113:             float val = node->getGain (activeDragRowMatrix, activeDragColMatrix);
+2114:             juce::String tooltipText = "IN " + juce::String (activeDragRowMatrix + 1) + " -> OUT " + juce::String (activeDragColMatrix + 1) + "\n";
+2115:             if (val <= 0.0f)
+2116:                 tooltipText += "Mute (-inf dB)";
+2117:             else
+2118:             {
+2119:                 float dB = 20.0f * std::log10 (val);
+2120:                 tooltipText += juce::String (val, 2) + " (" + (dB >= 0.0f ? "+" : "") + juce::String (dB, 1) + " dB)";
+2121:             }
+2122: 
+2123:             juce::Rectangle<float> tooltipRect (lastMousePos.x + 15.0f, lastMousePos.y - 45.0f, 150.0f, 40.0f);
+2124:             
+2125:             // Constrain inside bounds
+2126:             if (tooltipRect.getRight() > bounds.getWidth())
+2127:                 tooltipRect.setX (lastMousePos.x - 165.0f);
+2128:             if (tooltipRect.getY() < 0.0f)
+2129:                 tooltipRect.setY (lastMousePos.y + 15.0f);
+2130: 
+2131:             // Draw tooltip frame
+2132:             g.setColour (juce::Colour (0xFF1E1B4B).withAlpha (0.92f));
+2133:             g.fillRoundedRectangle (tooltipRect, 6.0f);
+2134:             g.setColour (juce::Colour (0xFFEC4899).withAlpha (0.6f));
+2135:             g.drawRoundedRectangle (tooltipRect, 6.0f, 1.2f);
+2136: 
+2137:             // Draw tooltip text
+2138:             g.setColour (juce::Colours::white);
+2139:             g.setFont (juce::FontOptions ("Sans", 9.5f, juce::Font::plain));
+2140:             g.drawText (tooltipText, tooltipRect.reduced (5.0f), juce::Justification::centred);
+2141:         }
+2142:     }
+2143: 
+2144:     void mouseDownMatrixMixerXL (const juce::MouseEvent& e)
+2145:     {
+2146:         auto* node = getMatrixMixerXLNode();
+2147:         if (!node) return;
+2148: 
+2149:         int activeSize = juce::jlimit (1, 32, (int) node->getParam ("size")->get());
+2150: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

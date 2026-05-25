@@ -23,7 +23,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (titleLabel);
 
     // Tabs — all in one radio group
-    for (auto* tab : { &tabPlay, &tabBoard, &tabRoute, &tabPedal, &tabFX, &tabLibrary, &tabStore, &tabMidi })
+    for (auto* tab : { &tabPlay, &tabBoard, &tabRoute, &tabPedal, &tabFX, &tabScript, &tabWiki, &tabLibrary, &tabStore, &tabMidi })
     {
         tab->setRadioGroupId (1);
         tab->setClickingTogglesState (true);
@@ -55,6 +55,41 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addChildComponent (libraryView);
     addChildComponent (midiSettingsPanel);
     midiSettingsPanel.setMidiLearnManagers (&proc.midiLearn, &proc.playMidiLearn);
+
+    addChildComponent (scriptingTab);
+    scriptingTab.onGraphChanged = [this] {
+        // Refresh the FX graph view if it was modified by the graph builder script
+        if (activePedal != nullptr && activePedal->design != nullptr)
+        {
+            nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
+            grid.refreshSelectedPedal();
+        }
+    };
+
+    // Wiki tab — load docs from the wiki directory beside the plugin binary
+    addChildComponent (wikiTab);
+    {
+        auto wikiDir = juce::File::getSpecialLocation (juce::File::currentApplicationFile)
+                           .getParentDirectory().getChildFile ("docs").getChildFile ("wiki");
+        if (! wikiDir.isDirectory())
+        {
+            // Fallback: try the source tree location (development builds)
+            auto devWikiDir = juce::File::getSpecialLocation (juce::File::currentApplicationFile)
+                                  .getParentDirectory();
+            // Walk up until we find docs/wiki or hit root
+            for (int i = 0; i < 8; ++i)
+            {
+                auto candidate = devWikiDir.getChildFile ("docs").getChildFile ("wiki");
+                if (candidate.isDirectory())
+                {
+                    wikiDir = candidate;
+                    break;
+                }
+                devWikiDir = devWikiDir.getParentDirectory();
+            }
+        }
+        wikiTab.loadFromDirectory (wikiDir);
+    }
 
     // Routing editor (needs engine reference)
     routingEditor = new RoutingGraphEditor (proc.getGraphEngine());
@@ -132,6 +167,90 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
 
     addChildComponent (canvasOverlay);
     
+    canvasOverlay.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
+    {
+        activeFileCallback = cb;
+        libraryOverlay.showForCategory(category);
+    };
+    
+    libraryView.onAssetSelected = [this] (const juce::File& file)
+    {
+        if (activePedal == nullptr || activePedal->design == nullptr)
+            return;
+
+        // Determine category based on file extension
+        juce::String ext = file.getFileExtension().toLowerCase();
+        juce::String category;
+        if (ext == ".nam") category = "NAM";
+        else if (ext == ".wav" || ext == ".ir") category = "IR";
+
+        // Find a mapping that exposes a filepath parameter for this category
+        int targetNodeID = -1;
+        for (const auto& mapping : activePedal->design->mappings)
+        {
+            if (mapping.nodeParam.endsWith ("_filepath"))
+            {
+                // Verify if this control is a loader for our category
+                for (const auto& ctrl : activePedal->design->controls)
+                {
+                    if (ctrl.controlID == mapping.controlID)
+                    {
+                        juce::String ctrlCat = ctrl.libraryCategory;
+                        if (ctrlCat.isEmpty()) ctrlCat = "NAM"; // default to NAM
+                        
+                        if (category == "NAM" && ctrlCat == "NAM")
+                        {
+                            targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf ("_", false, false).getIntValue();
+                            break;
+                        }
+                        else if (category == "IR" && (ctrlCat == "IR" || ctrlCat == "IR_CAB"))
+                        {
+                            targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf ("_", false, false).getIntValue();
+                            break;
+                        }
+                    }
+                }
+                if (targetNodeID >= 0)
+                    break;
+            }
+        }
+
+        // If no specific loader mapping is found, fall back to the first _filepath mapping
+        if (targetNodeID < 0)
+        {
+            for (const auto& mapping : activePedal->design->mappings)
+            {
+                if (mapping.nodeParam.endsWith ("_filepath"))
+                {
+                    targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf ("_", false, false).getIntValue();
+                    break;
+                }
+            }
+        }
+
+        if (targetNodeID >= 0)
+        {
+            auto& engine = tabPlay.getToggleState() ? processorRef.getPlayGraphEngine() : processorRef.getGraphEngine();
+            if (auto* node = engine.getGraph().getNodeForId (activePedal->nodeID))
+            {
+                if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
+                {
+                    graphProc->setNodeFilePath (targetNodeID, file.getFullPathName());
+                    
+                    // Update display
+                    updateDisplayForFilePath (*activePedal->design, activePedal->controlTexts, targetNodeID, file.getFullPathName());
+                    
+                    // Save to effectsGraph JSON in design
+                    activePedal->design->effectsGraph = graphProc->getDSPGraph().toJSON();
+                    
+                    engine.saveUndoState();
+                    grid.repaint();
+                    refreshAfterUndoRedo();
+                }
+            }
+        }
+    };
+    
     // Wire PedalboardGrid's open-library callback
     grid.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
     {
@@ -204,6 +323,8 @@ void PedalForgeEditor::resized()
     tabStore.setBounds   (toolbar.removeFromRight (80).reduced (4, 6));
     tabLibrary.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
     tabMidi.setBounds    (toolbar.removeFromRight (60).reduced (4, 6));
+    tabWiki.setBounds    (toolbar.removeFromRight (60).reduced (4, 6));
+    tabScript.setBounds  (toolbar.removeFromRight (70).reduced (4, 6));
     tabFX.setBounds      (toolbar.removeFromRight (60).reduced (4, 6));
     tabPedal.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
     tabRoute.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
@@ -219,6 +340,8 @@ void PedalForgeEditor::resized()
     nodeGraphEditor.setBounds (contentBounds);
     libraryView.setBounds (contentBounds);
     midiSettingsPanel.setBounds (contentBounds);
+    scriptingTab.setBounds (contentBounds);
+    wikiTab.setBounds (contentBounds);
     
     inventory.setBounds (getLocalBounds());
     libraryOverlay.setBounds (getLocalBounds());
@@ -244,8 +367,8 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     // Only handle tab buttons
     if (button != &tabPlay && button != &tabBoard && button != &tabRoute && button != &tabPedal
-        && button != &tabFX && button != &tabLibrary && button != &tabStore
-        && button != &tabMidi)
+        && button != &tabFX && button != &tabScript && button != &tabWiki && button != &tabLibrary
+        && button != &tabStore && button != &tabMidi)
         return;
 
     bool wasPedal   = pedalDesigner.isVisible();
@@ -256,6 +379,8 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     bool isRoute    = tabRoute.getToggleState();
     bool isPedal    = tabPedal.getToggleState();
     bool isFX       = tabFX.getToggleState();
+    bool isScript   = tabScript.getToggleState();
+    bool isWiki     = tabWiki.getToggleState();
     bool isLibrary  = tabLibrary.getToggleState();
     bool isMidi     = tabMidi.getToggleState();
 
@@ -325,6 +450,12 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
         nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
         nodeGraphEditor.loadNotes (activePedal->design->fxNotes);
     }
+
+    scriptingTab.setVisible (isScript);
+    if (isScript)
+        scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+
+    wikiTab.setVisible (isWiki);
 
     // Re-wire graph pointer
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
@@ -487,6 +618,10 @@ void PedalForgeEditor::refreshAfterUndoRedo()
             nodeGraphEditor.loadDesign (activePedal->design->effectsGraph);
             nodeGraphEditor.loadNotes (activePedal->design->fxNotes);
         }
+    }
+    else if (tabScript.getToggleState())
+    {
+        scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
     }
     repaint();
 }

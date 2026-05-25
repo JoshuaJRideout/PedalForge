@@ -93,8 +93,28 @@ public:
                                                          autoOpenMidiDevices);
     }
 
-    void initialise (const String&) override
+    void initialise (const String& commandLine) override
     {
+        // Set up file logger in ~/Library/Logs/PedalForge/PedalForge.log
+        auto logDir = File::getSpecialLocation (File::userHomeDirectory)
+                        .getChildFile ("Library/Logs/PedalForge");
+        logDir.createDirectory();
+        auto logFile = logDir.getChildFile ("PedalForge.log");
+
+        // Delete old log file if it's too big
+        if (logFile.existsAsFile() && logFile.getSize() > 10 * 1024 * 1024)
+            logFile.deleteFile();
+
+        fileLogger = std::make_unique<FileLogger> (logFile, "PedalForge Startup Log", 1024 * 1024);
+        Logger::setCurrentLogger (fileLogger.get());
+
+        Logger::writeToLog ("==================================================");
+        Logger::writeToLog ("PedalForge Standalone Startup");
+        Logger::writeToLog ("Version: " + getApplicationVersion());
+        Logger::writeToLog ("Command Line: " + commandLine);
+        Logger::writeToLog ("Log File: " + logFile.getFullPathName());
+        Logger::writeToLog ("==================================================");
+
         mainWindow.reset (createWindow());
 
         if (mainWindow != nullptr)
@@ -115,6 +135,10 @@ public:
         pluginHolder = nullptr;
         mainWindow = nullptr;
         appProperties.saveIfNeeded();
+
+        Logger::writeToLog ("PedalForge Standalone Shutdown");
+        Logger::setCurrentLogger (nullptr);
+        fileLogger.reset();
     }
 
     void systemRequestedQuit() override
@@ -145,6 +169,7 @@ protected:
 
 private:
     std::unique_ptr<StandalonePluginHolder> pluginHolder;
+    std::unique_ptr<juce::FileLogger> fileLogger;
 };
 
 } // namespace juce

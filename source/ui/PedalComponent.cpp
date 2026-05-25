@@ -215,8 +215,13 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                                 if (auto* node = sp->engine.getGraph().getNodeForId(sp->instance.nodeID)) {
                                     if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(node->getProcessor())) {
                                         graphProc->setNodeFilePath(targetNodeID, fc.getResult().getFullPathName());
+                                        if (sp->instance.design != nullptr)
+                                            sp->instance.design->effectsGraph = graphProc->getDSPGraph().toJSON();
                                     }
                                 }
+                                if (sp->instance.design != nullptr)
+                                    updateDisplayForFilePath (*sp->instance.design, sp->instance.controlTexts, targetNodeID, fc.getResult().getFullPathName());
+                                sp->repaint();
                             }
                         });
                         dragging = false;
@@ -238,12 +243,23 @@ void PedalComponent::mouseDown (const juce::MouseEvent& e)
                         {
                             auto safeEngineRef = &engine;
                             auto safeNodeID = instance.nodeID;
-                            onOpenLibrary (category, [safeEngineRef, safeNodeID, targetNodeID](const juce::File& file) {
+                            auto safeDesign = instance.design;
+                            auto* instPtr = &instance;
+                            juce::Component::SafePointer<PedalComponent> sp(this);
+                            onOpenLibrary (category, [safeEngineRef, safeNodeID, targetNodeID, safeDesign, instPtr, sp](const juce::File& file) {
                                 if (auto* node = safeEngineRef->getGraph().getNodeForId (safeNodeID))
                                 {
                                     if (auto* graphProc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
+                                    {
                                         graphProc->setNodeFilePath (targetNodeID, file.getFullPathName());
+                                        if (safeDesign != nullptr)
+                                            safeDesign->effectsGraph = graphProc->getDSPGraph().toJSON();
+                                    }
                                 }
+                                if (safeDesign != nullptr)
+                                    updateDisplayForFilePath (*safeDesign, instPtr->controlTexts, targetNodeID, file.getFullPathName());
+                                if (sp != nullptr)
+                                    sp->repaint();
                             });
                         }
 

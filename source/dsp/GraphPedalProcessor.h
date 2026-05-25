@@ -16,12 +16,28 @@
 class GraphPedalProcessor : public juce::AudioProcessor
 {
 public:
+    static BusesProperties createBusesProperties (const juce::String& name)
+    {
+        if (name == "Matrix Mixer XL")
+        {
+            BusesProperties buses;
+            for (int i = 0; i < 16; ++i)
+            {
+                buses = buses.withInput  ("Input " + juce::String (i + 1),  juce::AudioChannelSet::stereo(), true);
+                buses = buses.withOutput ("Output " + juce::String (i + 1), juce::AudioChannelSet::stereo(), true);
+            }
+            return buses;
+        }
+
+        return BusesProperties()
+            .withInput  ("Input",     juce::AudioChannelSet::stereo(), true)
+            .withOutput ("Output",    juce::AudioChannelSet::stereo(), true)
+            .withInput  ("FX Return", juce::AudioChannelSet::stereo(), name == "Mixer" || name == "Matrix Mixer")
+            .withOutput ("FX Send",   juce::AudioChannelSet::stereo(), name == "Matrix Mixer");
+    }
+
     GraphPedalProcessor (const juce::String& name, const juce::String& graphJSON = {})
-        : AudioProcessor (BusesProperties()
-                          .withInput  ("Input",    juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output",   juce::AudioChannelSet::stereo(), true)
-                          .withInput  ("FX Return", juce::AudioChannelSet::stereo(), false)
-                          .withOutput ("FX Send",   juce::AudioChannelSet::stereo(), false)),
+        : AudioProcessor (createBusesProperties (name)),
           pedalName (name)
     {
         if (graphJSON.isNotEmpty())
@@ -77,6 +93,10 @@ public:
             if (node->getType() == "audio_input" || node->getType() == "audio_output")
                 continue;
 
+            // For Aether Rig, skip exposing node 8 (EQ Right) and 9 (Reverb Right)
+            if (pedalName == "Aether Rig" && (nodeID == 8 || nodeID == 9))
+                continue;
+
             for (auto& param : const_cast<DSPNode*>(node.get())->getParams())
             {
                 juce::String fullID = juce::String (nodeID) + "_" + param.id;
@@ -127,6 +147,45 @@ public:
         // Sync JUCE parameter values → graph NodeParam atomics
         for (auto& bridge : paramBridge)
             bridge.nodeParam->set (bridge.juceParam->get());
+
+        // For Aether Rig, sync duplicate Right EQ (8) and Right Reverb (9) from Left (6 and 7)
+        if (pedalName == "Aether Rig")
+        {
+            if (auto* eqL = dspGraph.getNode (6))
+            {
+                if (auto* eqR = dspGraph.getNode (8))
+                {
+                    if (auto* pBassL = eqL->getParam ("bass"))
+                        if (auto* pBassR = eqR->getParam ("bass"))
+                            pBassR->set (pBassL->get());
+                            
+                    if (auto* pMidL = eqL->getParam ("mid"))
+                        if (auto* pMidR = eqR->getParam ("mid"))
+                            pMidR->set (pMidL->get());
+                            
+                    if (auto* pTrebleL = eqL->getParam ("treble"))
+                        if (auto* pTrebleR = eqR->getParam ("treble"))
+                            pTrebleR->set (pTrebleL->get());
+                }
+            }
+            if (auto* revL = dspGraph.getNode (7))
+            {
+                if (auto* revR = dspGraph.getNode (9))
+                {
+                    if (auto* pSizeL = revL->getParam ("size"))
+                        if (auto* pSizeR = revR->getParam ("size"))
+                            pSizeR->set (pSizeL->get());
+                            
+                    if (auto* pDampL = revL->getParam ("damping"))
+                        if (auto* pDampR = revR->getParam ("damping"))
+                            pDampR->set (pDampL->get());
+                            
+                    if (auto* pMixL = revL->getParam ("mix"))
+                        if (auto* pMixR = revR->getParam ("mix"))
+                            pMixR->set (pMixL->get());
+                }
+            }
+        }
 
         if (bypassParam == nullptr || !bypassParam->get())
         {
@@ -690,6 +749,74 @@ namespace GraphPedalFactory
         return proc;
     }
 
+    // ─── AETHER RIG ─────────────────────────────────────────────────────────────
+
+    /** Aether Rig: Complete channel strip.
+        Input → NoiseGate → SoftClip(Boost) → NAM(Amp) → IR(Cab) → ToneStack(EQ) → Reverb → Output
+        
+        Node IDs:
+          0 = audio_input
+          1 = audio_output
+          2 = noisegate
+          3 = softclip (boost/OD)
+          4 = nam (amp engine)
+          5 = ir (cab sim)
+          6 = tonestack (EQ Left)
+          7 = reverb (Reverb Left)
+          8 = tonestack (EQ Right)
+          9 = reverb (Reverb Right)
+          10 = add (summing L+R)
+    */
+    inline std::unique_ptr<GraphPedalProcessor> createAetherRig()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Aether Rig");
+        auto& g = proc->getDSPGraph();
+
+        int inID   = g.addNode (std::make_unique<AudioInputNode>(),        0);
+        int outID  = g.addNode (std::make_unique<AudioOutputNode>(),       1);
+        int gateID = g.addNode (std::make_unique<NoiseGateNode>(),         2);
+        int odID   = g.addNode (std::make_unique<SoftClipNode>(),          3);
+        int namID  = g.addNode (std::make_unique<NAMNode>("nam", "NAM Amp"), 4);
+        int irID   = g.addNode (std::make_unique<IRNode>(),                5);
+        int eqID   = g.addNode (std::make_unique<ToneStackNode>(),         6);
+        int revID  = g.addNode (std::make_unique<SchroederReverbNode>(),   7);
+        int eqID_R = g.addNode (std::make_unique<ToneStackNode>(),         8);
+        int revID_R = g.addNode (std::make_unique<SchroederReverbNode>(),  9);
+        int sumID  = g.addNode (std::make_unique<AddNode>(),              10);
+
+        // Sensible defaults
+        g.getNode(gateID)->getParam("threshold")->set (-50.0f);
+        g.getNode(odID)->getParam("drive")->set (1.0f);      // Bypass-level drive
+        g.getNode(revID)->getParam("size")->set (0.5f);
+        g.getNode(revID)->getParam("mix")->set (0.0f);        // Reverb off by default
+        g.getNode(revID_R)->getParam("size")->set (0.5f);
+        g.getNode(revID_R)->getParam("mix")->set (0.0f);
+
+        // Mono chain: In L + In R -> Sum -> Gate -> OD -> NAM
+        g.connect (inID,   0, sumID,  0);
+        g.connect (inID,   1, sumID,  1);
+        g.connect (sumID,  0, gateID, 0);
+        g.connect (gateID, 0, odID,   0);
+        g.connect (odID,   0, namID,  0);
+
+        // NAM (mono) → IR (stereo in: duplicate to L+R)
+        g.connect (namID,  0, irID,   0);   // NAM out → IR in_l
+        g.connect (namID,  0, irID,   1);   // NAM out → IR in_r
+
+        // IR Left → EQ Left → Reverb Left → Output L
+        g.connect (irID,   0, eqID,   0);   // IR out_l → EQ Left
+        g.connect (eqID,   0, revID,  0);   // EQ Left → Reverb Left
+        g.connect (revID,  0, outID,  0);   // Reverb Left → Output L
+
+        // IR Right → EQ Right → Reverb Right → Output R
+        g.connect (irID,   1, eqID_R,  0);   // IR out_r → EQ Right
+        g.connect (eqID_R, 0, revID_R, 0);   // EQ Right → Reverb Right
+        g.connect (revID_R,0, outID,  1);   // Reverb Right → Output R
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
     // ─── TUTORIAL ────────────────────────────────────────────────────────────────
 
     /** Tutorial 1 — Hello Gain: The simplest possible pedal.
@@ -1018,6 +1145,102 @@ namespace GraphPedalFactory
         g.connect (inID, 0, exprID, 0); 
         g.connect (exprID, 0, outID, 0); 
         g.connect (exprID, 0, outID, 1); 
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createMixerPedal()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Mixer");
+        auto& g = proc->getDSPGraph();
+
+        // Add nodes with deterministic IDs to match the mapping!
+        int inID    = g.addNode (std::make_unique<AudioInputNode>(),  0);
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>(), 1);
+        int auxID   = g.addNode (std::make_unique<AuxInputNode>(),    2);
+        int mixerID = g.addNode (std::make_unique<StereoMixerNode>(), 3);
+
+        // Visual Coordinates
+        g.getNode (inID)->visualX    = 80.0f;  g.getNode (inID)->visualY    = 150.0f;
+        g.getNode (auxID)->visualX   = 80.0f;  g.getNode (auxID)->visualY   = 300.0f;
+        g.getNode (mixerID)->visualX = 350.0f; g.getNode (mixerID)->visualY = 200.0f;
+        g.getNode (outID)->visualX   = 600.0f; g.getNode (outID)->visualY   = 200.0f;
+
+        // Set defaults
+        g.getNode (mixerID)->getParam ("vol1")->set (0.0f);     // 0dB
+        g.getNode (mixerID)->getParam ("vol2")->set (0.0f);     // 0dB
+        g.getNode (mixerID)->getParam ("master")->set (0.0f);   // 0dB
+
+        // Connections
+        g.connect (inID,    0, mixerID, 0); // Audio Input L -> Mixer In 1 L
+        g.connect (inID,    1, mixerID, 1); // Audio Input R -> Mixer In 1 R
+        g.connect (auxID,   0, mixerID, 2); // Aux Input L -> Mixer In 2 L
+        g.connect (auxID,   1, mixerID, 3); // Aux Input R -> Mixer In 2 R
+
+        g.connect (mixerID, 0, outID,   0); // Mixer Out L -> Audio Output L
+        g.connect (mixerID, 1, outID,   1); // Mixer Out R -> Audio Output R
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createMatrixMixerPedal()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Matrix Mixer");
+        auto& g = proc->getDSPGraph();
+
+        // Nodes with deterministic IDs to match the visual design mappings
+        int inID    = g.addNode (std::make_unique<AudioInputNode>(),  0);
+        int outID   = g.addNode (std::make_unique<AudioOutputNode>(), 1);
+        int auxInID = g.addNode (std::make_unique<AuxInputNode>(),    2);
+        int auxOutID = g.addNode (std::make_unique<AuxOutputNode>(),  3);
+        int matrixID = g.addNode (std::make_unique<MatrixMixerNode>(), 4);
+
+        // Visual Coordinates
+        g.getNode (inID)->visualX     = 80.0f;  g.getNode (inID)->visualY     = 100.0f;
+        g.getNode (auxInID)->visualX  = 80.0f;  g.getNode (auxInID)->visualY  = 300.0f;
+        g.getNode (matrixID)->visualX = 350.0f; g.getNode (matrixID)->visualY = 200.0f;
+        g.getNode (outID)->visualX    = 620.0f; g.getNode (outID)->visualY    = 100.0f;
+        g.getNode (auxOutID)->visualX = 620.0f; g.getNode (auxOutID)->visualY = 300.0f;
+
+        // Connections: Inputs into Matrix Mixer
+        g.connect (inID,    0, matrixID, 0); // Main In L -> Matrix In 1
+        g.connect (inID,    1, matrixID, 1); // Main In R -> Matrix In 2
+        g.connect (auxInID, 0, matrixID, 2); // Aux In L  -> Matrix In 3
+        g.connect (auxInID, 1, matrixID, 3); // Aux In R  -> Matrix In 4
+
+        // Connections: Matrix Mixer into Outputs
+        g.connect (matrixID, 0, outID,    0); // Matrix Out 1 -> Main Out L
+        g.connect (matrixID, 1, outID,    1); // Matrix Out 2 -> Main Out R
+        g.connect (matrixID, 2, auxOutID, 0); // Matrix Out 3 -> Aux Out L
+        g.connect (matrixID, 3, auxOutID, 1); // Matrix Out 4 -> Aux Out R
+
+        proc->rebuildParameters();
+        return proc;
+    }
+
+    inline std::unique_ptr<GraphPedalProcessor> createMatrixMixerXLPedal()
+    {
+        auto proc = std::make_unique<GraphPedalProcessor> ("Matrix Mixer XL");
+        auto& g = proc->getDSPGraph();
+
+        // 32-channel I/O nodes
+        int inID     = g.addNode (std::make_unique<AudioInputNode> (32), 0);
+        int outID    = g.addNode (std::make_unique<AudioOutputNode> (32), 1);
+        int matrixID = g.addNode (std::make_unique<MatrixMixerXLNode>(), 4);
+
+        // Position nodes in graph visualizer
+        g.getNode (inID)->visualX     = 80.0f;  g.getNode (inID)->visualY     = 200.0f;
+        g.getNode (matrixID)->visualX = 350.0f; g.getNode (matrixID)->visualY = 200.0f;
+        g.getNode (outID)->visualX    = 620.0f; g.getNode (outID)->visualY    = 200.0f;
+
+        // Connect 32 channels from input -> matrix -> output
+        for (int ch = 0; ch < 32; ++ch)
+        {
+            g.connect (inID,     ch, matrixID, ch);
+            g.connect (matrixID, ch, outID,    ch);
+        }
 
         proc->rebuildParameters();
         return proc;

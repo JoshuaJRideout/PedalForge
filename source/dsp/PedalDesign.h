@@ -431,3 +431,76 @@ inline bool matchMappingParam (const juce::String& mappingParam, const juce::Str
     return false;
 }
 
+/**
+ * After loading a file into a DSP node, call this to update any text_screen
+ * displays that are mapped to the filepath parameter.
+ *
+ * Handles the "controlID:lineIndex" mapping convention, e.g.
+ *   mapping { "nam_display:1", "4_filepath" }
+ * will update line 1 of the "nam_display" text_screen with the filename.
+ */
+inline void updateDisplayForFilePath (const PedalDesign& design,
+                                      std::map<juce::String, juce::String>& controlTexts,
+                                      int targetNodeID,
+                                      const juce::String& filePath)
+{
+    juce::String filepathParam = juce::String (targetNodeID) + "_filepath";
+    juce::String displayName = juce::File (filePath).getFileNameWithoutExtension();
+
+    for (const auto& mapping : design.mappings)
+    {
+        if (mapping.nodeParam != filepathParam)
+            continue;
+
+        // Check if this mapping's controlID has a ":lineIndex" suffix
+        juce::String baseControlID = mapping.controlID;
+        int lineIndex = -1;
+
+        int colonPos = mapping.controlID.lastIndexOfChar (':');
+        if (colonPos > 0)
+        {
+            juce::String suffix = mapping.controlID.substring (colonPos + 1);
+            if (suffix.containsOnly ("0123456789"))
+            {
+                baseControlID = mapping.controlID.substring (0, colonPos);
+                lineIndex = suffix.getIntValue();
+            }
+        }
+
+        // Only update text_screen controls, not file_loader/library_loader
+        bool isDisplay = false;
+        for (const auto& ctrl : design.controls)
+        {
+            if (ctrl.controlID == baseControlID
+                && (ctrl.type == "text_screen" || ctrl.type == "console"))
+            {
+                isDisplay = true;
+
+                if (lineIndex >= 0)
+                {
+                    // Update a specific line of the display
+                    juce::String currentText = ctrl.label;
+                    auto it = controlTexts.find (baseControlID);
+                    if (it != controlTexts.end() && it->second.isNotEmpty())
+                        currentText = it->second;
+
+                    juce::StringArray lines;
+                    lines.addLines (currentText);
+
+                    // Pad if needed
+                    while (lines.size() <= lineIndex)
+                        lines.add ("");
+
+                    lines.set (lineIndex, displayName);
+                    controlTexts[baseControlID] = lines.joinIntoString ("\n");
+                }
+                else
+                {
+                    // Replace entire display text
+                    controlTexts[baseControlID] = displayName;
+                }
+                break;
+            }
+        }
+    }
+}

@@ -1,0 +1,68 @@
+Created At: 2026-05-24T20:17:00Z
+Completed At: 2026-05-24T20:17:00Z
+File Path: `file:///Users/joshua/.gemini/antigravity/brain/0fcd7daa-48ba-4c23-8e7e-699765f078b6/implementation_plan.md`
+Total Lines: 82
+Total Bytes: 5060
+Showing lines 1 to 82
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: # Matrix Mixer XL Implementation Plan
+2: 
+3: We will implement a new premium utility pedal called **Matrix Mixer XL**. The physical pedal has a standard small chassis layout (`120.0f x 200.0f`), but clicking the "OPEN MATRIX" launcher opens a full-screen resizable vector-drawn **32x32 Matrix Grid** overlay. 
+4: 
+5: ---
+6: 
+7: ## User Review Required
+8: 
+9: > [!IMPORTANT]
+10: > **Arbitrary Multichannel Extension**: 
+11: > Instead of hardcoding 2-channel stereos for routing, we will extend `AudioInputNode` and `AudioOutputNode` to support a parameterizable channel count.
+12: > If the pedal is named `"Matrix Mixer XL"`, we configure the `GraphPedalProcessor` constructor to initialize **16 stereo input buses** and **16 stereo output buses** (totaling 32 discrete input and output channels).
+13: > The `Routing` tab will dynamically reflect all 32 inputs and 32 outputs as patch points!
+14: 
+15: > [!TIP]
+16: > **Heatmap reactive cells**:
+17: > The 32x32 matrix cells are drawn with interactive glows. Low gains render as dim indigo/blue, transitioning dynamically to glowing violet, magenta, and bright neon pink for high gains, forming an elegant interactive audio heatmap.
+18: 
+19: ---
+20: 
+21: ## Proposed Changes
+22: 
+23: ### DSP Nodes & Multichannel Infrastructure
+24: 
+25: #### [MODIFY] [DSPNodeLibrary.h](file:///Users/joshua/Developer/PedalForge/source/dsp/DSPNodeLibrary.h)
+26: * Modify constructors of `AudioInputNode` and `AudioOutputNode` to accept an optional channel count parameter, auto-declaring `left`/`right` or `ch1`...`chN` ports.
+2
+<truncated 1852 bytes>
+n, and "DIAGONAL UNITY" button.
+52:   * Render an interactive grid representing the active matrix size (e.g. 8x8 or 32x32).
+53:   * Draw column headers (Outputs) and row headers (Inputs) with elegant highlighting.
+54:   * Draw active cells as glowing neon squares matching gain intensity, showing values inside cells if size is readable.
+55: * Implement `mouseDownMatrixMixerXL()`, `mouseDragMatrixMixerXL()`, `mouseUpMatrixMixerXL()`, and `mouseMoveMatrixMixerXL()` to enable fluid mouse-based gain editing (vertical click-drag modifies cells).
+56: 
+57: ### Pedal Design & Registry
+58: 
+59: #### [MODIFY] [FactoryDesigns.h](file:///Users/joshua/Developer/PedalForge/source/pedals/FactoryDesigns.h)
+60: * Implement `createMatrixMixerXLPedal()`:
+61:   * Setup a small standard chassis size (`120.0f x 200.0f`) in deep dark midnight blue.
+62:   * Add a premium `"knob"` control for Master Volume mapped to `"4_master_vol"`.
+63:   * Add an `"overlay_launcher"` button mapped to canvas page `"Matrix Mixer XL Grid"`.
+64:   * Define the full-screen canvas page `"Matrix Mixer XL Grid"` containing a `"custom_display"` control of ID `"matrix_mixer_xl_display"`.
+65: 
+66: #### [MODIFY] [PedalRegistry.h](file:///Users/joshua/Developer/PedalForge/source/pedals/PedalRegistry.h)
+67: * Register `"Matrix Mixer XL"` in the `"Utility"` category.
+68: 
+69: ---
+70: 
+71: ## Verification Plan
+72: 
+73: ### Automated Tests
+74: * Trigger a production build of the PedalForge standalone target to verify successful compilation.
+75: 
+76: ### Manual Verification
+77: * Place a **Matrix Mixer XL** pedal on the pedalboard.
+78: * Open the **Routing** tab and verify that 32 inputs and 32 outputs are fully visible and patchable.
+79: * Launch the matrix overlay screen.
+80: * Drag the Size slider to test resizing between 4x4, 8x8, 16x16, and 32x32 dynamically.
+81: * Click and drag on cells, verifying the reactive heatmap gradient transitions and seamless audio routing adjustments.
+82: 
+The above content shows the entire, complete file contents of the requested file.

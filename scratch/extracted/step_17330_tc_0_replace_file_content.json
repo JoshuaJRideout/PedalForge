@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Hooked paintMatrixMixerXL inside paint() when the control ID is \\\"matrix_mixer_xl_display\\\".\"",
+  "EndLine": "234",
+  "Instruction": "\"Add matrix_mixer_xl_display check in paint()\"",
+  "ReplacementContent": "\"        if (controlID == \\\"midi_editor_display\\\")\\n        {\\n            paintMidiEditor (g);\\n            return;\\n        }\\n\\n        if (controlID == \\\"matrix_mixer_xl_display\\\")\\n        {\\n            paintMatrixMixerXL (g);\\n            return;\\n        }\"",
+  "StartLine": "229",
+  "TargetContent": "\"        if (controlID == \\\"midi_editor_display\\\")\\n        {\\n            paintMidiEditor (g);\\n            return;\\n        }\"",
+  "TargetFile": "\"/Users/joshua/Developer/PedalForge/source/ui/DynamicDisplayComponent.h\"",
+  "toolAction": "\"Hooking paintMatrixMixerXL in paint()\"",
+  "toolSummary": "\"Replacing file content\""
+}

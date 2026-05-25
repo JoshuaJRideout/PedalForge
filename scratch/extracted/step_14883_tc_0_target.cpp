@@ -1,0 +1,1 @@
+"                    juce::ColourGradient grad (colourStart, noteRect.getX(), noteRect.getY(), \n                                               colourEnd, noteRect.getRight(), noteRect.getBottom(), false);\n                    g.setBrush (grad);\n                    g.fillRoundedRectangle (noteRect, 3.0f);\n"
