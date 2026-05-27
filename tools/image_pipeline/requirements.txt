@@ -1,0 +1,9 @@
+Pillow>=10.0.0
+numpy>=1.24
+opencv-python-headless>=4.8
+rembg[cpu]>=2.0.50
+pyyaml>=6.0
+
+# Optional — only needed with --vlm. Install lazily on first use, or include now
+# if you know you'll be using the VLM check from the start.
+openai>=1.0.0

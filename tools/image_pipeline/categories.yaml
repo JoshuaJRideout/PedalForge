@@ -1,0 +1,49 @@
+# Asset category definitions. Each category controls how that asset class is
+# processed: target output size, expected aspect ratio, and how much of the
+# canvas the subject should fill before we accept it.
+#
+# Today the script can't auto-detect category from an input image. Until we
+# wire up prompt templates that tag at generation time, all inputs land in
+# "uncategorized" and you sort them by eye via the HTML report.
+
+uncategorized:
+  output_size: 1024
+  aspect_ratio: any
+  min_subject_fraction: 0.30   # lenient — anything that has a subject at all
+
+other:
+  # VLM classifier's fallback bucket — image doesn't fit any expected category.
+  # We still process it (don't lose the file) but flag for manual review.
+  output_size: 1024
+  aspect_ratio: any
+  min_subject_fraction: 0.20
+
+chassis:
+  output_size: 1024
+  aspect_ratio: any            # pedal chassis can be square or tall
+  min_subject_fraction: 0.40
+
+knob:
+  output_size: 512
+  aspect_ratio: square
+  min_subject_fraction: 0.55
+
+led:
+  output_size: 256
+  aspect_ratio: square
+  min_subject_fraction: 0.50
+
+footswitch:
+  output_size: 512
+  aspect_ratio: square
+  min_subject_fraction: 0.55
+
+screen:
+  output_size: 512
+  aspect_ratio: any
+  min_subject_fraction: 0.50
+
+pedalboard:
+  output_size: 2048
+  aspect_ratio: wide
+  min_subject_fraction: 0.50

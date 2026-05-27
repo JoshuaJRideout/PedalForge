@@ -1,5 +1,6 @@
 #include "AudioGraphEngine.h"
 #include "../dsp/GraphPedalProcessor.h"
+#include "../dsp/CompanionPedalProcessor.h"
 #include "MidiRoutingNodes.h"
 #include "../pedals/PedalRegistry.h"
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -425,6 +426,13 @@ void AudioGraphEngine::autoRoutePedal (NodeID newNodeId)
 
     auto* newInst = getPedalInstance(newNodeId);
     if (!newInst || !newInst->onBoard) return;
+
+    // Companion pedals (displays, foot controllers) have no audio buses —
+    // there's nothing to route. Skip auto-routing so we don't attempt
+    // invalid connections to their non-existent channels.
+    if (auto* node = graph.getNodeForId (newNodeId))
+        if (dynamic_cast<CompanionPedalProcessor*> (node->getProcessor()) != nullptr)
+            return;
 
     // Find the left neighbor
     PedalInstance* leftNeighbor = nullptr;

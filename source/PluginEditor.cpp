@@ -4,6 +4,7 @@
 #include "dsp/ControlSurfaceSync.h"
 #include "pedals/PedalRegistry.h"
 #include "ui/PlayTabComponent.h"
+#include "peripherals/displays/modes/MidiMonitorMode.h"
 
 #if JucePlugin_Build_Standalone
 extern void OpenStandaloneAudioSettingsDialog();
@@ -159,6 +160,20 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     };
     
     turingRenderer = std::make_unique<TuringRenderer> (processorRef.getGraphEngine());
+
+    // New display subsystem. Attempts to open the Turing 3.5" V2 on
+    // startup; reconnects on hot-plug. MIDI monitor is the default mode
+    // until the per-display mode picker UI ships.
+    displayManager = std::make_unique<DisplayManager> (processorRef.getGraphEngine());
+
+    auto turing = std::make_unique<TuringDisplay>();
+    const bool turingOpened = turing->startConnection();
+    juce::ignoreUnused (turingOpened);
+    const juce::String turingID = turing->getDisplayID();
+    displayManager->attachDisplay (std::move (turing));
+
+    displayManager->registerMode (std::make_unique<MidiMonitorMode>());
+    displayManager->setActiveMode (turingID, "midi_monitor");
 
     grid.onOpenInventory = [this]
     {

@@ -1,0 +1,128 @@
+# Per-category VLM check prompts.
+#
+# The VLM is asked to inspect each image against the category's checks and
+# respond in a strict JSON shape so we can aggregate accept/reject decisions.
+#
+# Failure modes these are designed to catch (which pure CV cannot):
+#   - Wrong viewing angle (perspective, 3/4, bottom-up when we need top-down)
+#   - Visible internal parts that should be hidden inside an enclosure
+#   - Wrong style (illustration / cartoon when we need photorealistic)
+#   - Missing or wrong subject
+
+# Common preamble inserted into every prompt.
+preamble: |
+  You are inspecting an AI-generated image that will become a UI asset for a
+  digital guitar pedal plugin. The plugin renders pedals to look like real
+  hardware on screen, so the source images must look like clean product
+  photography of finished hardware — not in-progress builds, mechanical
+  diagrams, or stylised illustrations.
+
+  Evaluate the image against the checks below. Respond ONLY with a JSON object
+  in this exact shape (no markdown fences, no commentary):
+
+  {
+    "checks": {
+      "<check_name>": {"verdict": "PASS" or "FAIL", "reason": "<one short sentence>"}
+    },
+    "overall": "ACCEPT" or "REJECT" or "REVIEW",
+    "summary": "<one short sentence>"
+  }
+
+  Use REVIEW when the image is borderline — could work for the right pedal but
+  has notable issues a human should weigh in on. REJECT is for outright
+  failures.
+
+categories:
+
+  chassis:
+    description: "A complete guitar effect pedal viewed as a finished product."
+    checks:
+      viewing_angle: |
+        Is the camera positioned roughly above the pedal, looking down? An
+        orthographic or near-top-down angle is required. PERSPECTIVE, 3/4 view,
+        side-on, or bottom-up views FAIL. A small amount of foreshortening is
+        acceptable; a clearly tilted camera is not.
+      assembled: |
+        Is the pedal fully assembled? Visible internal components — PCBs, wires,
+        capacitor banks, potentiometer shafts, switch undersides, exposed
+        threading, or anything that should be inside a sealed enclosure — FAIL.
+        We need a finished product, not a build-in-progress.
+      isolation: |
+        Is the pedal the clear subject, isolated against a plain background?
+        Other props (hands, cables on the floor, other pedals, instruments)
+        FAIL unless they're far in the background and small.
+      style: |
+        Is it photorealistic product photography? Cartoon, illustration,
+        sketch, 3D render with obvious CGI tells, or stylised art FAIL.
+
+  knob:
+    description: "A single isolated knob cap."
+    checks:
+      viewing_angle: |
+        Is the knob viewed from directly above (top of the cap facing camera)?
+        Side-on, angled, or back-of-knob views FAIL.
+      assembled: |
+        Only the visible-when-installed portion is shown. The set-screw, shaft,
+        potentiometer body, or any wiring underneath FAIL. We need just the
+        cap as a user sees it on the pedal face.
+      isolation: |
+        One knob only, centered, on a plain background. Multiple knobs, knob
+        groupings, or busy backgrounds FAIL.
+
+  led:
+    description: "An indicator LED, in its installed (off) state."
+    checks:
+      viewing_angle: |
+        Is the LED viewed from directly above the dome? Side or angled views
+        FAIL.
+      assembled: |
+        Only the light-emitting dome and its bezel should be visible. The
+        plastic body below the bezel, the anode/cathode leads, the LED's
+        legs, or any solder pads FAIL — those are inside the enclosure.
+      state: |
+        The LED should be in its OFF state (dark, unlit). A glowing/illuminated
+        LED should FAIL — the in-app renderer adds the glow at runtime over a
+        dark base image.
+
+  footswitch:
+    description: "A 3PDT-style stomp switch button cap, in its installed state."
+    checks:
+      viewing_angle: |
+        Top-down. Side or angled views of the body FAIL.
+      assembled: |
+        Only the cap that the user steps on should be visible. The threaded
+        shaft, hex nut, lock washer, lugs (solder tabs), or wires FAIL — those
+        are inside the enclosure.
+      isolation: |
+        One switch only, centered, plain background.
+
+  screen:
+    description: "A small display panel (numeric, segmented, LCD, or graphic)."
+    checks:
+      viewing_angle: |
+        Viewed face-on (display surface facing camera). Angled views FAIL.
+      assembled: |
+        Only the bezel and display area. The PCB behind the screen, ribbon
+        cables, connectors FAIL.
+
+  pedalboard:
+    description: "A guitar pedalboard with multiple pedals arranged on it."
+    checks:
+      viewing_angle: |
+        Top-down or near top-down. Heavy perspective or bottom-up FAIL.
+      style: |
+        Photorealistic. Illustrations, cartoons FAIL.
+      composition: |
+        The board is the subject. Foreground objects, hands, performers, gig
+        scenes FAIL — we need a flat-lay-style product photo.
+
+  uncategorized:
+    description: "An image whose intended category isn't yet known."
+    checks:
+      viewing_angle: |
+        If it's a hardware component, it should be viewed top-down or face-on.
+        FAIL if it's clearly perspective/angled when it shouldn't be.
+      style: |
+        Photorealistic product photography preferred over illustration.
+      isolation: |
+        The subject should be clearly identifiable on a plain background.

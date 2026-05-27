@@ -5,6 +5,18 @@
 #include "../engine/StickyNoteData.h"
 
 //==============================================================================
+// Pedal kind — distinguishes audio pedals from companion (no-audio) ones.
+// Companion pedals (displays, foot controllers, etc.) are not inserted into
+// the JUCE AudioProcessorGraph; they only participate in the UI, mapping,
+// library and scripting surfaces.
+enum class PedalKind
+{
+    Audio = 0,     // default — processes audio
+    Midi  = 1,     // pure MIDI router / transformer, no audio I/O
+    Companion = 2  // no signal flow at all (Turing display, HDMI display, foot controller)
+};
+
+//==============================================================================
 /**
  * The complete, unified definition of a pedal.
  *
@@ -31,6 +43,7 @@ struct PedalDesign
     juce::StringArray tags;       // free-form tags, e.g. {"drive", "beginner", "tutorial"}
     int version = 1;
     bool isFactory = false;       // true = read-only, can't overwrite
+    PedalKind kind = PedalKind::Audio; // see enum above
 
     PedalDesign() : uuid (juce::Uuid().toString()) {}
 
@@ -154,6 +167,7 @@ struct PedalDesign
 
         root->setProperty ("version",     version);
         root->setProperty ("isFactory",   isFactory);
+        root->setProperty ("kind",        (int) kind);
         root->setProperty ("chassisW",  chassisW);
         root->setProperty ("chassisH",  chassisH);
         root->setProperty ("chassisColour", (juce::int64) chassisColour.getARGB());
@@ -307,6 +321,8 @@ struct PedalDesign
 
             design.version     = (int) root->getProperty ("version");
             design.isFactory   = (bool) root->getProperty ("isFactory");
+            if (root->hasProperty ("kind"))
+                design.kind = (PedalKind) (int) root->getProperty ("kind");
             design.chassisW    = (float)(double) root->getProperty ("chassisW");
             design.chassisH    = (float)(double) root->getProperty ("chassisH");
             if (root->hasProperty ("chassisColour"))

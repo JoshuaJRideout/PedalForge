@@ -89,6 +89,16 @@ target_sources(PedalForge PRIVATE
     source/ui/PlayTabComponent.cpp
     source/ui/TuringRenderer.cpp
     source/ui/MidiSettingsPanel.cpp
+
+    # Secondary display peripherals (Turing 3.5" V2 and future HDMI/etc.)
+    source/peripherals/displays/SecondaryDisplay.h
+    source/peripherals/displays/DisplayMode.h
+    source/peripherals/displays/DisplayManager.h
+    source/peripherals/displays/DisplayManager.cpp
+    source/peripherals/displays/TuringDisplay.h
+    source/peripherals/displays/TuringDisplay.cpp
+    source/peripherals/displays/modes/MidiMonitorMode.h
+    source/peripherals/displays/modes/MidiMonitorMode.cpp
     source/ui/BoardCanvas.h
     source/ui/BoardCanvas.cpp
     source/ui/PedalComponent.h

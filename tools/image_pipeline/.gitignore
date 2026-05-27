@@ -1,0 +1,5 @@
+# Intermediate outputs — only the curated assets in resources/images/processed/ ship.
+out/
+.venv/
+__pycache__/
+*.pyc

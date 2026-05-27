@@ -13,6 +13,8 @@
 #include "ui/CanvasOverlay.h"
 #include "ui/TuringRenderer.h"
 #include "ui/MidiSettingsPanel.h"
+#include "peripherals/displays/DisplayManager.h"
+#include "peripherals/displays/TuringDisplay.h"
 #include "ui/ScriptingTabComponent.h"
 #include "ui/WikiTabComponent.h"
 
@@ -95,6 +97,10 @@ private:
     std::function<void(const juce::File&)> activeFileCallback;
     
     std::unique_ptr<TuringRenderer> turingRenderer;
+
+    // New secondary-display subsystem. Drives the Turing 3.5" V2 via real
+    // USB-serial protocol; future displays attach to the same manager.
+    std::unique_ptr<DisplayManager> displayManager;
 
     static constexpr int toolbarHeight = 44;
 
