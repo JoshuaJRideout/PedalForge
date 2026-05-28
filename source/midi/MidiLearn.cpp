@@ -38,6 +38,32 @@ void MidiLearnManager::clearAllMappings()
     ccToParam.clear();
 }
 
+void MidiLearnManager::setMapping (const juce::String& paramId, int ccNumber, int channel)
+{
+    if (ccNumber < 0 || ccNumber > 127) return;
+    if (channel < 0 || channel > 16)    return;
+
+    // Clear any prior mapping for this param.
+    removeMapping (paramId);
+
+    // If something else already owns this CC/channel slot, evict it so the
+    // user's manual edit takes precedence (and doesn't leave a ghost).
+    const int key = ccNumber * 17 + channel;
+    auto existing = ccToParam.find (key);
+    if (existing != ccToParam.end() && existing->second != paramId)
+    {
+        mappings.erase (existing->second);
+        // ccToParam[key] will be overwritten below
+    }
+
+    MidiMapping m;
+    m.ccNumber = ccNumber;
+    m.channel  = channel;
+    m.paramId  = paramId;
+    mappings[paramId] = m;
+    ccToParam[key] = paramId;
+}
+
 int MidiLearnManager::getMappedCC (const juce::String& paramId) const
 {
     auto it = mappings.find (paramId);
@@ -65,11 +91,21 @@ void MidiLearnManager::processMidi (const juce::MidiBuffer& midiBuffer)
                 mapping.channel  = 0; // Omni
                 mapping.paramId  = learningParamId;
 
-                // Remove any existing mapping for this param
+                // Remove any existing mapping for the param we're (re)learning.
                 removeMapping (learningParamId);
 
+                // If THIS CC was already bound to some OTHER param, also
+                // clear that old binding so we don't leave an orphan.
+                // Previously this case left the old mapping in `mappings`
+                // even though `ccToParam` would be overwritten — the user
+                // saw a "re-learn" that silently broke the other binding.
+                const int key = cc * 17; // channel 0 omni
+                auto existing = ccToParam.find (key);
+                if (existing != ccToParam.end() && existing->second != learningParamId)
+                    mappings.erase (existing->second);
+
                 mappings[learningParamId] = mapping;
-                ccToParam[cc * 17] = learningParamId; // Channel 0 = omni
+                ccToParam[key] = learningParamId;
 
                 learning = false;
                 learningParamId = {};

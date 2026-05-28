@@ -154,7 +154,7 @@ public:
     }
 
     bool isControlSurface() const override { return true; }
-    juce::String getControlType() const override { return "switch"; }  // multi-position; rendered as switch until HardwareDrawing has a dedicated rotary selector
+    juce::String getControlType() const override { return "selector"; }
 };
 
 /**

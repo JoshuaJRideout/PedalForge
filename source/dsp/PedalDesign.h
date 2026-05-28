@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 #include <vector>
 #include "../engine/StickyNoteData.h"
+#include "../util/AppPaths.h"
 
 //==============================================================================
 // Pedal kind — distinguishes audio pedals from companion (no-audio) ones.
@@ -67,10 +68,17 @@ struct PedalDesign
         // Knob visual/interaction properties
         float rotationRange = 270.0f;   // visual arc in degrees (e.g. 270 = 7-o'clock to 5-o'clock)
         float sensitivity = 200.0f;     // pixels of vertical drag for a full 0→1 sweep
+        int   positions = 4;            // number of selectable positions for a rotary selector (2-16)
 
         // Custom UI properties
         juce::String imageMain;
         juce::String imageTrack;
+        // Per-state images for stateful controls (switch / footswitch / LED /
+        // selector / toggle). Indexed by state: imageStates[0] = OFF/state 0,
+        // imageStates[1] = ON/state 1, etc. The renderer picks the right
+        // image by mapping the control value to a state index. When empty
+        // (or the chosen state's path is empty) it falls back to imageMain.
+        juce::StringArray imageStates;
         juce::Colour customColour { juce::Colours::red };
         bool stretchImage = true;
         
@@ -171,7 +179,7 @@ struct PedalDesign
         root->setProperty ("chassisW",  chassisW);
         root->setProperty ("chassisH",  chassisH);
         root->setProperty ("chassisColour", (juce::int64) chassisColour.getARGB());
-        root->setProperty ("chassisImage", chassisImage);
+        root->setProperty ("chassisImage", pf::paths::normalizePath (chassisImage));
 
         // Controls
         juce::Array<juce::var> ctrlArr;
@@ -186,8 +194,14 @@ struct PedalDesign
             co->setProperty ("label",        c.label);
             co->setProperty ("controlID",    c.controlID);
             co->setProperty ("defaultValue", c.defaultValue);
-            co->setProperty ("imageMain",    c.imageMain);
-            co->setProperty ("imageTrack",   c.imageTrack);
+            co->setProperty ("imageMain",    pf::paths::normalizePath (c.imageMain));
+            co->setProperty ("imageTrack",   pf::paths::normalizePath (c.imageTrack));
+            if (! c.imageStates.isEmpty())
+            {
+                juce::Array<juce::var> isArr;
+                for (const auto& s : c.imageStates) isArr.add (pf::paths::normalizePath (s));
+                co->setProperty ("imageStates", isArr);
+            }
             co->setProperty ("customColour", (juce::int64) c.customColour.getARGB());
             if (c.stretchImage != true)
                 co->setProperty ("stretchImage", c.stretchImage);
@@ -199,6 +213,8 @@ struct PedalDesign
                 co->setProperty ("rotationRange", c.rotationRange);
             if (std::abs (c.sensitivity - 200.0f) > 0.01f)
                 co->setProperty ("sensitivity", c.sensitivity);
+            if (c.positions != 4)
+                co->setProperty ("positions", c.positions);
             co->setProperty ("isLocked", c.isLocked);
             if (c.overlayPage.isNotEmpty())
                 co->setProperty ("overlayPage", c.overlayPage);
@@ -327,7 +343,7 @@ struct PedalDesign
             design.chassisH    = (float)(double) root->getProperty ("chassisH");
             if (root->hasProperty ("chassisColour"))
                 design.chassisColour = juce::Colour ((juce::uint32)(juce::int64) root->getProperty ("chassisColour"));
-            design.chassisImage = root->getProperty ("chassisImage").toString();
+            design.chassisImage = pf::paths::expandPath (root->getProperty ("chassisImage").toString());
 
             // Controls
             if (auto* arr = root->getProperty ("controls").getArray())
@@ -345,14 +361,17 @@ struct PedalDesign
                         c.label        = co->getProperty ("label").toString();
                         c.controlID    = co->getProperty ("controlID").toString();
                         c.defaultValue = (float)(double) co->getProperty ("defaultValue");
-                        if (co->hasProperty("imageMain"))    c.imageMain    = co->getProperty ("imageMain").toString();
-                        if (co->hasProperty("imageTrack"))   c.imageTrack   = co->getProperty ("imageTrack").toString();
+                        if (co->hasProperty("imageMain"))    c.imageMain    = pf::paths::expandPath (co->getProperty ("imageMain").toString());
+                        if (co->hasProperty("imageTrack"))   c.imageTrack   = pf::paths::expandPath (co->getProperty ("imageTrack").toString());
+                        if (auto* isArr = co->getProperty ("imageStates").getArray())
+                            for (const auto& sv : *isArr) c.imageStates.add (pf::paths::expandPath (sv.toString()));
                         if (co->hasProperty("customColour")) c.customColour = juce::Colour ((juce::uint32)(juce::int64) co->getProperty ("customColour"));
                         if (co->hasProperty("stretchImage")) c.stretchImage = (bool) co->getProperty ("stretchImage");
                         if (co->hasProperty("fontFamily"))   c.fontFamily   = co->getProperty ("fontFamily").toString();
                         if (co->hasProperty("fontStyle"))    c.fontStyle    = (int) co->getProperty ("fontStyle");
                         if (co->hasProperty("rotationRange")) c.rotationRange = (float)(double) co->getProperty ("rotationRange");
                         if (co->hasProperty("sensitivity"))   c.sensitivity   = (float)(double) co->getProperty ("sensitivity");
+                        if (co->hasProperty("positions"))     c.positions     = (int) co->getProperty ("positions");
                         if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
                         if (co->hasProperty("overlayPage"))   c.overlayPage   = co->getProperty ("overlayPage").toString();
                         design.controls.push_back (c);

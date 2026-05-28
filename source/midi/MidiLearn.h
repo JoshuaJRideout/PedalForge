@@ -35,6 +35,11 @@ public:
     /** Remove a MIDI mapping for a parameter. */
     void removeMapping (const juce::String& paramId);
 
+    /** Manually create / replace a mapping (used by the MIDI tab's
+        edit affordances — change CC# or channel without re-learning).
+        Clears any other mapping that targeted the same CC+channel. */
+    void setMapping (const juce::String& paramId, int ccNumber, int channel);
+
     /** Clear all MIDI mappings. */
     void clearAllMappings();
 

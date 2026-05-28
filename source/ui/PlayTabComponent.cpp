@@ -1,5 +1,7 @@
 #include "PlayTabComponent.h"
 #include "LookAndFeel.h"
+#include "ToastOverlay.h"
+#include "../util/AppPaths.h"
 #include "../pedals/PedalRegistry.h"
 #include "../dsp/GraphPedalProcessor.h"
 #include "../dsp/PedalDesign.h"
@@ -217,6 +219,34 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
 
     startTimerHz (10);
     rebuildSlots();
+
+    // First-launch onboarding: if we've never welcomed this user before
+    // AND the chain is empty, drop the "Classic Rock" demo preset in so
+    // they immediately have something to hear and tweak. The sentinel
+    // file is created in the app support dir so this only fires once.
+    {
+        auto sentinel = pf::paths::getFirstRunSentinel();
+        sentinel.getParentDirectory().createDirectory();
+        const bool emptyChain = [this]
+        {
+            for (const auto& inst : playEngine.getPedalInstances())
+                if (inst.boardId == "play_board") return false;
+            return true;
+        }();
+        if (! sentinel.existsAsFile() && emptyChain)
+        {
+            sentinel.create();
+            // Defer so the rest of the UI finishes building before the
+            // preset load triggers slot rebuilds + the welcome toast.
+            juce::MessageManager::callAsync ([this]
+            {
+                loadPreset ("Classic Rock");
+                presetMenu.setText ("Classic Rock", juce::dontSendNotification);
+                pf::toastInfo ("Welcome to PedalForge — loaded the Classic Rock demo. "
+                               "Click any slot, or press Tab to swap pedals.");
+            });
+        }
+    }
 
     notesOverlay.setNotes (playEngine.playNotes);
     addChildComponent (notesOverlay);
@@ -838,7 +868,36 @@ void PlayTabComponent::loadPreset (const juce::String& presetName)
         addToSlot (4, "Delay");
         addToSlot (5, "Reverb");
     }
-    
+    else if (presetName == "Blues Crunch")
+    {
+        addToSlot (0, "Compressor");
+        addToSlot (1, "Overdrive");
+        addToSlot (2, "Cabinet Sim");
+        addToSlot (5, "Reverb");
+    }
+    else if (presetName == "Funk Wah Clean")
+    {
+        addToSlot (0, "Compressor");
+        addToSlot (1, "Wah");
+        addToSlot (3, "Chorus");
+        addToSlot (5, "Reverb");
+    }
+    else if (presetName == "Worship Ambient")
+    {
+        addToSlot (0, "Compressor");
+        addToSlot (1, "Overdrive");
+        addToSlot (3, "Chorus");
+        addToSlot (4, "Delay");
+        addToSlot (5, "Reverb");
+    }
+    else if (presetName == "Country Slap")
+    {
+        addToSlot (0, "Compressor");
+        addToSlot (2, "Cabinet Sim");
+        addToSlot (4, "Delay");
+        addToSlot (5, "Reverb");
+    }
+
     rebuildSlots();
 }
 
@@ -857,10 +916,7 @@ void PlayTabComponent::visibilityChanged()
 
 juce::File PlayTabComponent::presetsDir()
 {
-    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                   .getChildFile ("PedalForge").getChildFile ("playpresets");
-    dir.createDirectory();
-    return dir;
+    return pf::paths::getPlayPresetsDir();
 }
 
 void PlayTabComponent::rebuildPresetMenu()
@@ -869,10 +925,14 @@ void PlayTabComponent::rebuildPresetMenu()
     userPresets.clear();
 
     // Built-in presets first
-    presetMenu.addItem ("Clean & Space",   1);
-    presetMenu.addItem ("Classic Rock",    2);
-    presetMenu.addItem ("High Gain Lead",  3);
-    presetMenu.addItem ("Ambient Shimmer", 4);
+    presetMenu.addItem ("Clean & Space",     1);
+    presetMenu.addItem ("Classic Rock",      2);
+    presetMenu.addItem ("High Gain Lead",    3);
+    presetMenu.addItem ("Ambient Shimmer",   4);
+    presetMenu.addItem ("Blues Crunch",      5);
+    presetMenu.addItem ("Funk Wah Clean",    6);
+    presetMenu.addItem ("Worship Ambient",   7);
+    presetMenu.addItem ("Country Slap",      8);
 
     // User-saved presets — scan ~/Library/PedalForge/playpresets/
     auto dir = presetsDir();

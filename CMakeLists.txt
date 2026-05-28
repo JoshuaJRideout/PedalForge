@@ -89,6 +89,13 @@ target_sources(PedalForge PRIVATE
     source/ui/PlayTabComponent.cpp
     source/ui/TuringRenderer.cpp
     source/ui/MidiSettingsPanel.cpp
+    source/ui/ToastOverlay.h
+    source/ui/ToastOverlay.cpp
+    source/ui/AudioStatusBar.h
+    source/ui/AudioStatusBar.cpp
+    source/util/AppPaths.h
+    source/util/SnapshotManager.h
+    source/util/SnapshotManager.cpp
 
     # Secondary display peripherals (Turing 3.5" V2 and future HDMI/etc.)
     source/peripherals/displays/SecondaryDisplay.h

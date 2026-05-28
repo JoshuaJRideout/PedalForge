@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DSPNode.h"
+#include "../util/AppPaths.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 class PluginHostNode : public DSPNode
@@ -32,9 +33,7 @@ public:
         static bool initialized = false;
         if (!initialized)
         {
-            juce::File listFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                    .getChildFile("PedalForge")
-                                    .getChildFile("KnownPlugins.xml");
+            juce::File listFile = pf::paths::getRoot().getChildFile ("KnownPlugins.xml");
             if (auto xml = juce::parseXML(listFile))
                 pluginList.recreateFromXml(*xml);
             initialized = true;
@@ -44,9 +43,7 @@ public:
 
     static void saveKnownPluginList()
     {
-        juce::File listFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                .getChildFile("PedalForge")
-                                .getChildFile("KnownPlugins.xml");
+        juce::File listFile = pf::paths::getRoot().getChildFile ("KnownPlugins.xml");
         listFile.getParentDirectory().createDirectory();
         if (auto xml = getKnownPluginList().createXml())
             xml->writeTo(listFile);

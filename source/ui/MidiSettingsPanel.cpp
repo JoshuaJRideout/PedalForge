@@ -1,5 +1,6 @@
 #include "MidiSettingsPanel.h"
 #include "LookAndFeel.h"
+#include "ToastOverlay.h"
 
 //==============================================================================
 MidiSettingsPanel::MidiSettingsPanel (AudioGraphEngine& eng) : engine(eng)
@@ -409,6 +410,20 @@ void MidiSettingsPanel::refresh()
 }
 
 //==============================================================================
+void MidiSettingsPanel::commitBindingEdit (BindingRow* row)
+{
+    if (row == nullptr || row->manager == nullptr) return;
+    const int cc = juce::jlimit (0, 127, row->ccInput.getText().getIntValue());
+    const int ch = juce::jlimit (0, 16,  row->channelInput.getText().getIntValue());
+    row->manager->setMapping (row->paramId, cc, ch);
+    pf::toastInfo ("Updated binding — " + row->paramId
+                   + " → CC " + juce::String (cc)
+                   + (ch == 0 ? " (Omni)" : " ch " + juce::String (ch)));
+    rebuildBindings();
+    resized();
+    repaint();
+}
+
 void MidiSettingsPanel::rebuildBindings()
 {
     // Clear old sections
@@ -418,7 +433,9 @@ void MidiSettingsPanel::rebuildBindings()
         for (auto& row : section->rows)
         {
             contentComponent->removeChildComponent (&row->paramLabel);
-            contentComponent->removeChildComponent (&row->ccLabel);
+            contentComponent->removeChildComponent (&row->ccInput);
+            contentComponent->removeChildComponent (&row->channelInput);
+            contentComponent->removeChildComponent (&row->relearnBtn);
             contentComponent->removeChildComponent (&row->deleteBtn);
         }
     }
@@ -459,14 +476,48 @@ void MidiSettingsPanel::rebuildBindings()
             row->paramLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textPrimary);
             contentComponent->addAndMakeVisible (row->paramLabel);
 
-            juce::String ccText = "CC " + juce::String(mapping.ccNumber);
-            if (mapping.channel > 0) ccText += "  Ch " + juce::String(mapping.channel);
-            else ccText += "  (Omni)";
-            
-            row->ccLabel.setText (ccText, juce::dontSendNotification);
-            row->ccLabel.setFont (juce::FontOptions (12.0f));
-            row->ccLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textSecondary);
-            contentComponent->addAndMakeVisible (row->ccLabel);
+            row->paramId = paramId;
+            row->manager = mgr;
+
+            // Editable CC# input
+            row->ccInput.setText (juce::String (mapping.ccNumber), juce::dontSendNotification);
+            row->ccInput.setInputRestrictions (3, "0123456789");
+            row->ccInput.setJustification (juce::Justification::centred);
+            row->ccInput.setFont (juce::FontOptions (12.0f));
+            row->ccInput.setColour (juce::TextEditor::textColourId, PedalForgeLookAndFeel::textPrimary);
+            // On commit (Enter or focus loss), apply via setMapping.
+            {
+                auto* r = row.get();
+                row->ccInput.onReturnKey = [this, r] { commitBindingEdit (r); };
+                row->ccInput.onFocusLost = [this, r] { commitBindingEdit (r); };
+            }
+            contentComponent->addAndMakeVisible (row->ccInput);
+
+            // Editable channel input (0 = Omni)
+            row->channelInput.setText (juce::String (mapping.channel), juce::dontSendNotification);
+            row->channelInput.setInputRestrictions (2, "0123456789");
+            row->channelInput.setJustification (juce::Justification::centred);
+            row->channelInput.setFont (juce::FontOptions (12.0f));
+            row->channelInput.setColour (juce::TextEditor::textColourId, PedalForgeLookAndFeel::textPrimary);
+            {
+                auto* r = row.get();
+                row->channelInput.onReturnKey = [this, r] { commitBindingEdit (r); };
+                row->channelInput.onFocusLost = [this, r] { commitBindingEdit (r); };
+            }
+            contentComponent->addAndMakeVisible (row->channelInput);
+
+            // Relearn ⟳
+            row->relearnBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent.withAlpha (0.18f));
+            row->relearnBtn.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::accent);
+            row->relearnBtn.setTooltip ("Re-learn this binding (press a control on your MIDI device)");
+            {
+                auto paramCopy = paramId;
+                row->relearnBtn.onClick = [this, paramCopy, mgr] {
+                    mgr->startLearning (paramCopy);
+                    pf::toastInfo ("Move a CC on your MIDI controller to bind it to: " + paramCopy);
+                };
+            }
+            contentComponent->addAndMakeVisible (row->relearnBtn);
 
             row->deleteBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::danger.withAlpha(0.2f));
             row->deleteBtn.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::danger);
@@ -572,9 +623,15 @@ void MidiSettingsPanel::resized()
 
         for (auto& row : section->rows)
         {
-            row->paramLabel.setBounds (m + 8, y, contentW / 2 - 40, 22);
-            row->ccLabel.setBounds (m + contentW / 2 - 24, y, 120, 22);
-            row->deleteBtn.setBounds (m + contentW - 40, y, 24, 22);
+            // Param name takes the left half; CC# + Ch + ⟳ + X stack on the right.
+            const int rowRight = m + contentW;
+            const int btnW = 28;
+            const int gap  = 4;
+            row->deleteBtn.setBounds  (rowRight - btnW,                                 y, btnW, 22);
+            row->relearnBtn.setBounds (rowRight - btnW * 2 - gap,                       y, btnW, 22);
+            row->channelInput.setBounds (rowRight - btnW * 2 - gap - 36 - gap,          y, 36,   22);
+            row->ccInput.setBounds      (rowRight - btnW * 2 - gap - 36 - gap - 40 - gap, y, 40,  22);
+            row->paramLabel.setBounds (m + 8, y, row->ccInput.getX() - (m + 16), 22);
             y += 28;
         }
         y += 4;

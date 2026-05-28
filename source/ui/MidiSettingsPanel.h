@@ -74,8 +74,12 @@ private:
     struct BindingRow
     {
         juce::Label paramLabel;
-        juce::Label ccLabel;
-        juce::TextButton deleteBtn { "X" };
+        juce::TextEditor ccInput;        // editable CC number
+        juce::TextEditor channelInput;   // editable channel (0=Omni)
+        juce::TextButton relearnBtn { juce::CharPointer_UTF8 ("\xe2\x9f\xb3") };  // ⟳
+        juce::TextButton deleteBtn  { "X" };
+        juce::String paramId;            // captured for the callbacks
+        MidiLearnManager* manager = nullptr;
     };
 
     struct BindingSection
@@ -89,6 +93,7 @@ private:
     std::vector<std::unique_ptr<BindingSection>> bindingSections;
 
     void rebuildBindings();
+    void commitBindingEdit (struct BindingRow* row);
     int lastBindingCount = 0;
 
     // ── MIDI Monitor UI ──

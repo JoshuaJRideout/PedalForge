@@ -62,6 +62,7 @@ private:
 
     juce::TextEditor searchBox;
     juce::TextButton importBtn  { "Import" };
+    juce::TextButton snapshotBtn { juce::CharPointer_UTF8 ("\xe2\x9d\x84 Snapshot") };  // ❄
     juce::ComboBox subcategoryCombo;
     juce::TextButton newCategoryBtn { "+ Category" };
 
@@ -206,6 +207,12 @@ private:
 
     std::unique_ptr<juce::FileChooser> fileChooser;
     std::unique_ptr<juce::FileChooser> exportChooser;
+
+    // Snapshot (#62) — export/import the entire data root as a single
+    // portable .pfsnapshot. Disaster recovery, USB-portability, etc.
+    void exportSnapshotFlow();
+    void importSnapshotFlow();
+    std::unique_ptr<juce::FileChooser> snapshotChooser;
 
     // Image thumbnail cache
     std::map<juce::String, juce::Image> thumbnailCache;

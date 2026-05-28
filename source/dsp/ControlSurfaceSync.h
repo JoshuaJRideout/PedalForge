@@ -36,18 +36,28 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
     // ButtonNode → "pressed", ToggleNode → "state", etc.). We use the node's
     // first declared param, since control-surface nodes by convention put the
     // user-facing value first.
-    struct Snap { int id; juce::String type; juce::String label; juce::String primaryParam; };
+    struct Snap { int id; juce::String type; juce::String label; juce::String primaryParam; int positions; };
     std::vector<Snap> ctrlNodes;
-    std::set<int> validNodeIDs;
+    std::set<int> validNodeIDs;     // control-surface nodes only
+    std::set<int> allNodeIDs;       // every live node — for user-mapping orphan detection
     for (const auto& [nid, node] : graph.getNodes())
     {
+        if (node) allNodeIDs.insert (nid);
         if (node && node->isControlSurface())
         {
             auto t = node->getControlType();
             if (t.isEmpty()) continue;
             const auto& params = node->getParams();
             if (params.empty()) continue;
-            ctrlNodes.push_back ({ nid, t, node->getName(), params[0].id });
+            // For selectors, pull the "positions" param so the face control
+            // knows how many ticks to draw.
+            int positions = 4;
+            if (t == "selector")
+            {
+                if (auto* posParam = node->getParam ("positions"))
+                    positions = juce::jlimit (2, 16, (int) posParam->get());
+            }
+            ctrlNodes.push_back ({ nid, t, node->getName(), params[0].id, positions });
             validNodeIDs.insert (nid);
         }
     }
@@ -81,6 +91,23 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
                 }),
             design.controls.end());
     }
+
+    // 2b. Also clean USER-placed mappings whose referenced DSP node is gone.
+    //    Previously these survived silently — the audit's "orphaned mappings
+    //    cause silent failures" case. We drop the mapping (so it stops
+    //    being applied) but keep the user-placed control so the user can
+    //    re-wire it.
+    design.mappings.erase (
+        std::remove_if (design.mappings.begin(), design.mappings.end(),
+            [&] (const PedalDesign::Mapping& m)
+            {
+                if (isAutoManaged (m.controlID)) return false;  // handled above
+                int us = m.nodeParam.indexOfChar ('_');
+                if (us <= 0) return false;
+                int nid = m.nodeParam.substring (0, us).getIntValue();
+                return allNodeIDs.count (nid) == 0;
+            }),
+        design.mappings.end());
 
     // 3. For each control-surface node, ensure there's a Control + Mapping.
     //    We compute a simple grid layout for fresh ones; existing auto-controls
@@ -118,6 +145,8 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
         // Sensible defaults per type
         if      (c.type == "knob" || c.type == "switch" || c.type == "led" || c.type == "footswitch")
         { c.width = 40; c.height = 40; }
+        else if (c.type == "selector")
+        { c.width = 56; c.height = 56; c.positions = cn.positions; }
         else if (c.type == "fader")
         { c.width = 30; c.height = 120; }
         else

@@ -25,8 +25,10 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     titleLabel.setColour (juce::Label::textColourId, PedalForgeLookAndFeel::textPrimary);
     addAndMakeVisible (titleLabel);
 
-    // Tabs — all in one radio group
-    for (auto* tab : { &tabPlay, &tabBoard, &tabRoute, &tabPedal, &tabFX, &tabScript, &tabWiki, &tabLibrary, &tabStore, &tabMidi })
+    // Tabs — all in one radio group. The Store tab is hidden until §6
+    // ships content; without backend or content it's a dead click that
+    // confuses new users.
+    for (auto* tab : { &tabPlay, &tabBoard, &tabRoute, &tabPedal, &tabFX, &tabScript, &tabWiki, &tabLibrary, &tabMidi })
     {
         tab->setRadioGroupId (1);
         tab->setClickingTogglesState (true);
@@ -195,6 +197,45 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     };
 
     addChildComponent (canvasOverlay);
+    // Toast overlay is always visible (it just paints nothing when empty)
+    // and sits above every other tab so messages aren't obscured.
+    addAndMakeVisible (toastOverlay);
+
+    // Always-visible audio status strip at the bottom.
+    audioStatusBar = std::make_unique<AudioStatusBar> (processorRef);
+    addAndMakeVisible (*audioStatusBar);
+
+    // Crash recovery (#52): if a recovery file is sitting around it means
+    // the previous run didn't shut down cleanly. Offer to restore.
+    // Deferred so the editor finishes constructing before the modal pops.
+    if (processorRef.hasPendingRecovery())
+    {
+        juce::MessageManager::callAsync ([this]
+        {
+            juce::AlertWindow::showOkCancelBox (
+                juce::MessageBoxIconType::WarningIcon,
+                "Recover unsaved work?",
+                "PedalForge didn't shut down cleanly last time. A recovery file was found. "
+                "Restore your last autosaved state?",
+                "Restore",
+                "Discard",
+                this,
+                juce::ModalCallbackFunction::create ([this] (int result)
+                {
+                    if (result == 1)
+                    {
+                        auto state = processorRef.loadRecoveryState();
+                        if (state.isNotEmpty())
+                        {
+                            processorRef.getPresetManager().restoreState (state);
+                            pf::toastInfo ("Restored last autosaved state.");
+                        }
+                    }
+                    // Either way, clear the file so we don't prompt again next launch.
+                    processorRef.clearRecoveryFile();
+                }));
+        });
+    }
     
     canvasOverlay.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
     {
@@ -460,7 +501,8 @@ void PedalForgeEditor::resized()
     btnTestSound.setBounds (toolbar.removeFromLeft (90).reduced (4, 6));
    
     // Tabs (right-aligned)
-    tabStore.setBounds   (toolbar.removeFromRight (80).reduced (4, 6));
+    // Store tab hidden until §6 ships content (see PluginEditor constructor).
+    // tabStore.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
     tabLibrary.setBounds (toolbar.removeFromRight (80).reduced (4, 6));
     tabMidi.setBounds    (toolbar.removeFromRight (60).reduced (4, 6));
     tabWiki.setBounds    (toolbar.removeFromRight (60).reduced (4, 6));
@@ -471,8 +513,12 @@ void PedalForgeEditor::resized()
     tabBoard.setBounds   (toolbar.removeFromRight (70).reduced (4, 6));
     tabPlay.setBounds    (toolbar.removeFromRight (70).reduced (4, 6));
 
+    // Reserve a slim strip at the bottom for the audio I/O status bar.
+    if (audioStatusBar != nullptr)
+        audioStatusBar->setBounds (bounds.removeFromBottom (audioStatusBarHeight));
+
     auto contentBounds = bounds;
-    
+
     if (playTab) playTab->setBounds (contentBounds);
     grid.setBounds (contentBounds);
     if (routingEditor) routingEditor->setBounds (contentBounds);
@@ -486,6 +532,7 @@ void PedalForgeEditor::resized()
     inventory.setBounds (getLocalBounds());
     libraryOverlay.setBounds (getLocalBounds());
     canvasOverlay.setBounds (getLocalBounds());
+    toastOverlay.setBounds (getLocalBounds());
 }
 
 //==============================================================================

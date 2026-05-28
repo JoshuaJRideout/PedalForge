@@ -1,5 +1,6 @@
 #include "InventoryOverlay.h"
 #include "LookAndFeel.h"
+#include "../util/AppPaths.h"
 #include <algorithm>
 #include "HardwareDrawing.h"
 #include "PedalPainter.h"
@@ -197,8 +198,7 @@ void InventoryOverlay::ItemGrid::GridCell::mouseDown (const juce::MouseEvent& e)
         {
             if (result == 1 && item.mainCategory == "Pedals" && item.pedalDesign != nullptr)
             {
-                auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                                      .getChildFile ("PedalForge").getChildFile ("designs");
+                auto designsDir = pf::paths::getDesignsDir();
                 auto targetUuid = item.pedalDesign->uuid;
                 for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
                 {
@@ -520,8 +520,7 @@ void InventoryOverlay::buildItemDatabase()
     }
 
     // User-designed pedals
-    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge").getChildFile ("designs");
+    auto designsDir = pf::paths::getDesignsDir();
     if (designsDir.isDirectory())
     {
         for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
@@ -560,6 +559,7 @@ void InventoryOverlay::buildItemDatabase()
     PartDef parts[] = {
         { "knob",        "Knob",        "Controls",    "Rotary potentiometer control. Maps to a continuous parameter (0-1)." },
         { "switch",      "Switch",      "Controls",    "Toggle switch. Maps to a binary on/off parameter." },
+        { "selector",    "Selector",    "Controls",    "Rotary multi-position selector. Pairs with a Selector Node; defaults to 4 positions." },
         { "fader",       "Fader",       "Controls",    "Linear slider control. Maps to a continuous parameter (0-1)." },
         { "footswitch",  "Stomp",       "Controls",    "3PDT footswitch for bypass/engage control." },
         { "led",         "LED",         "Lights",      "Single-color LED indicator." },
@@ -576,6 +576,8 @@ void InventoryOverlay::buildItemDatabase()
         { "graphic",     "Graphic",     "Decoration",  "Custom image layer (supports transparency)." },
         { "vu_meter",    "VU Meter",    "Instruments", "Analog-style VU level meter." },
         { "oscilloscope","Scope",       "Instruments", "Mini oscilloscope waveform display." },
+        { "pixel_display","Pixel Grid", "Screens",     "Pixel matrix display. Maps to a control signal driving each pixel." },
+        { "library_loader","Library",   "Controls",    "Button that opens the Library overlay to select a NAM/IR/Image asset." },
     };
 
     for (auto& p : parts)

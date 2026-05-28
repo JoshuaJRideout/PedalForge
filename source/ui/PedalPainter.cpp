@@ -89,6 +89,8 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         styles.customColour = ctrl.customColour;
         styles.imageMain = ctrl.imageMain;
         styles.imageTrack = ctrl.imageTrack;
+        styles.imageStates = ctrl.imageStates;
+        styles.positions = ctrl.positions;
         styles.stretchImage = ctrl.stretchImage;
         styles.fontFamily = ctrl.fontFamily;
         styles.fontStyle = ctrl.fontStyle;
@@ -98,6 +100,8 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
             HardwareDrawing::drawKnob (g, ctrlBounds, val, &styles);
         else if (ctrl.type == "switch")
             HardwareDrawing::drawSwitch (g, ctrlBounds, val, &styles);
+        else if (ctrl.type == "selector")
+            HardwareDrawing::drawSelector (g, ctrlBounds, val, &styles);
         else if (ctrl.type == "footswitch")
             HardwareDrawing::drawFootswitch (g, ctrlBounds, val, &styles);
         else if (ctrl.type == "led")

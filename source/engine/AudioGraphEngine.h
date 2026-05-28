@@ -266,6 +266,12 @@ private:
     std::vector<juce::String> undoStack;
     std::vector<juce::String> redoStack;
     static constexpr size_t maxUndoDepth = 50;
+    // Soft memory cap on undo+redo combined. Each state is the full
+    // serialized graph JSON; a complex board can easily exceed 1 MB per
+    // step, so 50 steps × 5 MB ≈ 250 MB. Prune oldest states first when
+    // over budget — preserves the most recent edits the user is likely
+    // to undo.
+    static constexpr size_t maxUndoMemoryBytes = 256ull * 1024ull * 1024ull;
     bool isRestoringState = false;
 
     double currentSampleRate = 44100.0;

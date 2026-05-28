@@ -2,6 +2,7 @@
 #include "PedalPainter.h"
 #include "LookAndFeel.h"
 #include "../dsp/PedalDesign.h"
+#include "../util/AppPaths.h"
 
 //==============================================================================
 // PaletteItem — mini pedal thumbnail using shared PedalPainter
@@ -64,8 +65,7 @@ void PedalPalette::PaletteItem::mouseDown (const juce::MouseEvent& e)
                 if (result == 1)
                 {
                     // Find the JSON file that matches this design
-                    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                                          .getChildFile ("PedalForge").getChildFile ("designs");
+                    auto designsDir = pf::paths::getDesignsDir();
                     
                     for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
                     {
@@ -171,8 +171,7 @@ void PedalPalette::resized()
 
 void PedalPalette::loadUserDesigns()
 {
-    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge").getChildFile ("designs");
+    auto designsDir = pf::paths::getDesignsDir();
     if (! designsDir.isDirectory()) return;
 
     for (const auto& file : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))

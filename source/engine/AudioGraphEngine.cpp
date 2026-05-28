@@ -1330,6 +1330,19 @@ void AudioGraphEngine::saveUndoState()
 
     if (undoStack.size() > maxUndoDepth)
         undoStack.erase (undoStack.begin());
+
+    // Memory bound: prune oldest states until under the soft cap. We
+    // measure both stacks combined because redo entries also live in
+    // RAM. Recomputing total each call is fine (max 50 small strings).
+    auto totalBytes = [this]
+    {
+        size_t b = 0;
+        for (const auto& s : undoStack) b += (size_t) s.getNumBytesAsUTF8();
+        for (const auto& s : redoStack) b += (size_t) s.getNumBytesAsUTF8();
+        return b;
+    };
+    while (undoStack.size() > 1 && totalBytes() > maxUndoMemoryBytes)
+        undoStack.erase (undoStack.begin());
 }
 
 bool AudioGraphEngine::undo()

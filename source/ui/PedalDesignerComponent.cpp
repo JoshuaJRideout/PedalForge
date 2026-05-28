@@ -2,6 +2,7 @@
 #include "HardwareDrawing.h"
 #include "../dsp/DSPGraph.h"
 #include "../dsp/PedalDesign.h"
+#include "../util/AppPaths.h"
 
 //==============================================================================
 struct PlacedHardware
@@ -17,6 +18,7 @@ struct PlacedHardware
     // Custom UI properties
     juce::String imageMain;       // Path to custom main image (knob body, switch, LED, fader thumb)
     juce::String imageTrack;      // Path to track/background image (fader slot)
+    juce::StringArray imageStates;// Per-state images (state 0/1/2/…); falls back to imageMain
     juce::Colour customColour { juce::Colours::red }; // Color for LED glow
     bool stretchImage = true;     // Whether to stretch image or keep aspect ratio
     juce::String fontFamily = "Sans";
@@ -25,6 +27,7 @@ struct PlacedHardware
     // Knob visual/interaction properties
     float rotationRange = 270.0f; // visual arc in degrees
     float sensitivity = 200.0f;   // pixels of drag for full sweep
+    int   positions = 4;          // number of positions for rotary selector (2-16)
     
     bool isLocked = false;        // prevents dragging and selection on canvas
     juce::String overlayPage;     // target page for overlay_launcher
@@ -188,9 +191,7 @@ public:
         PedalDesign design = buildPedalDesign (pedalFaceBackupPtr);
 
         // Save to designs directory
-        auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                              .getChildFile ("PedalForge").getChildFile ("designs");
-        designsDir.createDirectory();
+        auto designsDir = pf::paths::getDesignsDir();
 
         auto file = designsDir.getChildFile (pedalName.replace (" ", "_") + ".json");
         design.saveToFile (file);
@@ -274,6 +275,8 @@ public:
                 ctrl.defaultValue = hw.value;
                 ctrl.imageMain = hw.imageMain;
                 ctrl.imageTrack = hw.imageTrack;
+                ctrl.imageStates = hw.imageStates;
+                ctrl.positions = hw.positions;
                 ctrl.customColour = hw.customColour;
                 ctrl.stretchImage = hw.stretchImage;
                 ctrl.fontFamily = hw.fontFamily;
@@ -431,6 +434,8 @@ public:
             HardwareDrawing::CustomStyles styles;
             styles.imageMain = hw.imageMain;
             styles.imageTrack = hw.imageTrack;
+            styles.imageStates = hw.imageStates;
+            styles.positions = hw.positions;
             styles.customColour = hw.customColour;
             styles.stretchImage = hw.stretchImage;
 
@@ -1276,6 +1281,8 @@ public:
 
         setupButton (btnImageMain, [this] { pickImage (true); });
         setupButton (btnImageTrack, [this] { pickImage (false); });
+        setupButton (btnImageOff,   [this] { pickStateImage (0); });
+        setupButton (btnImageOn,    [this] { pickStateImage (1); });
         setupButton (btnClearImage, [this] { clearImage(); });
 
         // Knob-specific editors
@@ -1285,12 +1292,22 @@ public:
         setupCombo (overlayPageCombo);
     }
 
+    // Default starting location for image pickers — the user's already-
+    // imported Library/Images folder. Falls back to home if it doesn't
+    // exist yet (first-run case).
+    static juce::File imagePickerStartDir()
+    {
+        auto lib = pf::paths::getImagesDir();
+        return lib.isDirectory() ? lib
+                                 : juce::File::getSpecialLocation (juce::File::userHomeDirectory);
+    }
+
     void pickImage (bool isMain)
     {
         if (canvas == nullptr) return;
 
         fileChooser = std::make_unique<juce::FileChooser> (
-            "Select an image file...", juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+            "Select an image file...", imagePickerStartDir(),
             "*.png;*.jpg;*.jpeg");
 
         auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
@@ -1322,12 +1339,34 @@ public:
         {
             hw->imageMain = "";
             hw->imageTrack = "";
+            hw->imageStates.clear();
         }
         else
         {
             canvas->chassisImage = "";
         }
         canvas->notifyHardwareChanged();
+    }
+
+    void pickStateImage (int stateIndex)
+    {
+        if (canvas == nullptr) return;
+        fileChooser = std::make_unique<juce::FileChooser> (
+            "Select an image for state " + juce::String (stateIndex) + "...",
+            imagePickerStartDir(),
+            "*.png;*.jpg;*.jpeg");
+
+        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        fileChooser->launchAsync (flags, [this, stateIndex] (const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (! file.existsAsFile()) return;
+            auto* hw = canvas->getSelectedHardware();
+            if (hw == nullptr) return;
+            while (hw->imageStates.size() <= stateIndex) hw->imageStates.add ("");
+            hw->imageStates.set (stateIndex, file.getFullPathName());
+            canvas->notifyHardwareChanged();
+        });
     }
 
     void setCanvas (ChassisCanvas* c) { canvas = c; }
@@ -1396,6 +1435,11 @@ public:
                 btnImageMain.setVisible (!isLabel);
                 btnImageMain.setButtonText ("Set Image...");
                 btnImageTrack.setVisible (showTrack);
+                const bool isBinaryStateful = (hwPtr->type == "switch"
+                                            || hwPtr->type == "footswitch"
+                                            || hwPtr->type == "led");
+                btnImageOff.setVisible (isBinaryStateful);
+                btnImageOn .setVisible (isBinaryStateful);
                 btnClearImage.setVisible (!isLabel);
 
                 fontStyleCombo.setVisible (isLabel);
@@ -1446,6 +1490,8 @@ public:
             btnImageMain.setVisible (true);
             btnImageMain.setButtonText ("Set Chassis Image...");
             btnImageTrack.setVisible (false);
+            btnImageOff.setVisible (false);
+            btnImageOn.setVisible (false);
             btnClearImage.setVisible (true);
 
             fontStyleCombo.setVisible (false);
@@ -1464,6 +1510,8 @@ public:
             paramCombo.setVisible (false);
             btnImageMain.setVisible (false);
             btnImageTrack.setVisible (false);
+            btnImageOff.setVisible (false);
+            btnImageOn.setVisible (false);
             btnClearImage.setVisible (false);
             fontStyleCombo.setVisible (false);
             fontFamilyCombo.setVisible (false);
@@ -1678,7 +1726,15 @@ public:
             else
             {
                 btnImageMain.setBounds (m, y, getWidth()-m*2, 24); y += 30;
-                btnImageTrack.setBounds (m, y, getWidth()-m*2, 24); y += 30;
+                btnImageTrack.setBounds (m, y, getWidth()-m*2, 24);
+                if (btnImageTrack.isVisible()) y += 30;
+                if (btnImageOff.isVisible() || btnImageOn.isVisible())
+                {
+                    const int half = (getWidth() - m*2 - 4) / 2;
+                    btnImageOff.setBounds (m,            y, half, 24);
+                    btnImageOn .setBounds (m + half + 4, y, half, 24);
+                    y += 30;
+                }
                 colourCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
                 btnClearImage.setBounds (m, y, getWidth()-m*2, 24); y += 32;
 
@@ -1825,6 +1881,8 @@ private:
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
+    juce::TextButton btnImageOff   { "Set OFF Image..." };
+    juce::TextButton btnImageOn    { "Set ON Image..." };
     juce::TextButton btnClearImage { "Clear Images" };
     juce::TextEditor rotationEditor, sensitivityEditor;
     std::unique_ptr<juce::FileChooser> fileChooser;
@@ -2628,6 +2686,8 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
                 hw.controlID = ctrl.controlID;
                 hw.imageMain = ctrl.imageMain;
                 hw.imageTrack = ctrl.imageTrack;
+                hw.imageStates = ctrl.imageStates;
+                hw.positions = ctrl.positions;
                 hw.customColour = ctrl.customColour;
                 hw.stretchImage = ctrl.stretchImage;
                 hw.fontFamily = ctrl.fontFamily;

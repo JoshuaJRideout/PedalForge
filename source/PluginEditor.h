@@ -15,6 +15,8 @@
 #include "ui/MidiSettingsPanel.h"
 #include "peripherals/displays/DisplayManager.h"
 #include "peripherals/displays/TuringDisplay.h"
+#include "ui/ToastOverlay.h"
+#include "ui/AudioStatusBar.h"
 #include "ui/ScriptingTabComponent.h"
 #include "ui/WikiTabComponent.h"
 
@@ -101,6 +103,14 @@ private:
     // New secondary-display subsystem. Drives the Turing 3.5" V2 via real
     // USB-serial protocol; future displays attach to the same manager.
     std::unique_ptr<DisplayManager> displayManager;
+
+    // Non-modal toasts overlay (lower-right). Singleton-routed via
+    // pf::toastInfo / toastWarn / toastError from anywhere in the app.
+    ToastOverlay toastOverlay;
+
+    // Bottom status bar — I/O meters, master volume, mute, device info.
+    std::unique_ptr<AudioStatusBar> audioStatusBar;
+    static constexpr int audioStatusBarHeight = 30;
 
     static constexpr int toolbarHeight = 44;
 

@@ -9,13 +9,41 @@ struct CustomStyles
     juce::String imageMain;
     juce::String imageTrack;
     juce::String imageChassis;
+    // Per-state images for stateful controls. Indexed by state 0,1,2…
+    // The renderer picks the right entry based on the control's current
+    // value. Empty / missing entries fall back to imageMain.
+    juce::StringArray imageStates;
     juce::Colour customColour { juce::Colours::red };
     bool stretchImage = true;
     juce::String fontFamily = "Sans";
     int fontStyle = 1;
     float fontSize = 0.0f;
     float rotationRangeDeg = 270.0f;  // visual arc for knobs, in degrees
+    int positions = 4;                // position count for rotary selector
 };
+
+/** Pick the image path for a given control value: imageStates[state] if
+    populated for the right state index, else imageMain.
+    @param value      current control value 0..1
+    @param numStates  expected number of states (2 for switch/footswitch/
+                      LED; N for selector). If imageStates has fewer than
+                      this many entries we just use what's there.
+*/
+inline juce::String pickStateImagePath (const CustomStyles* custom, float value, int numStates)
+{
+    if (custom == nullptr) return {};
+    const int n = custom->imageStates.size();
+    if (n > 0 && numStates > 0)
+    {
+        const float v = juce::jlimit (0.0f, 1.0f, value);
+        // Map [0,1] uniformly across numStates buckets. For numStates=2
+        // this gives state 0 when value<0.5 and state 1 otherwise.
+        int state = juce::jmin (numStates - 1, (int) (v * (float) numStates));
+        if (state < n && custom->imageStates[state].isNotEmpty())
+            return custom->imageStates[state];
+    }
+    return custom->imageMain;
+}
 
 inline void drawImageScaled (juce::Graphics& g, const juce::Image& img, juce::Rectangle<float> area, bool stretch)
 {
@@ -73,13 +101,17 @@ inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float valu
 
 inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr)
 {
-    if (custom && custom->imageMain.isNotEmpty())
+    if (custom != nullptr)
     {
-        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
-        if (!img.isNull())
+        const auto path = pickStateImagePath (custom, value, 2);
+        if (path.isNotEmpty())
         {
-            drawImageScaled (g, img, area, custom->stretchImage);
-            return;
+            juce::Image img = juce::ImageCache::getFromFile (juce::File (path));
+            if (!img.isNull())
+            {
+                drawImageScaled (g, img, area, custom->stretchImage);
+                return;
+            }
         }
     }
 
@@ -103,13 +135,17 @@ inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float va
 
 inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value = 1.0f, const CustomStyles* custom = nullptr)
 {
-    if (custom && custom->imageMain.isNotEmpty())
+    if (custom != nullptr)
     {
-        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
-        if (!img.isNull())
+        const auto path = pickStateImagePath (custom, value, 2);
+        if (path.isNotEmpty())
         {
-            drawImageScaled (g, img, area, custom->stretchImage);
-            return;
+            juce::Image img = juce::ImageCache::getFromFile (juce::File (path));
+            if (!img.isNull())
+            {
+                drawImageScaled (g, img, area, custom->stretchImage);
+                return;
+            }
         }
     }
 
@@ -142,15 +178,128 @@ inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value
     g.fillEllipse (cx - r * 0.5f, cy - r * 0.5f, r, r);
 }
 
+/** Rotary selector — chickenhead-style pointer with one tick per position.
+    `value` may be either a normalised 0..1 fraction OR a raw integer
+    position index 0..(positions-1); both interpretations are accepted to
+    match SelectorNode's "selection" parameter which is stored as a raw
+    int (0..15). */
+inline void drawSelector (juce::Graphics& g, juce::Rectangle<float> area,
+                          float value = 0.0f, const CustomStyles* custom = nullptr)
+{
+    const int positions = juce::jlimit (2, 16, custom ? custom->positions : 4);
+
+    // Coerce value to an integer position index. Heuristic: anything > 1.0
+    // is treated as a raw index; otherwise as a 0..1 normalised fraction.
+    int sel;
+    if (value > 1.0f)
+        sel = juce::jlimit (0, positions - 1, (int) std::floor (value + 0.5f));
+    else
+        sel = juce::jlimit (0, positions - 1, (int) std::floor (value * (float) positions));
+
+    // Custom image override: pick state image if user supplied one per
+    // position, else fall back to imageMain (still rotated to indicate
+    // selection if it's a single image).
+    if (custom != nullptr)
+    {
+        const auto path = pickStateImagePath (custom, value > 1.0f
+                                                          ? (positions > 1 ? value / (float) (positions - 1) : 0.0f)
+                                                          : value, positions);
+        if (path.isNotEmpty())
+        {
+            juce::Image img = juce::ImageCache::getFromFile (juce::File (path));
+            if (!img.isNull())
+            {
+                // If the user supplied per-state images we draw straight
+                // (no rotation — each state is its own artwork).
+                if (! custom->imageStates.isEmpty())
+                {
+                    drawImageScaled (g, img, area, custom->stretchImage);
+                    return;
+                }
+                // Single image: rotate it to indicate selection.
+                const float arc = (custom->rotationRangeDeg) * juce::MathConstants<float>::pi / 180.0f;
+                const float halfArc = arc * 0.5f;
+                const float frac = (positions > 1) ? (float) sel / (float) (positions - 1) : 0.5f;
+                const float angle = -halfArc + frac * arc;
+                g.saveState();
+                auto t = juce::AffineTransform::rotation (angle, area.getCentreX(), area.getCentreY());
+                g.addTransform (t);
+                drawImageScaled (g, img, area, custom->stretchImage);
+                g.restoreState();
+                return;
+            }
+        }
+    }
+
+    // Default chickenhead-style render.
+    const auto cx = area.getCentreX();
+    const auto cy = area.getCentreY();
+    const auto r  = juce::jmin (area.getWidth(), area.getHeight()) * 0.42f;
+
+    // Outer ring / bezel
+    juce::ColourGradient ring (juce::Colour (0xFF26262E), cx, cy - r,
+                               juce::Colour (0xFF0E0E14), cx, cy + r, false);
+    g.setGradientFill (ring);
+    g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
+
+    // Tick marks — one per position around the active arc
+    const float arc = (custom ? custom->rotationRangeDeg : 270.0f) * juce::MathConstants<float>::pi / 180.0f;
+    const float halfArc = arc * 0.5f;
+    const float tickInner = r * 1.02f;
+    const float tickOuter = r * 1.18f;
+    for (int i = 0; i < positions; ++i)
+    {
+        const float frac = (positions > 1) ? (float) i / (float) (positions - 1) : 0.5f;
+        const float a = -halfArc + frac * arc - juce::MathConstants<float>::halfPi;
+        const float x0 = cx + tickInner * std::cos (a);
+        const float y0 = cy + tickInner * std::sin (a);
+        const float x1 = cx + tickOuter * std::cos (a);
+        const float y1 = cy + tickOuter * std::sin (a);
+        g.setColour (i == sel ? juce::Colour (0xFFE5E7EB)
+                              : juce::Colour (0xFF4B5563));
+        g.drawLine (x0, y0, x1, y1, juce::jmax (1.0f, r * 0.06f));
+    }
+
+    // Inner disc
+    juce::ColourGradient disc (juce::Colour (0xFF6B7280), cx - r * 0.4f, cy - r * 0.7f,
+                               juce::Colour (0xFF1F2937), cx + r * 0.4f, cy + r * 0.7f, false);
+    g.setGradientFill (disc);
+    g.fillEllipse (cx - r * 0.86f, cy - r * 0.86f, r * 1.72f, r * 1.72f);
+
+    // Pointer
+    const float frac = (positions > 1) ? (float) sel / (float) (positions - 1) : 0.5f;
+    const float pa = -halfArc + frac * arc - juce::MathConstants<float>::halfPi;
+    juce::Path pointer;
+    const float baseWidth = r * 0.22f;
+    const float tipLen    = r * 0.88f;
+    pointer.startNewSubPath (-baseWidth * 0.5f, 0.0f);
+    pointer.lineTo (baseWidth * 0.5f, 0.0f);
+    pointer.lineTo (0.0f, -tipLen);
+    pointer.closeSubPath();
+    g.setColour (custom ? custom->customColour : juce::Colour (0xFFF59E0B));
+    auto pt = juce::AffineTransform::rotation (pa).translated (cx, cy);
+    g.fillPath (pointer, pt);
+
+    // Center cap + specular
+    g.setColour (juce::Colour (0xFF0A0F1A));
+    g.fillEllipse (cx - r * 0.16f, cy - r * 0.16f, r * 0.32f, r * 0.32f);
+    g.setColour (juce::Colour (0x33FFFFFF));
+    g.fillEllipse (cx - r * 0.6f, cy - r * 0.82f, r * 1.2f, r * 0.45f);
+}
+
 inline void drawFootswitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr)
 {
-    if (custom && custom->imageMain.isNotEmpty())
+    if (custom != nullptr)
     {
-        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
-        if (!img.isNull())
+        const auto path = pickStateImagePath (custom, value, 2);
+        if (path.isNotEmpty())
         {
-            drawImageScaled (g, img, area, custom->stretchImage);
-            return;
+            juce::Image img = juce::ImageCache::getFromFile (juce::File (path));
+            if (!img.isNull())
+            {
+                drawImageScaled (g, img, area, custom->stretchImage);
+                return;
+            }
         }
     }
 
@@ -621,6 +770,7 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
 {
     if (type == "knob")             drawKnob (g, area, value, custom);
     else if (type == "switch")      drawSwitch (g, area, value, custom);
+    else if (type == "selector")    drawSelector (g, area, value, custom);
     else if (type == "led")         drawLED (g, area, value, custom);
     else if (type == "footswitch")  drawFootswitch (g, area, value, custom);
     else if (type == "fader")       drawFader (g, area, value, custom);

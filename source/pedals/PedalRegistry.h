@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/GraphPedalProcessor.h"
+#include "../util/AppPaths.h"
 #include "FactoryDesigns.h"
 #include <functional>
 #include <vector>
@@ -32,10 +33,7 @@ struct PedalInfo
 
 inline juce::File getPedalLibraryDir()
 {
-    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("PedalForge")
-        .getChildFile("Library")
-        .getChildFile("Pedals");
+    auto dir = pf::paths::getLibraryDir().getChildFile ("Pedals");
     dir.createDirectory();
     return dir;
 }
@@ -61,19 +59,51 @@ inline std::shared_ptr<PedalDesign> loadDesignOrDefault(const juce::String& name
 
     Pure utility — does not refresh any UI. Callers should refresh the
     inventory after a successful import. */
-inline juce::File importPedalDesignFile (const juce::File& source)
+/** Outcome of an import operation. The destFile is non-empty when the
+    import succeeded (Created or Updated). The message field carries a
+    human-readable description for the failure cases. */
+struct ImportResult
 {
-    if (! source.existsAsFile()) return {};
+    enum Kind { Created, Updated, FailedCorrupt, FailedSchema, FailedIO };
+    Kind kind = FailedIO;
+    juce::File destFile;
+    juce::String message;
+    juce::String displayName;     // populated for any non-FailedIO case
+};
+
+inline ImportResult importPedalDesignFileEx (const juce::File& source)
+{
+    ImportResult r;
+    if (! source.existsAsFile())
+    {
+        r.kind = ImportResult::FailedIO;
+        r.message = "File not found: " + source.getFileName();
+        return r;
+    }
 
     PedalDesign design;
     try { design = PedalDesign::loadFromFile (source); }
-    catch (...) { return {}; }
+    catch (...)
+    {
+        r.kind = ImportResult::FailedCorrupt;
+        r.message = source.getFileName() + ": corrupted or unreadable JSON";
+        return r;
+    }
 
-    if (design.name.isEmpty()) return {};
+    // Minimum schema check: must have a name AND either UI controls or
+    // scripts that do something. A bare file with just an empty design
+    // is almost certainly accidental.
+    if (design.name.isEmpty()
+        || (design.controls.empty() && design.scripts.empty()
+            && design.effectsGraph.isVoid()))
+    {
+        r.kind = ImportResult::FailedSchema;
+        r.message = source.getFileName() + ": missing name or empty design";
+        return r;
+    }
+    r.displayName = design.name;
 
-    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge").getChildFile ("designs");
-    designsDir.createDirectory();
+    auto designsDir = pf::paths::getDesignsDir();
 
     // If a design with the same UUID is already installed, treat this import
     // as an update and overwrite it. Same identity = same pedal, even if the
@@ -85,8 +115,17 @@ inline juce::File importPedalDesignFile (const juce::File& source)
             try {
                 if (PedalDesign::loadFromFile (f).uuid == design.uuid)
                 {
-                    source.copyFileTo (f);
-                    return f;
+                    if (source.copyFileTo (f))
+                    {
+                        r.kind = ImportResult::Updated;
+                        r.destFile = f;
+                    }
+                    else
+                    {
+                        r.kind = ImportResult::FailedIO;
+                        r.message = "Could not overwrite " + f.getFileName();
+                    }
+                    return r;
                 }
             } catch (...) {}
         }
@@ -101,10 +140,32 @@ inline juce::File importPedalDesignFile (const juce::File& source)
     while (target.existsAsFile())
     {
         target = designsDir.getChildFile (baseName + "_" + juce::String (suffix++) + ".json");
-        if (suffix > 1000) return {};   // sanity
+        if (suffix > 1000)
+        {
+            r.kind = ImportResult::FailedIO;
+            r.message = "Could not pick a non-colliding filename";
+            return r;
+        }
     }
 
-    return source.copyFileTo (target) ? target : juce::File();
+    if (source.copyFileTo (target))
+    {
+        r.kind = ImportResult::Created;
+        r.destFile = target;
+    }
+    else
+    {
+        r.kind = ImportResult::FailedIO;
+        r.message = "Could not write " + target.getFileName();
+    }
+    return r;
+}
+
+/** Back-compat wrapper. Returns the dest file (empty on failure) — matches
+    the original signature so existing callers don't need to change yet. */
+inline juce::File importPedalDesignFile (const juce::File& source)
+{
+    return importPedalDesignFileEx (source).destFile;
 }
 
 /** Look up a custom pedal design in the designs/ dir by its stable UUID.
@@ -113,10 +174,7 @@ inline juce::File importPedalDesignFile (const juce::File& source)
     are still uniquely addressable. */
 inline juce::File getBoardsDir()
 {
-    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                   .getChildFile ("PedalForge").getChildFile ("boards");
-    dir.createDirectory();
-    return dir;
+    return pf::paths::getBoardsDir();
 }
 
 /** Copy a .pfboard file into ~/Library/PedalForge/boards/. Returns the
@@ -126,13 +184,39 @@ inline juce::File getBoardsDir()
     .pfboard already in boards/, overwrite that file in place — re-import of
     the same rig should not produce MyRig_2, MyRig_3, etc. Otherwise the
     filename is uniquified for hygiene only. */
-inline juce::File importBoardFile (const juce::File& source)
+inline ImportResult importBoardFileEx (const juce::File& source)
 {
-    if (! source.existsAsFile()) return {};
+    ImportResult r;
+    if (! source.existsAsFile())
+    {
+        r.kind = ImportResult::FailedIO;
+        r.message = "File not found: " + source.getFileName();
+        return r;
+    }
 
     auto boardsDir   = getBoardsDir();
     auto incomingTxt = source.loadFileAsString();
-    auto incomingUuid = juce::JSON::parse (incomingTxt).getProperty ("pfboardUuid", "").toString();
+    auto incomingVar = juce::JSON::parse (incomingTxt);
+    if (! incomingVar.isObject())
+    {
+        r.kind = ImportResult::FailedCorrupt;
+        r.message = source.getFileName() + ": not valid JSON";
+        return r;
+    }
+
+    // Minimum schema check for a board file: must look like a pedal board
+    // (some recognisable top-level keys).
+    if (! incomingVar.hasProperty ("pfboardUuid")
+        && ! incomingVar.hasProperty ("boards")
+        && ! incomingVar.hasProperty ("config"))
+    {
+        r.kind = ImportResult::FailedSchema;
+        r.message = source.getFileName() + ": not a recognisable .pfboard";
+        return r;
+    }
+
+    auto incomingUuid = incomingVar.getProperty ("pfboardUuid", "").toString();
+    r.displayName = incomingVar.getProperty ("name", source.getFileNameWithoutExtension()).toString();
 
     if (incomingUuid.isNotEmpty())
     {
@@ -142,8 +226,17 @@ inline juce::File importBoardFile (const juce::File& source)
                                     .getProperty ("pfboardUuid", "").toString();
             if (existingUuid == incomingUuid)
             {
-                source.copyFileTo (f);
-                return f;
+                if (source.copyFileTo (f))
+                {
+                    r.kind = ImportResult::Updated;
+                    r.destFile = f;
+                }
+                else
+                {
+                    r.kind = ImportResult::FailedIO;
+                    r.message = "Could not overwrite " + f.getFileName();
+                }
+                return r;
             }
         }
     }
@@ -156,17 +249,38 @@ inline juce::File importBoardFile (const juce::File& source)
     while (target.existsAsFile())
     {
         target = boardsDir.getChildFile (baseName + "_" + juce::String (suffix++) + ".pfboard");
-        if (suffix > 1000) return {};
+        if (suffix > 1000)
+        {
+            r.kind = ImportResult::FailedIO;
+            r.message = "Could not pick a non-colliding filename";
+            return r;
+        }
     }
-    return source.copyFileTo (target) ? target : juce::File();
+
+    if (source.copyFileTo (target))
+    {
+        r.kind = ImportResult::Created;
+        r.destFile = target;
+    }
+    else
+    {
+        r.kind = ImportResult::FailedIO;
+        r.message = "Could not write " + target.getFileName();
+    }
+    return r;
+}
+
+/** Back-compat wrapper. */
+inline juce::File importBoardFile (const juce::File& source)
+{
+    return importBoardFileEx (source).destFile;
 }
 
 inline std::shared_ptr<PedalDesign> loadCustomPedalDesignByUuid (const juce::String& uuid)
 {
     if (uuid.isEmpty()) return nullptr;
 
-    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge").getChildFile ("designs");
+    auto designsDir = pf::paths::getDesignsDir();
     if (! designsDir.isDirectory()) return nullptr;
 
     for (const auto& f : designsDir.findChildFiles (juce::File::findFiles, false, "*.json"))
@@ -181,9 +295,7 @@ inline std::shared_ptr<PedalDesign> loadCustomPedalDesignByUuid (const juce::Str
 
 inline std::shared_ptr<PedalDesign> loadCustomPedalDesign(const juce::String& name)
 {
-    auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge").getChildFile ("designs");
-    
+    auto designsDir = pf::paths::getDesignsDir();
     auto file = designsDir.getChildFile (name.replace (" ", "_") + ".json");
     if (file.existsAsFile())
     {

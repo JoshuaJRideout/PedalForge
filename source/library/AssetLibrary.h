@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 #include <vector>
 #include <functional>
+#include "../util/AppPaths.h"
 
 //==============================================================================
 /**
@@ -33,20 +34,17 @@ public:
     };
 
     //==========================================================================
-    AssetLibrary()
-    {
-        libraryRoot = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                          .getChildFile ("PedalForge")
-                          .getChildFile ("Library");
-    }
+    AssetLibrary() = default;
 
-    /** Get the library root directory. */
-    juce::File getRoot() const { return libraryRoot; }
+    /** Get the library root directory. Resolved via pf::paths so any
+        runtime data-root override (e.g. snapshot mount) takes effect
+        without restarting. */
+    juce::File getRoot() const { return pf::paths::getLibraryDir(); }
 
     /** Get the directory for a specific category, creating it if needed. */
     juce::File getCategoryDir (const juce::String& category) const
     {
-        auto dir = libraryRoot.getChildFile (category);
+        auto dir = getRoot().getChildFile (category);
         dir.createDirectory();
         return dir;
     }
@@ -56,7 +54,7 @@ public:
     std::vector<AssetItem> getAssets (const juce::String& category, const juce::String& subcategory = "") const
     {
         std::vector<AssetItem> result;
-        auto dir = libraryRoot.getChildFile (category);
+        auto dir = getRoot().getChildFile (category);
 
         if (! dir.isDirectory())
             return result;
@@ -112,7 +110,7 @@ public:
     juce::StringArray getSubcategories (const juce::String& category) const
     {
         juce::StringArray result;
-        auto dir = libraryRoot.getChildFile (category);
+        auto dir = getRoot().getChildFile (category);
         if (!dir.isDirectory()) return result;
         for (const auto& entry : juce::RangedDirectoryIterator (dir, false, "*", juce::File::findDirectories))
             result.add (entry.getFile().getFileName());
@@ -123,7 +121,7 @@ public:
     /** Create a subcategory folder. */
     bool createSubcategory (const juce::String& category, const juce::String& name)
     {
-        return libraryRoot.getChildFile(category).getChildFile(name).createDirectory();
+        return getRoot().getChildFile(category).getChildFile(name).createDirectory();
     }
 
     //==========================================================================
@@ -184,7 +182,7 @@ public:
     /** Move an asset to a subcategory folder. */
     juce::File moveToSubcategory (const AssetItem& item, const juce::String& subcategory)
     {
-        auto catDir = libraryRoot.getChildFile (item.category);
+        auto catDir = getRoot().getChildFile (item.category);
         juce::File destDir = subcategory.isEmpty() ? catDir : catDir.getChildFile (subcategory);
         destDir.createDirectory();
         auto destFile = destDir.getChildFile (item.file.getFileName());
@@ -270,5 +268,5 @@ public:
     }
 
 private:
-    juce::File libraryRoot;
+    // libraryRoot removed — getRoot() resolves dynamically via pf::paths.
 };

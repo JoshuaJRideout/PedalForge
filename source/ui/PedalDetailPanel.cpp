@@ -3,6 +3,7 @@
 #include "LookAndFeel.h"
 #include "PluginBrowserWindow.h"
 #include "../dsp/GraphPedalProcessor.h"
+#include "../util/AppPaths.h"
 
 //==============================================================================
 PedalDetailPanel::PedalDetailPanel()
@@ -555,11 +556,10 @@ void PedalDetailPanel::buttonClicked (juce::Button* button)
         if (!selectedInstance || !selectedInstance->design) return;
 
         // Save to library
-        juce::File overrideFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-            .getChildFile("PedalForge")
-            .getChildFile("Library")
+        juce::File overrideFile = pf::paths::getLibraryDir()
             .getChildFile("Pedals")
             .getChildFile(selectedInstance->name + ".json");
+        overrideFile.getParentDirectory().createDirectory();
         
         overrideFile.getParentDirectory().createDirectory();
         selectedInstance->design->saveToFile(overrideFile);

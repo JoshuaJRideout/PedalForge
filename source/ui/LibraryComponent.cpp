@@ -1,6 +1,9 @@
 #include "LibraryComponent.h"
 #include "LookAndFeel.h"
 #include "PedalPainter.h"
+#include "ToastOverlay.h"
+#include "../util/AppPaths.h"
+#include "../util/SnapshotManager.h"
 #include "../dsp/PedalDesign.h"
 #include "../pedals/PedalRegistry.h"
 
@@ -72,6 +75,23 @@ LibraryComponent::LibraryComponent()
     searchBox.setColour (juce::TextEditor::outlineColourId, PedalForgeLookAndFeel::gridLine);
     searchBox.onTextChange = [this] { applyFilter(); };
 
+    addAndMakeVisible (snapshotBtn);
+    snapshotBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+    snapshotBtn.setTooltip ("Export or import a full-install snapshot (.pfsnapshot)");
+    snapshotBtn.onClick = [this]
+    {
+        juce::PopupMenu m;
+        m.addSectionHeader ("Snapshot");
+        m.addItem ("Export full snapshot…",   [this] { exportSnapshotFlow(); });
+        m.addItem ("Import snapshot…",        [this] { importSnapshotFlow(); });
+        m.addSeparator();
+        m.addItem ("What is this?", false, false, [] {});
+        m.addItem (juce::CharPointer_UTF8 ("\xe2\x80\xa2 Bundle every design, board, preset, image"), false, false, [] {});
+        m.addItem (juce::CharPointer_UTF8 ("\xe2\x80\xa2 NAM/IR file into one portable file"),         false, false, [] {});
+        m.addItem (juce::CharPointer_UTF8 ("\xe2\x80\xa2 Restore on any other Mac running PedalForge"),false, false, [] {});
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&snapshotBtn));
+    };
+
     addAndMakeVisible (importBtn);
     importBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::accent);
     importBtn.onClick = [this]
@@ -93,14 +113,47 @@ LibraryComponent::LibraryComponent()
         {
             if (sp == nullptr) return;
             auto results = fc.getResults();
+            int created = 0, updated = 0;
+            juce::StringArray failMessages;
             for (auto& f : results)
             {
                 if (! f.existsAsFile()) continue;
-                if      (isPedals) importPedalDesignFile (f);
-                else if (isBoards) importBoardFile (f);
-                else                sp->library.importFile (f, sp->currentCategoryID);
+                if (isPedals)
+                {
+                    auto r = importPedalDesignFileEx (f);
+                    if      (r.kind == ImportResult::Created) ++created;
+                    else if (r.kind == ImportResult::Updated) ++updated;
+                    else failMessages.add (r.message);
+                }
+                else if (isBoards)
+                {
+                    auto r = importBoardFileEx (f);
+                    if      (r.kind == ImportResult::Created) ++created;
+                    else if (r.kind == ImportResult::Updated) ++updated;
+                    else failMessages.add (r.message);
+                }
+                else
+                {
+                    sp->library.importFile (f, sp->currentCategoryID);
+                    ++created; // we don't yet validate generic assets
+                }
             }
             sp->refreshAssets();
+
+            // Surface results via non-modal toasts so the user keeps their
+            // place. One toast per failure for per-file detail; a single
+            // summary toast for the success counts.
+            for (const auto& msg : failMessages)
+                pf::toastError ("Import failed — " + msg);
+
+            if (created + updated > 0)
+            {
+                juce::String summary;
+                if (created > 0) summary << created << (created == 1 ? " item added" : " items added");
+                if (created > 0 && updated > 0) summary << ", ";
+                if (updated > 0) summary << updated << (updated == 1 ? " updated" : " items updated");
+                pf::toastInfo (summary);
+            }
         });
     };
 
@@ -292,6 +345,8 @@ void LibraryComponent::resized()
         newCategoryBtn.setBounds (toolbar.removeFromLeft (85).withSizeKeepingCentre (85, 24));
     }
 
+    snapshotBtn.setBounds (toolbar.removeFromRight (110).withSizeKeepingCentre (110, 24));
+    toolbar.removeFromRight (4);
     importBtn.setBounds (toolbar.removeFromRight (80).withSizeKeepingCentre (80, 24));
 
     // Cloud / Local toggle buttons + API Key button
@@ -414,8 +469,7 @@ void LibraryComponent::refreshAssets()
         currentAssets.clear();
         pedalDesignCache.clear();
 
-        auto designsDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                              .getChildFile ("PedalForge").getChildFile ("designs");
+        auto designsDir = pf::paths::getDesignsDir();
 
         if (designsDir.isDirectory())
         {
@@ -1614,8 +1668,7 @@ namespace
 {
     juce::File librarySettingsFile()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                   .getChildFile ("PedalForge").getChildFile ("settings.json");
+        return pf::paths::getSettingsFile();
     }
 }
 
@@ -1654,5 +1707,101 @@ void LibraryComponent::saveViewModePrefs() const
     root->setProperty ("categoryViewModes", juce::var (modesObj));
 
     file.replaceWithText (juce::JSON::toString (juce::var (root.get())));
+}
+
+//==============================================================================
+// Snapshot (#62)
+//==============================================================================
+void LibraryComponent::exportSnapshotFlow()
+{
+    auto suggested = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                         .getChildFile ("PedalForge-"
+                                        + juce::Time::getCurrentTime().formatted ("%Y%m%d-%H%M")
+                                        + ".pfsnapshot");
+
+    snapshotChooser = std::make_unique<juce::FileChooser> (
+        "Save snapshot…", suggested, "*.pfsnapshot");
+
+    auto flags = juce::FileBrowserComponent::saveMode
+               | juce::FileBrowserComponent::canSelectFiles
+               | juce::FileBrowserComponent::warnAboutOverwriting;
+
+    juce::Component::SafePointer<LibraryComponent> sp (this);
+    snapshotChooser->launchAsync (flags, [sp] (const juce::FileChooser& fc)
+    {
+        if (sp == nullptr) return;
+        auto dest = fc.getResult();
+        if (dest == juce::File()) return;
+        if (! dest.hasFileExtension ("pfsnapshot"))
+            dest = dest.withFileExtension ("pfsnapshot");
+
+        pf::toastInfo ("Building snapshot…");
+        // Run on a background thread — zipping can take a few seconds.
+        juce::Thread::launch ([sp, dest]
+        {
+            auto r = pf::snapshot::exportSnapshot (dest);
+            juce::MessageManager::callAsync ([sp, dest, r]
+            {
+                if (sp == nullptr) return;
+                if (r.success)
+                {
+                    pf::toastInfo ("Snapshot saved — " + r.message);
+                }
+                else
+                {
+                    pf::toastError ("Snapshot failed — " + r.message);
+                }
+            });
+        });
+    });
+}
+
+void LibraryComponent::importSnapshotFlow()
+{
+    snapshotChooser = std::make_unique<juce::FileChooser> (
+        "Restore from snapshot…", juce::File{}, "*.pfsnapshot");
+
+    auto flags = juce::FileBrowserComponent::openMode
+               | juce::FileBrowserComponent::canSelectFiles;
+
+    juce::Component::SafePointer<LibraryComponent> sp (this);
+    snapshotChooser->launchAsync (flags, [sp] (const juce::FileChooser& fc)
+    {
+        if (sp == nullptr) return;
+        auto src = fc.getResult();
+        if (! src.existsAsFile()) return;
+
+        juce::AlertWindow::showOkCancelBox (
+            juce::MessageBoxIconType::QuestionIcon,
+            "Restore snapshot?",
+            "Files from the snapshot will be added to your library. "
+            "Existing files with the same UUID are kept as-is (not overwritten). "
+            "OAuth tokens, logs, and your audio device settings are unaffected.\n\n"
+            "Continue?",
+            "Restore", "Cancel",
+            sp.getComponent(),
+            juce::ModalCallbackFunction::create ([sp, src] (int result)
+            {
+                if (sp == nullptr || result != 1) return;
+                pf::toastInfo ("Restoring snapshot…");
+                juce::Thread::launch ([sp, src]
+                {
+                    auto r = pf::snapshot::importSnapshotMerge (src, /*overwrite*/ false);
+                    juce::MessageManager::callAsync ([sp, r]
+                    {
+                        if (sp == nullptr) return;
+                        if (r.kind == pf::snapshot::ImportResult::Imported)
+                        {
+                            pf::toastInfo ("Snapshot restored — " + r.message);
+                            sp->refreshAssets();
+                        }
+                        else
+                        {
+                            pf::toastError ("Snapshot failed — " + r.message);
+                        }
+                    });
+                });
+            }));
+    });
 }
 
