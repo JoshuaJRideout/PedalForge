@@ -26,6 +26,7 @@ namespace
     {
         auto name = f.getFileName();
         if (name == "settings.json")        return true;  // contains OAuth tokens
+        if (name == "secrets.json")         return true;  // AI provider API keys — never travel
         if (name.startsWith ("."))           return true;  // hidden / sentinels
         if (name.endsWith   (".tmp"))        return true;  // half-written autosaves
         if (name == "KnownPlugins.xml")      return true;

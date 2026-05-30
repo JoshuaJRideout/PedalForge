@@ -292,6 +292,70 @@ public:
         bindVMCallbacks();
     }
 
+    //==========================================================================
+    // Headless entry points for the AI agent (task #65). These reuse the exact
+    // same compile/emit logic the Compile button uses; the widgets they touch
+    // (console, code editor) exist whether or not the tab is visible, so
+    // running them off-screen is safe. Always call on the message thread.
+
+    /** Run a script of the given mode and return the console output (success
+        summary or "ERROR line N: …"). For Pedal/DSP/GraphBuilder modes the
+        caller must setActivePedal() to the target first. */
+    juce::String runScriptHeadless (ScriptMode mode, const juce::String& source)
+    {
+        consoleOutput.clear();
+        currentMode = mode;
+        modeSelector.setSelectedId ((int) mode, juce::dontSendNotification);
+        autocompletePanel.setDatabaseMode ((int) mode);
+        codeDocument.replaceAllContent (source);
+        compileAndRun();
+        return consoleOutput.getText();
+    }
+
+    /** Emit the current live state as a script (round-trip) for the given
+        mode, so the agent can read existing state as editable code. */
+    juce::String emitScript (ScriptMode mode)
+    {
+        if      (mode == ScriptMode::Board)        importBoardAsScript();
+        else if (mode == ScriptMode::Pedal)        importPedalAsScript();
+        else if (mode == ScriptMode::GraphBuilder) importGraphAsScript();
+        else return {};
+        return codeDocument.getAllContent();
+    }
+
+    /** A concise reference of every script command + the ExpressionVM
+        function list, for feeding to the AI agent so it writes valid code. */
+    static juce::String getApiReference()
+    {
+        juce::String s;
+        s << "PEDALFORGE SCRIPTING API\n"
+             "========================\n\n"
+             "BOARD script (mode=board) — builds the pedalboard. The board is "
+             "cleared first, then rebuilt:\n"
+             "  v = addPedal(\"<name or factory id>\")        // add a pedal, returns a handle\n"
+             "  addPedal(\"<name>\", x, y)                    // with explicit grid position\n"
+             "  connect(src, srcCh, dst, dstCh)              // wire audio: handle, channel ints\n"
+             "  setPos(v, x, y)                              // move a pedal\n"
+             "  focus(v)                                     // set MIDI-learn focus\n\n"
+             "PEDAL script (mode=pedal) — defines the active pedal's chassis + controls:\n"
+             "  setMeta(\"name\",\"author\",\"category\",\"description\")\n"
+             "  setChassis(width, height, \"RRGGBB\")\n"
+             "  addKnob(\"id\", x, y, \"label\" [, w, h])\n"
+             "  addSwitch / addFootswitch / addLed / addFader / addTextScreen(\"id\", x, y, \"label\")\n"
+             "  mapControl(\"controlId\", \"<nodeID>_<paramID>\")   // bind a face control to a DSP param\n\n"
+             "FX script (mode=fx) — builds the active pedal's DSP node graph (audible):\n"
+             "  n = addNode(\"<type>\")                       // e.g. gain, softclip, tonestack, delay,\n"
+             "                                               // reverb, lfo, oscillator, adsr, expression,\n"
+             "                                               // audio_input, audio_output, midi_cc, ...\n"
+             "  connect(src, srcPort, dst, dstPort)          // wire nodes (port ints)\n"
+             "  setParam(n, \"paramName\", value)            // set a node parameter\n"
+             "  (unknown node types are rejected with a readable error)\n\n"
+             "DSP script (mode=dsp) — per-sample expression for an Expression node on the active pedal.\n\n"
+             "ExpressionVM functions (for DSP/UI expressions):\n";
+        s << ExpressionVM::dumpFunctionsAsMarkdown();
+        return s;
+    }
+
     void setVisible (bool shouldBeVisible) override
     {
         juce::Component::setVisible (shouldBeVisible);

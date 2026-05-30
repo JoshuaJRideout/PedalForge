@@ -17,8 +17,10 @@
 #include "peripherals/displays/TuringDisplay.h"
 #include "ui/ToastOverlay.h"
 #include "ui/AudioStatusBar.h"
+#include "ui/AiAssistantPanel.h"
 #include "ui/ScriptingTabComponent.h"
 #include "ui/WikiTabComponent.h"
+#include "ai/ToolHost.h"
 
 class PedalForgeProcessor;
 
@@ -27,7 +29,8 @@ class PedalForgeEditor : public juce::AudioProcessorEditor,
                          public juce::DragAndDropContainer,
                          public juce::FileDragAndDropTarget,
                          public juce::Button::Listener,
-                         public juce::KeyListener
+                         public juce::KeyListener,
+                         public pf::ai::ToolHost
 {
 public:
     explicit PedalForgeEditor (PedalForgeProcessor& processor);
@@ -48,6 +51,26 @@ public:
     void triggerRedo();
     void commitActiveTabState();
     void refreshAfterUndoRedo();
+
+    //==========================================================================
+    // pf::ai::ToolHost — lets the in-app AI assistant read/modify app state.
+    juce::String readActiveTab() override;
+    juce::String listPedals() override;
+    juce::String readPedalDesign (const juce::String& uuid) override;
+    bool writePedalDesign (const juce::String& uuid, const juce::String& json, juce::String& errorOut) override;
+    juce::String readFxGraph (const juce::String& pedalUuid) override;
+    bool writeFxGraph (const juce::String& pedalUuid, const juce::String& json, juce::String& errorOut) override;
+    void showToast (const juce::String& message) override;
+    juce::String listFactoryPedals() override;
+    juce::String addPedalToBoard (const juce::String& pedalId, juce::String& errorOut) override;
+    juce::String getScriptApiReference() override;
+    juce::String runBoardScript (const juce::String& source) override;
+    juce::String runPedalScript (const juce::String& pedalUuid, const juce::String& source) override;
+    juce::String runFxScript (const juce::String& pedalUuid, const juce::String& source) override;
+    juce::String runDspScript (const juce::String& pedalUuid, const juce::String& source) override;
+    juce::String readBoardAsScript() override;
+    juce::String readPedalAsScript (const juce::String& pedalUuid) override;
+    juce::String readFxAsScript (const juce::String& pedalUuid) override;
 
 
 private:
@@ -111,6 +134,13 @@ private:
     // Bottom status bar — I/O meters, master volume, mute, device info.
     std::unique_ptr<AudioStatusBar> audioStatusBar;
     static constexpr int audioStatusBarHeight = 30;
+
+    // AI assistant panel — sits just above the audio status bar; collapsed
+    // it's a single input line, expanded it's a chat surface (#64).
+    AiAssistantPanel aiPanel { *this };
+
+    // Find a live pedal instance by its design uuid (for the AI ToolHost).
+    PedalInstance* findInstanceByUuid (const juce::String& uuid);
 
     static constexpr int toolbarHeight = 44;
 

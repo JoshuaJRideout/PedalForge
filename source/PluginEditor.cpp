@@ -205,6 +205,11 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     audioStatusBar = std::make_unique<AudioStatusBar> (processorRef);
     addAndMakeVisible (*audioStatusBar);
 
+    // AI assistant panel — sits above the status bar. Re-lay-out the editor
+    // when it expands/collapses so the active tab shrinks to make room.
+    addAndMakeVisible (aiPanel);
+    aiPanel.onExpandedChanged = [this] { resized(); };
+
     // Crash recovery (#52): if a recovery file is sitting around it means
     // the previous run didn't shut down cleanly. Offer to restore.
     // Deferred so the editor finishes constructing before the modal pops.
@@ -517,6 +522,16 @@ void PedalForgeEditor::resized()
     if (audioStatusBar != nullptr)
         audioStatusBar->setBounds (bounds.removeFromBottom (audioStatusBarHeight));
 
+    // AI assistant panel sits just above the status bar. Collapsed it's a
+    // single input row; expanded it claims ~45% of the window height.
+    {
+        const int panelH = aiPanel.isExpanded()
+                               ? juce::jmax (AiAssistantPanel::collapsedHeight + 120,
+                                             (int) (getHeight() * 0.45))
+                               : AiAssistantPanel::collapsedHeight;
+        aiPanel.setBounds (bounds.removeFromBottom (panelH));
+    }
+
     auto contentBounds = bounds;
 
     if (playTab) playTab->setBounds (contentBounds);
@@ -694,6 +709,15 @@ bool PedalForgeEditor::keyPressed (const juce::KeyPress& key, juce::Component* o
 {
     (void) originatingComponent;
 
+    // Cmd/Ctrl-K focuses the AI assistant from anywhere (even from a text
+    // editor), so it must be handled before the text-focus early-return.
+    if ((key.getModifiers().isCommandDown() || key.getModifiers().isCtrlDown())
+        && (key.getKeyCode() == 'K' || key.getKeyCode() == 'k'))
+    {
+        aiPanel.focusInput();
+        return true;
+    }
+
     // Check if keyboard focus is currently held by a text entry element.
     // If so, let them handle local undo/redo instead of triggering global undo/redo.
     if (auto* focused = juce::Component::getCurrentlyFocusedComponent())
@@ -814,3 +838,299 @@ void PedalForgeEditor::refreshAfterUndoRedo()
 }
 
 
+
+//==============================================================================
+// pf::ai::ToolHost — the AI assistant's window into the live app (#64).
+//==============================================================================
+namespace
+{
+    // Find a pedal instance by its design uuid across both engines. Returns
+    // the engine it lives in (for writes) via engineOut.
+    PedalInstance* findByUuid (PedalForgeProcessor& proc,
+                               const juce::String& uuid,
+                               AudioGraphEngine** engineOut)
+    {
+        AudioGraphEngine* engines[] = { &proc.getGraphEngine(), &proc.getPlayGraphEngine() };
+        for (auto* eng : engines)
+        {
+            for (const auto& inst : eng->getPedalInstances())
+            {
+                if (inst.design != nullptr && inst.design->uuid == uuid)
+                {
+                    if (engineOut) *engineOut = eng;
+                    return eng->getPedalInstance (inst.nodeID);
+                }
+            }
+        }
+        if (engineOut) *engineOut = nullptr;
+        return nullptr;
+    }
+}
+
+PedalInstance* PedalForgeEditor::findInstanceByUuid (const juce::String& uuid)
+{
+    return findByUuid (processorRef, uuid, nullptr);
+}
+
+juce::String PedalForgeEditor::readActiveTab()
+{
+    juce::String tab = "Play";
+    if      (tabBoard.getToggleState())   tab = "Board";
+    else if (tabRoute.getToggleState())   tab = "Route";
+    else if (tabPedal.getToggleState())   tab = "Pedal Designer";
+    else if (tabFX.getToggleState())      tab = "FX (DSP node graph)";
+    else if (tabScript.getToggleState())  tab = "Scripting";
+    else if (tabWiki.getToggleState())    tab = "Wiki";
+    else if (tabLibrary.getToggleState()) tab = "Library";
+    else if (tabMidi.getToggleState())    tab = "MIDI";
+
+    auto* root = new juce::DynamicObject();
+    root->setProperty ("activeTab", tab);
+    if (activePedal != nullptr && activePedal->design != nullptr)
+    {
+        root->setProperty ("focusedPedalName", activePedal->name);
+        root->setProperty ("focusedPedalUuid", activePedal->design->uuid);
+    }
+    return juce::JSON::toString (juce::var (root));
+}
+
+juce::String PedalForgeEditor::listPedals()
+{
+    juce::Array<juce::var> arr;
+    AudioGraphEngine* engines[] = { &processorRef.getGraphEngine(), &processorRef.getPlayGraphEngine() };
+    juce::StringArray seenUuids;
+    for (auto* eng : engines)
+    {
+        for (const auto& inst : eng->getPedalInstances())
+        {
+            if (inst.design == nullptr) continue;
+            if (seenUuids.contains (inst.design->uuid)) continue;
+            seenUuids.add (inst.design->uuid);
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("uuid", inst.design->uuid);
+            o->setProperty ("name", inst.name);
+            o->setProperty ("board", inst.boardId);
+            arr.add (juce::var (o));
+        }
+    }
+    return juce::JSON::toString (juce::var (arr));
+}
+
+juce::String PedalForgeEditor::readPedalDesign (const juce::String& uuid)
+{
+    if (auto* inst = findInstanceByUuid (uuid))
+        if (inst->design != nullptr)
+            return juce::JSON::toString (inst->design->toJSON());
+    return {};
+}
+
+bool PedalForgeEditor::writePedalDesign (const juce::String& uuid,
+                                         const juce::String& json,
+                                         juce::String& errorOut)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, uuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+    {
+        errorOut = "No pedal with uuid " + uuid;
+        return false;
+    }
+
+    auto parsed = juce::JSON::parse (json);
+    if (! parsed.isObject())
+    {
+        errorOut = "JSON did not parse to an object";
+        return false;
+    }
+
+    eng->saveUndoState();
+
+    auto newDesign = PedalDesign::fromJSON (parsed);
+    newDesign.uuid = uuid;   // identity is immutable — never let the agent change it
+    *(inst->design) = newDesign;
+
+    // Rebuild the processor so any FX-graph changes carried in the design
+    // become audible too.
+    auto newProc = std::make_unique<GraphPedalProcessor> (
+        inst->name, juce::JSON::toString (inst->design->effectsGraph));
+    eng->updatePedalProcessor (inst->nodeID, std::move (newProc));
+
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return true;
+}
+
+juce::String PedalForgeEditor::readFxGraph (const juce::String& pedalUuid)
+{
+    if (auto* inst = findInstanceByUuid (pedalUuid))
+        if (inst->design != nullptr)
+            return juce::JSON::toString (inst->design->effectsGraph);
+    return {};
+}
+
+bool PedalForgeEditor::writeFxGraph (const juce::String& pedalUuid,
+                                     const juce::String& json,
+                                     juce::String& errorOut)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, pedalUuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+    {
+        errorOut = "No pedal with uuid " + pedalUuid;
+        return false;
+    }
+
+    auto parsed = juce::JSON::parse (json);
+    if (! parsed.isObject() && ! parsed.isArray())
+    {
+        errorOut = "FX graph JSON did not parse";
+        return false;
+    }
+
+    eng->saveUndoState();
+    inst->design->effectsGraph = parsed;
+
+    auto newProc = std::make_unique<GraphPedalProcessor> (
+        inst->name, juce::JSON::toString (parsed));
+    eng->updatePedalProcessor (inst->nodeID, std::move (newProc));
+
+    // If this is the pedal currently open in the FX editor, refresh it.
+    if (activePedal == inst)
+        nodeGraphEditor.loadDesign (inst->design->effectsGraph);
+
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return true;
+}
+
+void PedalForgeEditor::showToast (const juce::String& message)
+{
+    pf::toastInfo (message);
+}
+
+juce::String PedalForgeEditor::listFactoryPedals()
+{
+    juce::Array<juce::var> arr;
+    for (const auto& info : getFactoryPedals())
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("id", info.factoryID());
+        o->setProperty ("name", info.name);
+        o->setProperty ("category", info.category);
+        arr.add (juce::var (o));
+    }
+    return juce::JSON::toString (juce::var (arr));
+}
+
+juce::String PedalForgeEditor::addPedalToBoard (const juce::String& pedalId, juce::String& errorOut)
+{
+    // Snapshot existing design uuids so we can identify the new instance.
+    juce::StringArray before;
+    for (const auto& inst : processorRef.getGraphEngine().getPedalInstances())
+        if (inst.design != nullptr) before.add (inst.design->uuid);
+
+    // Reuse the same path the inventory drag-drop uses: auto-place (-1,-1),
+    // which also auto-routes and saves undo state internally.
+    grid.addPedalAtGrid (pedalId, -1.0f, -1.0f);
+
+    // Find the newly added instance (uuid not present before).
+    for (const auto& inst : processorRef.getGraphEngine().getPedalInstances())
+    {
+        if (inst.design == nullptr) continue;
+        if (before.contains (inst.design->uuid)) continue;
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("uuid", inst.design->uuid);
+        o->setProperty ("name", inst.name);
+        return juce::JSON::toString (juce::var (o));
+    }
+
+    errorOut = "Unknown pedal id '" + pedalId + "'. Call list_factory_pedals for valid ids.";
+    return {};
+}
+
+//==============================================================================
+// Scripting-engine tools (#65). Each routes through the ScriptingTabComponent's
+// existing compile logic via its headless entry points. Pedal-scoped scripts
+// set the scripting tab's active pedal to the target first, then restore the
+// editor's current selection afterward so the visible tab isn't left desynced.
+//==============================================================================
+juce::String PedalForgeEditor::getScriptApiReference()
+{
+    return ScriptingTabComponent::getApiReference();
+}
+
+juce::String PedalForgeEditor::runBoardScript (const juce::String& source)
+{
+    // Board scripts operate on the engine, not a specific pedal.
+    scriptingTab.setActivePedal (nullptr, &processorRef.getGraphEngine());
+    auto out = scriptingTab.runScriptHeadless (ScriptingTabComponent::ScriptMode::Board, source);
+    // Restore the visible tab's pedal context + refresh the board view.
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    grid.rebuildFromEngine();
+    grid.repaint();
+    return out;
+}
+
+juce::String PedalForgeEditor::runPedalScript (const juce::String& pedalUuid, const juce::String& source)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    scriptingTab.setActivePedal (inst, &processorRef.getGraphEngine());
+    auto out = scriptingTab.runScriptHeadless (ScriptingTabComponent::ScriptMode::Pedal, source);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return out;
+}
+
+juce::String PedalForgeEditor::runFxScript (const juce::String& pedalUuid, const juce::String& source)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    scriptingTab.setActivePedal (inst, &processorRef.getGraphEngine());
+    auto out = scriptingTab.runScriptHeadless (ScriptingTabComponent::ScriptMode::GraphBuilder, source);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return out;
+}
+
+juce::String PedalForgeEditor::runDspScript (const juce::String& pedalUuid, const juce::String& source)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    scriptingTab.setActivePedal (inst, &processorRef.getGraphEngine());
+    auto out = scriptingTab.runScriptHeadless (ScriptingTabComponent::ScriptMode::DSP, source);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return out;
+}
+
+juce::String PedalForgeEditor::readBoardAsScript()
+{
+    scriptingTab.setActivePedal (nullptr, &processorRef.getGraphEngine());
+    auto s = scriptingTab.emitScript (ScriptingTabComponent::ScriptMode::Board);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    return s;
+}
+
+juce::String PedalForgeEditor::readPedalAsScript (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    scriptingTab.setActivePedal (inst, &processorRef.getGraphEngine());
+    auto s = scriptingTab.emitScript (ScriptingTabComponent::ScriptMode::Pedal);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    return s;
+}
+
+juce::String PedalForgeEditor::readFxAsScript (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    scriptingTab.setActivePedal (inst, &processorRef.getGraphEngine());
+    auto s = scriptingTab.emitScript (ScriptingTabComponent::ScriptMode::GraphBuilder);
+    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+    return s;
+}

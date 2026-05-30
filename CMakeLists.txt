@@ -97,6 +97,23 @@ target_sources(PedalForge PRIVATE
     source/util/SnapshotManager.h
     source/util/SnapshotManager.cpp
 
+    # AI assistant (#64)
+    source/ai/AiTypes.h
+    source/ai/AiProvider.h
+    source/ai/ToolHost.h
+    source/ai/SecureStore.h
+    source/ai/SecureStore.cpp
+    source/ai/AiTools.h
+    source/ai/AiTools.cpp
+    source/ai/ClaudeProvider.h
+    source/ai/ClaudeProvider.cpp
+    source/ai/ClaudeCodeProvider.h
+    source/ai/ClaudeCodeProvider.cpp
+    source/ai/AiAgent.h
+    source/ai/AiAgent.cpp
+    source/ui/AiAssistantPanel.h
+    source/ui/AiAssistantPanel.cpp
+
     # Secondary display peripherals (Turing 3.5" V2 and future HDMI/etc.)
     source/peripherals/displays/SecondaryDisplay.h
     source/peripherals/displays/DisplayMode.h
