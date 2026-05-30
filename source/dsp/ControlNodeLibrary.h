@@ -25,6 +25,15 @@ public:
         addParam ("max", "Max", 0.0f, 1000.0f, 1.0f);
         // Curve: 0 = linear, 1 = logarithmic, 2 = exponential
         addParam ("curve", "Curve (0=lin,1=log,2=exp)", 0.0f, 2.0f, 0.0f);
+
+        // ── Physical-widget properties (a knob is a configurable trinket,
+        //    independent of any DSP wiring). 'stepped' is honoured here (the
+        //    output quantises to discrete positions); 'encoder' and
+        //    'sensitivity' are read by the faceplate interaction layer (feel).
+        addParam ("stepped",     "Stepped (0=analog,1=stepped)", 0.0f, 1.0f, 0.0f);
+        addParam ("steps",       "Steps (when stepped)",         2.0f, 64.0f, 8.0f);
+        addParam ("encoder",     "Encoder (0=knob,1=endless)",   0.0f, 1.0f, 0.0f);
+        addParam ("sensitivity", "Sensitivity (drag ratio)",     0.1f, 4.0f, 1.0f);
     }
 
     void process (const float**, int, float** out, int, int n) override
@@ -33,14 +42,22 @@ public:
         float mn = getParam("min")->get();
         float mx = getParam("max")->get();
         int curve = (int) getParam("curve")->get();
-        
+
+        // Stepped/detented knob: snap the normalised value to discrete positions.
+        if (getParam("stepped")->get() > 0.5f)
+        {
+            const int steps = juce::jmax (2, (int) getParam("steps")->get());
+            norm = juce::jlimit (0.0f, 1.0f,
+                                 std::round (norm * (float) (steps - 1)) / (float) (steps - 1));
+        }
+
         float mapped = norm;
         switch (curve) {
             case 1: mapped = std::log10(1.0f + norm * 9.0f); break; // log
             case 2: mapped = norm * norm; break; // exponential
             default: break; // linear
         }
-        
+
         float val = mn + mapped * (mx - mn);
         for (int i = 0; i < n; ++i)
             out[0][i] = val;
