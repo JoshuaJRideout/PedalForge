@@ -86,3 +86,27 @@ The VST3 and AU plugins are automatically copied to `/Library/Audio/Plug-Ins/` (
 - When implementing the VST3/AU Host Node, should the hosted plugin GUI be a floating detachable window, or embedded inside the node editor?
 - For the NAM integration, should we prioritize the dedicated "NAM Node" or focus on the full out-of-the-box factory NAM Pedal first?
 - How far along is the `InventoryOverlay` drag-and-drop implementation? Are there specific edge cases remaining to handle?
+
+## 12. In-app AI assistant — driving it from a Claude Code session
+The running app has its own AI agent (the **Ai Assistant Panel** on the bottom bar, placeholder *"Ask Claude to build or change a pedal…"*). It is a **bring-your-own-subscription** agent that shells out to the user's locally installed `claude` CLI (`source/ai/ClaudeCodeProvider.h/cpp`) on their Pro/Max login — **not** the metered Anthropic API. There is no managed API cost and no key required.
+
+**Why this matters for a Claude Code session:** when a task needs to inspect, build, or modify pedals / FX graphs / scripts / MIDI mappings *inside the running app*, prefer asking this in-app agent over driving the designer UI click-by-click with computer-use. It has 45 first-class, UUID-addressed tools and is far more reliable than pixel clicking. (Note: it spawns a **separate** `claude` process — you are delegating to it, not extending your own context.)
+
+### How to communicate with it (via the `computer-use` MCP)
+1. Focus the input: click the bottom-bar field, or press **Cmd-K** from anywhere (handled in `PluginEditor::keyPressed`).
+2. Type a natural-language request, then press **Return** (or click the **↑** send button). `input.onReturnKey → sendCurrent()`.
+3. The panel expands (~45% of the window) and the transcript streams progress as `· Running <tool>...` lines, then the final answer as `Claude: …`.
+4. Read the result from the transcript with a screenshot. Tool results that reference pedals come back with their **UUIDs** — those UUIDs are exactly what the read/write tools need.
+- The **(i)** button shows provider/binary status; the **⌄/⌃** chevron expands/collapses.
+
+### Capabilities (the 45 tools — see `source/ai/AiTools.cpp::buildToolDefs`)
+- **Read state:** `read_active_tab`, `get_state`, `list_pedals`, `read_pedal_design`, `read_fx_graph`, `read_fx_notes`, `read_routing`, `list_midi_mappings`, `list_pedal_params`, `list_factory_pedals`, `list_assets`, `read_play_chain`, `list_play_presets`, `list_wiki_pages` / `read_wiki_page`.
+- **Read as editable script:** `read_board_as_script`, `read_pedal_as_script`, `read_fx_as_script`, `get_script_api`.
+- **Mutate (all undoable via Cmd-Z):** `write_pedal_design`, `write_fx_graph`, `create_pedal`, `add_pedal_to_board`, `add_fx_note`/`edit_fx_note`/`delete_fx_note`, routing `connect_pedals`/`disconnect_pedals`, MIDI `map_midi_cc`/`remove_midi_mapping`/`clear_midi_mappings`, Play tab `play_add_pedal`/`play_clear`/`load_play_preset`.
+- **Scripting (primary build path):** `run_script` (mode = board|pedal|fx|dsp), plus the explicit `run_board_script` / `run_pedal_script` / `run_fx_script` / `run_dsp_script`.
+- **Senses & checks:** `probe_pedal` (its "ears" — runs test tones/noise/impulse and reports THD, levels, latency, tilt), `screenshot` (its "eyes"), `verify_pedal`, `show_toast`, `switch_tab`.
+
+### Gotchas
+- The agent operates on the **live in-memory** app state (the same state the UI shows). Mutating tools call `engine.saveUndoState()` first (`source/ai/ToolHost.h`), so changes are user-undoable — but they are real and audible immediately.
+- The agent loop (`source/ai/AiAgent.cpp`) runs on a background thread and is capped at `kMaxToolRounds` per turn; if it hits the cap it asks you to say "continue".
+- It is verification-grade for the scripting path (the `*_as_script` / `run_script` round-trip), which is how prior sessions confirmed pedal migrations. It does **not** replace eyeballing the actual designer UI for layout/visual checks — use computer-use screenshots for those.
