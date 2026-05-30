@@ -77,7 +77,11 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
 
     input.setMultiLine (false);
     input.setReturnKeyStartsNewLine (false);
-    input.setTextToShowWhenEmpty ("Ask Claude to build or change a pedal…",
+    // NOTE: juce::String's (const char*) constructor decodes as ASCII/Latin-1,
+    // so a bare UTF-8 literal like "…" becomes mojibake ("â€¦"). Any non-ASCII
+    // string literal MUST be wrapped in CharPointer_UTF8 (see also the button
+    // glyphs above). "\xe2\x80\xa6" == U+2026 HORIZONTAL ELLIPSIS.
+    input.setTextToShowWhenEmpty (juce::CharPointer_UTF8 ("Ask Claude to build or change a pedal\xe2\x80\xa6"),
                                   juce::Colour (0xFF6B7280));
     input.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xFF1A1F26));
     input.setColour (juce::TextEditor::textColourId, juce::Colours::white);
@@ -115,7 +119,7 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
     agent->onToolActivity  = [this] (const juce::String& t)
     {
         appendActivity (t);
-        if (remoteActive) remoteResponse << "  · " << t << "\n";
+        if (remoteActive) remoteResponse << juce::String (juce::CharPointer_UTF8 ("  \xc2\xb7 ")) << t << "\n";
     };
     agent->onError         = [this] (const juce::String& e)
     {
@@ -245,7 +249,7 @@ void AiAssistantPanel::appendActivity (const juce::String& line)
 {
     transcript.moveCaretToEnd();
     auto prefix = transcript.getText().isEmpty() ? juce::String() : juce::String ("\n");
-    transcript.insertTextAtCaret (prefix + "· " + line);
+    transcript.insertTextAtCaret (prefix + juce::String (juce::CharPointer_UTF8 ("\xc2\xb7 ")) + line);
     transcript.moveCaretToEnd();
 }
 

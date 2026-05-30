@@ -1609,7 +1609,7 @@ public:
                     g.setColour (PedalForgeLookAndFeel::textMuted); g.setFont (juce::FontOptions (11.0f));
                     g.drawText ("KNOB BEHAVIOUR", m, ky, getWidth()-m*2, 16, juce::Justification::centredLeft);
                     g.setColour (PedalForgeLookAndFeel::textSecondary); g.setFont (juce::FontOptions (11.0f));
-                    g.drawText ("Arc °", m, rotationEditor.getY(), 32, 24, juce::Justification::centredLeft);
+                    g.drawText (juce::CharPointer_UTF8 ("Arc \xc2\xb0"), m, rotationEditor.getY(), 32, 24, juce::Justification::centredLeft); // \xc2\xb0 = U+00B0 DEGREE; bare UTF-8 literal would mojibake as "Â°"
                     g.drawText ("Sens", m + 90, sensitivityEditor.getY(), 32, 24, juce::Justification::centredLeft);
                 }
             }
