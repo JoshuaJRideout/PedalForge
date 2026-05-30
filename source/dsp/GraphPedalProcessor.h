@@ -323,93 +323,9 @@ namespace GraphPedalFactory
 
     // ─── MODULATION ──────────────────────────────────────────────────────────────
 
-    /** 5. Chorus: Input → Split → ModDelay(LFO) → Mix → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createChorus()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Chorus");
-        auto& g = proc->getDSPGraph();
-        int inID     = g.addNode (std::make_unique<AudioInputNode>());
-        int splitID  = g.addNode (std::make_unique<SplitNode>());
-        int lfoID    = g.addNode (std::make_unique<LFONode>());
-        int modDelID = g.addNode (std::make_unique<ModDelayNode>());
-        int mixID    = g.addNode (std::make_unique<MixNode>());
-        int outID    = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(lfoID)->getParam("rate")->set (1.5f);
-        g.getNode(modDelID)->getParam("time")->set (0.007f);
-        g.getNode(modDelID)->getParam("depth")->set (0.003f);
-        g.getNode(mixID)->getParam("mix")->set (0.5f);
-
-        g.connect (inID, 0, splitID, 0);
-        g.connect (splitID, 0, mixID, 0);
-        g.connect (splitID, 1, modDelID, 0);
-        g.connect (lfoID, 0, modDelID, 1);
-        g.connect (modDelID, 0, mixID, 1);
-        g.connect (mixID, 0, outID, 0);
-        g.connect (mixID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
-
-    /** 6. Phaser: Input → Split → Phaser(LFO) → Mix → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createPhaser()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Phaser");
-        auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());
-        int splitID = g.addNode (std::make_unique<SplitNode>());
-        int lfoID   = g.addNode (std::make_unique<LFONode>());
-        int phsID   = g.addNode (std::make_unique<PhaserNode>());
-        int mixID   = g.addNode (std::make_unique<MixNode>());
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(lfoID)->getParam("rate")->set (0.5f);
-        g.getNode(phsID)->getParam("depth")->set (0.8f);
-        g.getNode(mixID)->getParam("mix")->set (0.5f);
-
-        g.connect (inID, 0, splitID, 0);
-        g.connect (splitID, 0, mixID, 0);
-        g.connect (splitID, 1, phsID, 0);
-        g.connect (lfoID, 0, phsID, 1);
-        g.connect (phsID, 0, mixID, 1);
-        g.connect (mixID, 0, outID, 0);
-        g.connect (mixID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
-
-    /** 7. Flanger: Input → Split → Flanger(LFO) → Mix → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createFlanger()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Flanger");
-        auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());
-        int splitID = g.addNode (std::make_unique<SplitNode>());
-        int lfoID   = g.addNode (std::make_unique<LFONode>());
-        int flgID   = g.addNode (std::make_unique<FlangerNode>());
-        int mixID   = g.addNode (std::make_unique<MixNode>());
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(lfoID)->getParam("rate")->set (0.2f);
-        g.getNode(flgID)->getParam("depth")->set (0.9f);
-        g.getNode(flgID)->getParam("feedback")->set (0.6f);
-        g.getNode(mixID)->getParam("mix")->set (0.5f);
-
-        g.connect (inID, 0, splitID, 0);
-        g.connect (splitID, 0, mixID, 0);
-        g.connect (splitID, 1, flgID, 0);
-        g.connect (lfoID, 0, flgID, 1);
-        g.connect (flgID, 0, mixID, 1);
-        g.connect (mixID, 0, outID, 0);
-        g.connect (mixID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
-
-    /** 8. Tremolo: Input → Multiply(LFO) → Output */
+    // Chorus / Phaser / Flanger / Tremolo are HONEST builds — declared graph +
+    // control-node twins in FactoryDesigns::create*; retired from here.
+#if 0
     inline std::unique_ptr<GraphPedalProcessor> createTremolo()
     {
         auto proc = std::make_unique<GraphPedalProcessor> ("Tremolo");
@@ -441,6 +357,7 @@ namespace GraphPedalFactory
         proc->rebuildParameters();
         return proc;
     }
+#endif
 
     // ─── TIME & DYNAMICS ────────────────────────────────────────────────────────
 

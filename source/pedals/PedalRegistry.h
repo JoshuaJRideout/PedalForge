@@ -421,22 +421,22 @@ inline std::vector<PedalInfo> getFactoryPedals()
         // ─── MODULATION ────────────────────────────────────────────────────
         { "Chorus",       "Modulation", 1, 2, 4,
           juce::Colour (0xFFA78BFA),    // purple
-          [] { return GraphPedalFactory::createChorus(); },
+          [] { return processorFromDeclaredGraph ("Chorus", FactoryDesigns::createChorus); },
           [] { return loadDesignOrDefault("Chorus", FactoryDesigns::createChorus); } },
 
         { "Phaser",       "Modulation", 1, 2, 3,
           juce::Colour (0xFFD946EF),    // fuchsia
-          [] { return GraphPedalFactory::createPhaser(); },
+          [] { return processorFromDeclaredGraph ("Phaser", FactoryDesigns::createPhaser); },
           [] { return loadDesignOrDefault("Phaser", FactoryDesigns::createPhaser); } },
 
         { "Flanger",      "Modulation", 1, 2, 4,
           juce::Colour (0xFFEC4899),    // pink
-          [] { return GraphPedalFactory::createFlanger(); },
+          [] { return processorFromDeclaredGraph ("Flanger", FactoryDesigns::createFlanger); },
           [] { return loadDesignOrDefault("Flanger", FactoryDesigns::createFlanger); } },
 
         { "Tremolo",      "Modulation", 1, 2, 2,
           juce::Colour (0xFFFB7185),    // light pink
-          [] { return GraphPedalFactory::createTremolo(); },
+          [] { return processorFromDeclaredGraph ("Tremolo", FactoryDesigns::createTremolo); },
           [] { return loadDesignOrDefault("Tremolo", FactoryDesigns::createTremolo); } },
 
         // ─── TIME & DYNAMICS ───────────────────────────────────────────────

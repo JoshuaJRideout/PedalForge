@@ -633,26 +633,39 @@ namespace FactoryDesigns
         d->chassisColour = juce::Colour(0xFFA78BFA);
         addBypassAndLED(*d);
 
-        for (int i=0; i<4; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 30; knob.height = 30;
-            knob.x = 25.0f + (i % 2) * 55.0f;
-            knob.y = 30.0f + (i / 2) * 50.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Rate";
-        d->controls[3].label = "Depth";
-        d->controls[4].label = "Time";
-        d->controls[5].label = "Mix";
+        // In -> Split; dry to Mix, wet through an LFO-modulated delay; Mix -> Out.
+        DSPGraph g;
+        int inID    = g.addNode (createNodeByType ("audio_input"));
+        int splitID = g.addNode (createNodeByType ("split"));
+        int lfoID   = g.addNode (createNodeByType ("lfo"));
+        int modID   = g.addNode (createNodeByType ("mod_delay"));
+        int mixID   = g.addNode (createNodeByType ("mix"));
+        int outID   = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
-        d->mappings.push_back({"knob_2", "4_depth"}); // ModDelay depth
-        d->mappings.push_back({"knob_3", "4_time"}); // ModDelay time
-        d->mappings.push_back({"knob_4", "5_mix"}); // MixNode mix
+        g.getNode (lfoID)->getParam ("rate")->set (1.5f);
+        g.getNode (modID)->getParam ("time")->set (0.007f);
+        g.getNode (modID)->getParam ("depth")->set (0.003f);
+        g.getNode (mixID)->getParam ("mix")->set (0.5f);
+
+        float gx = 60.0f;
+        for (int id : { inID, splitID, lfoID, modID, mixID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 260.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, splitID, 0);
+        g.connect (splitID, 0, mixID, 0);
+        g.connect (splitID, 1, modID, 0);
+        g.connect (lfoID, 0, modID, 1);
+        g.connect (modID, 0, mixID, 1);
+        g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
+
+        addBoundKnob (g, *d, "Rate",  25.0f, 30.0f, lfoID, "rate",  30, 30);
+        addBoundKnob (g, *d, "Depth", 80.0f, 30.0f, modID, "depth", 30, 30);
+        addBoundKnob (g, *d, "Time",  25.0f, 80.0f, modID, "time",  30, 30);
+        addBoundKnob (g, *d, "Mix",   80.0f, 80.0f, mixID, "mix",   30, 30);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -667,24 +680,37 @@ namespace FactoryDesigns
         d->chassisColour = juce::Colour(0xFFD946EF);
         addBypassAndLED(*d);
 
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 35; knob.height = 35;
-            knob.x = d->chassisW / 2.0f - 17.5f;
-            knob.y = 30.0f + i * 45.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Rate";
-        d->controls[3].label = "Depth";
-        d->controls[4].label = "Mix";
+        DSPGraph g;
+        int inID    = g.addNode (createNodeByType ("audio_input"));
+        int splitID = g.addNode (createNodeByType ("split"));
+        int lfoID   = g.addNode (createNodeByType ("lfo"));
+        int phsID   = g.addNode (createNodeByType ("phaser"));
+        int mixID   = g.addNode (createNodeByType ("mix"));
+        int outID   = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
-        d->mappings.push_back({"knob_2", "4_depth"}); // PhaserNode depth
-        d->mappings.push_back({"knob_3", "5_mix"}); // MixNode mix
+        g.getNode (lfoID)->getParam ("rate")->set (0.5f);
+        g.getNode (phsID)->getParam ("depth")->set (0.8f);
+        g.getNode (mixID)->getParam ("mix")->set (0.5f);
+
+        float gx = 60.0f;
+        for (int id : { inID, splitID, lfoID, phsID, mixID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 260.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, splitID, 0);
+        g.connect (splitID, 0, mixID, 0);
+        g.connect (splitID, 1, phsID, 0);
+        g.connect (lfoID, 0, phsID, 1);
+        g.connect (phsID, 0, mixID, 1);
+        g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 17.5f;
+        addBoundKnob (g, *d, "Rate",  cx, 30.0f,  lfoID, "rate",  35, 35);
+        addBoundKnob (g, *d, "Depth", cx, 75.0f,  phsID, "depth", 35, 35);
+        addBoundKnob (g, *d, "Mix",   cx, 120.0f, mixID, "mix",   35, 35);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -699,26 +725,38 @@ namespace FactoryDesigns
         d->chassisColour = juce::Colour(0xFFEC4899);
         addBypassAndLED(*d);
 
-        for (int i=0; i<4; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 30; knob.height = 30;
-            knob.x = 25.0f + (i % 2) * 55.0f;
-            knob.y = 30.0f + (i / 2) * 50.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Rate";
-        d->controls[3].label = "Depth";
-        d->controls[4].label = "Fdbk";
-        d->controls[5].label = "Mix";
+        DSPGraph g;
+        int inID    = g.addNode (createNodeByType ("audio_input"));
+        int splitID = g.addNode (createNodeByType ("split"));
+        int lfoID   = g.addNode (createNodeByType ("lfo"));
+        int flgID   = g.addNode (createNodeByType ("flanger"));
+        int mixID   = g.addNode (createNodeByType ("mix"));
+        int outID   = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "3_rate"}); // LFONode rate
-        d->mappings.push_back({"knob_2", "4_depth"}); // FlangerNode depth
-        d->mappings.push_back({"knob_3", "4_feedback"}); // FlangerNode feedback
-        d->mappings.push_back({"knob_4", "5_mix"}); // MixNode mix
+        g.getNode (lfoID)->getParam ("rate")->set (0.2f);
+        g.getNode (flgID)->getParam ("depth")->set (0.9f);
+        g.getNode (flgID)->getParam ("feedback")->set (0.6f);
+        g.getNode (mixID)->getParam ("mix")->set (0.5f);
+
+        float gx = 60.0f;
+        for (int id : { inID, splitID, lfoID, flgID, mixID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 260.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, splitID, 0);
+        g.connect (splitID, 0, mixID, 0);
+        g.connect (splitID, 1, flgID, 0);
+        g.connect (lfoID, 0, flgID, 1);
+        g.connect (flgID, 0, mixID, 1);
+        g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
+
+        addBoundKnob (g, *d, "Rate",  25.0f, 30.0f, lfoID, "rate",     30, 30);
+        addBoundKnob (g, *d, "Depth", 80.0f, 30.0f, flgID, "depth",    30, 30);
+        addBoundKnob (g, *d, "Fdbk",  25.0f, 80.0f, flgID, "feedback", 30, 30);
+        addBoundKnob (g, *d, "Mix",   80.0f, 80.0f, mixID, "mix",      30, 30);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -733,22 +771,44 @@ namespace FactoryDesigns
         d->chassisColour = juce::Colour(0xFFFB7185);
         addBypassAndLED(*d);
 
-        for (int i=0; i<2; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 40; knob.height = 40;
-            knob.x = d->chassisW / 2.0f - 20.0f;
-            knob.y = 40.0f + i * 55.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Rate";
-        d->controls[3].label = "Depth";
+        // Tremolo = audio * a unipolar 0..1 envelope. The LFO is bipolar, so we
+        // map it: (LFO + 1) / 2. Add/Divide take their second operand from their
+        // second INPUT, so we feed constants in (this is the legible way a user
+        // would wire it, and it actually works — unlike a bare value param).
+        DSPGraph g;
+        int inID  = g.addNode (createNodeByType ("audio_input"));
+        int lfoID = g.addNode (createNodeByType ("lfo"));
+        int oneID = g.addNode (createNodeByType ("constant"));
+        int addID = g.addNode (createNodeByType ("add"));
+        int twoID = g.addNode (createNodeByType ("constant"));
+        int divID = g.addNode (createNodeByType ("divide"));
+        int mulID = g.addNode (createNodeByType ("multiply"));
+        int outID = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_rate"}); // LFONode rate
-        d->mappings.push_back({"knob_2", "2_depth"}); // LFONode depth
+        g.getNode (lfoID)->getParam ("rate")->set (5.0f);
+        g.getNode (lfoID)->getParam ("depth")->set (0.8f);   // floor stays above silence
+        g.getNode (oneID)->getParam ("value")->set (1.0f);
+        g.getNode (twoID)->getParam ("value")->set (2.0f);
+
+        float gx = 60.0f;
+        for (int id : { inID, lfoID, oneID, addID, twoID, divID, mulID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 260.0f; gx += 150.0f; }
+
+        g.connect (lfoID, 0, addID, 0);   // a = LFO
+        g.connect (oneID, 0, addID, 1);   // b = 1   -> LFO + 1
+        g.connect (addID, 0, divID, 0);   // a = LFO+1
+        g.connect (twoID, 0, divID, 1);   // b = 2   -> (LFO+1)/2  (0..1)
+        g.connect (inID, 0, mulID, 0);    // a = audio
+        g.connect (divID, 0, mulID, 1);   // b = envelope
+        g.connect (mulID, 0, outID, 0);
+        g.connect (mulID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 20.0f;
+        addBoundKnob (g, *d, "Rate",  cx, 40.0f, lfoID, "rate",  40, 40);
+        addBoundKnob (g, *d, "Depth", cx, 95.0f, lfoID, "depth", 40, 40);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
