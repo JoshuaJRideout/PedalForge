@@ -381,6 +381,16 @@ public:
              "  setParam(n, \"paramName\", value)\n"
              "  Wire a full path in->...->out or the pedal is SILENT. After building, the agent\n"
              "  should call verify_pedal to confirm the audio path connected.\n\n"
+             "  EASY DISPLAY (menu screen): add a \"disp_easy\" node, then configure it with\n"
+             "    d = addNode(\"disp_easy\")\n"
+             "    setScreen(d, {\"kind\":\"easy\",\"grid\":{\"lines\":4,\"cols\":16},\"font\":12,\n"
+             "                  \"fg\":\"FFFFFFFF\",\"bg\":\"FF101010\",\"items\":[\n"
+             "      {\"id\":\"mix\",\"type\":\"value\",\"label\":\"Mix\",\"port\":\"out\",\"min\":0,\"max\":1,\"value\":0.5,\"fmt\":\"%.0f%%\"},\n"
+             "      {\"id\":\"lvl\",\"type\":\"readout\",\"label\":\"In\",\"port\":\"in\",\"fmt\":\"%.1f\"} ]})\n"
+             "    Write the JSON UNQUOTED as the 2nd arg. Each item declares its PORT: \"out\"\n"
+             "    (value/toggle/trigger/list -> a Control output you wire to a param), \"in\"\n"
+             "    (readout -> a Control input reading a node value to display), or \"none\".\n"
+             "    The node grows one port per out/in item; wire them with connect().\n\n"
              "DSP script - per-sample expression for an Expression node on the pedal.\n\n"
              "ExpressionVM functions (for DSP/UI expressions):\n";
         s << ExpressionVM::dumpFunctionsAsMarkdown();
@@ -1083,6 +1093,34 @@ private:
                     }
                     else
                         logToConsole ("  WARNING: Param \"" + paramName + "\" not found on node " + nodeRef);
+                }
+            }
+            // Parse: setScreen(node, <ScreenDesign JSON>) — configure an Easy Display.
+            // The JSON is taken verbatim as the rest of the line (write it UNQUOTED,
+            // e.g. setScreen(disp, {"kind":"easy","grid":{"lines":4,"cols":16},"items":[...]}) ).
+            else if (line.startsWith ("setScreen"))
+            {
+                juce::String args = line.fromFirstOccurrenceOf ("(", false, false)
+                                        .upToLastOccurrenceOf (")", false, false);
+                juce::String nodeRef = args.upToFirstOccurrenceOf (",", false, false).trim();
+                juce::String jsonStr = args.fromFirstOccurrenceOf (",", false, false).trim();
+                if (jsonStr.startsWithChar ('"') && jsonStr.endsWithChar ('"'))
+                    jsonStr = jsonStr.unquoted();
+
+                int nid = varToNodeID.count (nodeRef) ? varToNodeID[nodeRef] : nodeRef.getIntValue();
+                if (auto* disp = dynamic_cast<EasyDisplayNode*> (tempGraph.getNode (nid)))
+                {
+                    disp->setScreenJSON (jsonStr);
+                    logToConsole ("  Set screen on " + nodeRef + " ("
+                                  + juce::String ((int) disp->getOutputPorts().size()) + " out / "
+                                  + juce::String ((int) disp->getInputPorts().size()) + " in ports)");
+                }
+                else
+                {
+                    codeEditor.setErrorLine (lineIdx + 1, "setScreen target must be a disp_easy node");
+                    logToConsole ("ERROR line " + juce::String (lineIdx + 1) + ": setScreen target must be a disp_easy node");
+                    hasError = true;
+                    break;
                 }
             }
             else
