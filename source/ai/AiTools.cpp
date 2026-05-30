@@ -33,6 +33,14 @@ namespace
         return juce::var (o);
     }
 
+    juce::var numberProp (const juce::String& desc)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("type", "integer");
+        o->setProperty ("description", desc);
+        return juce::var (o);
+    }
+
     void auditLog (const juce::String& line)
     {
         auto f = pf::paths::getLogsDir().getChildFile ("ai_audit.log");
@@ -42,6 +50,13 @@ namespace
     juce::String argStr (const ToolCall& call, const juce::String& key)
     {
         return call.input.getProperty (key, "").toString();
+    }
+
+    // Robust to the model sending a number OR a quoted string.
+    int argInt (const ToolCall& call, const juce::String& key, int def = 0)
+    {
+        auto s = argStr (call, key);
+        return s.isNotEmpty() ? s.getIntValue() : def;
     }
 }
 
@@ -257,6 +272,45 @@ std::vector<ToolDef> buildToolDefs()
                         { "to",   stringProp ("Destination pedal uuid") } },
                       { "from", "to" }) });
 
+    // ── MIDI TAB ── map hardware controller CCs to board-pedal parameters.
+    defs.push_back ({ "list_midi_mappings",
+        "List the board's MIDI mappings (which CC controls which pedal parameter).",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "list_pedal_params",
+        "List a board pedal's mappable parameters and their ids (format "
+        "'<nodeUID>:<paramID>'). Call this to get the id you pass to map_midi_cc.",
+        schemaObject ({ { "pedal_uuid", stringProp ("Board pedal uuid") } }, { "pedal_uuid" }) });
+
+    defs.push_back ({ "map_midi_cc",
+        "Map a MIDI CC to a pedal parameter so a hardware knob/expression pedal "
+        "controls it. 'param' is the '<nodeUID>:<paramID>' id from "
+        "list_pedal_params. 'channel' 0 = any.",
+        schemaObject ({ { "param",   stringProp ("Parameter id '<nodeUID>:<paramID>'") },
+                        { "cc",      numberProp ("MIDI CC number 0-127") },
+                        { "channel", numberProp ("MIDI channel 1-16, or 0 for any (optional)") } },
+                      { "param", "cc" }) });
+
+    defs.push_back ({ "remove_midi_mapping",
+        "Remove the MIDI mapping for a parameter id.",
+        schemaObject ({ { "param", stringProp ("Parameter id '<nodeUID>:<paramID>'") } }, { "param" }) });
+
+    defs.push_back ({ "clear_midi_mappings",
+        "Remove ALL of the board's MIDI mappings.",
+        schemaObject ({}, {}) });
+
+    // ── NAVIGATION + LIBRARY ──
+    defs.push_back ({ "switch_tab",
+        "Switch the app to a tab so you can work on it (and screenshot to SEE "
+        "it). Tabs: Play, Board, Route, Pedal, FX, Script, Wiki, Library, MIDI.",
+        schemaObject ({ { "tab", stringProp ("Tab name (e.g. Board, Play, FX, MIDI, Wiki)") } }, { "tab" }) });
+
+    defs.push_back ({ "list_assets",
+        "List available assets the user has: NAM amp models, IR cabinets, "
+        "images, saved pedal designs, and saved boards. Optional 'category': "
+        "nam | ir | image | pedal | board | all (default all).",
+        schemaObject ({ { "category", stringProp ("nam | ir | image | pedal | board | all") } }, {}) });
+
     return defs;
 }
 
@@ -461,6 +515,37 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
                                                      : host.disconnectPedals (from, to);
         return r;
     }
+    if (call.name == "list_midi_mappings") { r.content = host.listMidiMappings(); return r; }
+    if (call.name == "clear_midi_mappings") { r.content = host.clearMidiMappings(); return r; }
+    if (call.name == "list_pedal_params")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
+        r.content = host.listPedalParams (uuid);
+        return r;
+    }
+    if (call.name == "map_midi_cc")
+    {
+        auto param = argStr (call, "param");
+        if (param.isEmpty()) return fail ("Missing 'param' (get it from list_pedal_params)");
+        r.content = host.mapMidiCc (param, argInt (call, "cc", -1), argInt (call, "channel", 0));
+        return r;
+    }
+    if (call.name == "remove_midi_mapping")
+    {
+        auto param = argStr (call, "param");
+        if (param.isEmpty()) return fail ("Missing 'param'");
+        r.content = host.removeMidiMapping (param);
+        return r;
+    }
+    if (call.name == "switch_tab")
+    {
+        auto tab = argStr (call, "tab");
+        if (tab.isEmpty()) return fail ("Missing 'tab'");
+        r.content = host.switchTab (tab);
+        return r;
+    }
+    if (call.name == "list_assets") { r.content = host.listAssets (argStr (call, "category")); return r; }
     if (call.name == "run_script")
     {
         auto mode = argStr (call, "mode").toLowerCase();

@@ -83,6 +83,13 @@ public:
     juce::String readRouting() override;
     juce::String connectPedals (const juce::String& fromUuid, const juce::String& toUuid) override;
     juce::String disconnectPedals (const juce::String& fromUuid, const juce::String& toUuid) override;
+    juce::String listMidiMappings() override;
+    juce::String listPedalParams (const juce::String& pedalUuid) override;
+    juce::String mapMidiCc (const juce::String& param, int cc, int channel) override;
+    juce::String removeMidiMapping (const juce::String& param) override;
+    juce::String clearMidiMappings() override;
+    juce::String switchTab (const juce::String& tabName) override;
+    juce::String listAssets (const juce::String& category) override;
 
 
 private:

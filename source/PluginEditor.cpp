@@ -6,6 +6,7 @@
 #include "ui/PlayTabComponent.h"
 #include "peripherals/displays/modes/MidiMonitorMode.h"
 #include "ai/AudioProbe.h"
+#include "util/AppPaths.h"
 #include <set>
 
 #if JucePlugin_Build_Standalone
@@ -1407,4 +1408,115 @@ juce::String PedalForgeEditor::disconnectPedals (const juce::String& fromUuid, c
     if (! ok0 && ! ok1)
         return "No connection " + aName + " -> " + bName + " to remove.";
     return "Disconnected " + aName + " -> " + bName + ".\n" + readRouting();
+}
+
+//==============================================================================
+// MIDI tools — map controller CCs to board-pedal parameters.
+juce::String PedalForgeEditor::listMidiMappings()
+{
+    const auto& maps = processorRef.getMidiLearn().getMappings();
+    if (maps.empty()) return "No MIDI mappings on the board.";
+    juce::String r = "MIDI mappings (param <- CC):\n";
+    for (const auto& [paramId, m] : maps)
+        r << "  " << paramId << "  <- CC " << m.ccNumber
+          << (m.channel == 0 ? juce::String (" (any channel)")
+                             : " (channel " + juce::String (m.channel) + ")") << "\n";
+    return r;
+}
+
+juce::String PedalForgeEditor::listPedalParams (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+    auto& eng = processorRef.getGraphEngine();
+    if (eng.getPedalInstance (inst->nodeID) == nullptr)
+        return "ERROR: '" + inst->name + "' is not on the Board (MIDI mapping targets board pedals).";
+    auto* node = eng.getGraph().getNodeForId (inst->nodeID);
+    auto* proc = node != nullptr ? node->getProcessor() : nullptr;
+    if (proc == nullptr) return "ERROR: pedal has no processor.";
+
+    const auto prefix = juce::String (inst->nodeID.uid) + ":";
+    juce::String r;
+    r << "Mappable parameters for \"" << inst->name << "\" (use the id with map_midi_cc):\n";
+    int n = 0;
+    for (auto* p : proc->getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+        {
+            r << "  " << prefix << rp->getParameterID()
+              << "   \"" << rp->getName (40) << "\" = " << rp->getCurrentValueAsText() << "\n";
+            ++n;
+        }
+    if (n == 0) r << "  (no parameters)\n";
+    return r;
+}
+
+juce::String PedalForgeEditor::mapMidiCc (const juce::String& param, int cc, int channel)
+{
+    if (cc < 0 || cc > 127)       return "ERROR: cc must be 0-127.";
+    if (channel < 0 || channel > 16) return "ERROR: channel must be 0 (any) - 16.";
+    if (! param.contains (":"))
+        return "ERROR: param must be '<nodeUID>:<paramID>' from list_pedal_params (e.g. \"1027:3_gain\").";
+    processorRef.getMidiLearn().setMapping (param, cc, channel);
+    return "Mapped CC " + juce::String (cc)
+         + (channel == 0 ? juce::String (" (any channel)") : " (channel " + juce::String (channel) + ")")
+         + " -> " + param + ".\n" + listMidiMappings();
+}
+
+juce::String PedalForgeEditor::removeMidiMapping (const juce::String& param)
+{
+    processorRef.getMidiLearn().removeMapping (param);
+    return "Removed MIDI mapping for " + param + ".\n" + listMidiMappings();
+}
+
+juce::String PedalForgeEditor::clearMidiMappings()
+{
+    processorRef.getMidiLearn().clearAllMappings();
+    return "Cleared all board MIDI mappings.";
+}
+
+//==============================================================================
+// Navigation + Library.
+juce::String PedalForgeEditor::switchTab (const juce::String& tabName)
+{
+    const auto t = tabName.trim().toLowerCase();
+    juce::TextButton* btn = t == "play"    ? &tabPlay
+                          : t == "board"   ? &tabBoard
+                          : t == "route"   ? &tabRoute
+                          : t == "pedal"   ? &tabPedal
+                          : t == "fx"      ? &tabFX
+                          : t == "script"  ? &tabScript
+                          : t == "wiki"    ? &tabWiki
+                          : t == "library" ? &tabLibrary
+                          : t == "store"   ? &tabStore
+                          : t == "midi"    ? &tabMidi
+                                           : nullptr;
+    if (btn == nullptr)
+        return "ERROR: unknown tab '" + tabName + "'. Tabs: Play, Board, Route, "
+               "Pedal, FX, Script, Wiki, Library, MIDI.";
+    btn->setToggleState (true, juce::sendNotification);   // radio group -> drives the switch
+    return "Switched to the " + btn->getButtonText() + " tab. (screenshot to see it.)";
+}
+
+juce::String PedalForgeEditor::listAssets (const juce::String& category)
+{
+    const auto cat = category.trim().toLowerCase();
+    juce::String r;
+    auto section = [&] (const juce::String& key, const juce::String& label,
+                        const juce::File& dir, const juce::String& wild)
+    {
+        if (! (cat.isEmpty() || cat == "all" || cat == key)) return;
+        juce::StringArray items;
+        for (const auto& f : dir.findChildFiles (juce::File::findFiles, false, wild))
+            items.add (f.getFileName());
+        items.sort (true);
+        r << label << " (" << items.size() << "):\n";
+        for (const auto& i : items) r << "  " << i << "\n";
+    };
+    section ("nam",   "NAM models",            pf::paths::getNamDir(),     "*.nam");
+    section ("ir",    "Impulse responses",     pf::paths::getIrDir(),      "*.wav");
+    section ("image", "Images",                pf::paths::getImagesDir(),  "*.png;*.jpg;*.jpeg");
+    section ("pedal", "Saved pedal designs",   pf::paths::getDesignsDir(), "*.json");
+    section ("board", "Saved boards",          pf::paths::getBoardsDir(),  "*.pfboard");
+    return r.isEmpty() ? "No assets found (unknown category? use: nam, ir, image, pedal, board, or all)."
+                       : r;
 }

@@ -141,5 +141,21 @@ namespace pf::ai
         virtual juce::String readRouting() = 0;                                              // list connections
         virtual juce::String connectPedals (const juce::String& fromUuid, const juce::String& toUuid) = 0;
         virtual juce::String disconnectPedals (const juce::String& fromUuid, const juce::String& toUuid) = 0;
+
+        //======================================================================
+        // MIDI TAB — map hardware controller CCs to board-pedal parameters.
+        // Mapping ids are "<nodeUID>:<paramID>" (get them from listPedalParams).
+        virtual juce::String listMidiMappings() = 0;
+        virtual juce::String listPedalParams (const juce::String& pedalUuid) = 0;
+        virtual juce::String mapMidiCc (const juce::String& param, int cc, int channel) = 0;
+        virtual juce::String removeMidiMapping (const juce::String& param) = 0;
+        virtual juce::String clearMidiMappings() = 0;
+
+        //======================================================================
+        // Navigation + Library. switchTab lets the agent move to ANY tab (then
+        // screenshot to see it); listAssets surfaces NAM/IR/image/pedal/board
+        // files so the agent knows what's available to use.
+        virtual juce::String switchTab (const juce::String& tabName) = 0;
+        virtual juce::String listAssets (const juce::String& category) = 0;
     };
 }

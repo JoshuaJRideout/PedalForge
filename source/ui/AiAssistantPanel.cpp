@@ -73,7 +73,12 @@ namespace
             "- ROUTING: Board pedals auto-wire left-to-right. For custom signal "
             "paths (parallel splits, FX loops) use read_routing to see the graph, "
             "and connect_pedals / disconnect_pedals (endpoints are board pedal "
-            "uuids, or 'input'/'output' for the board's audio I/O).";
+            "uuids, or 'input'/'output' for the board's audio I/O).\n"
+            "- MIDI: to map a hardware knob/CC to a pedal parameter, call "
+            "list_pedal_params(uuid) to get the parameter id, then map_midi_cc. "
+            "list/remove/clear_midi_mappings manage them.\n"
+            "- NAVIGATION: you can switch_tab to any tab and screenshot to SEE "
+            "it; list_assets shows the user's NAM/IR/image/pedal/board files.";
     }
 }
 
