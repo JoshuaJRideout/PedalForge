@@ -1,4 +1,5 @@
 #include "ClaudeCodeProvider.h"
+#include "../util/AppPaths.h"
 
 namespace pf::ai
 {
@@ -141,13 +142,25 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
     // /usr/bin/env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p …
     // Stripping the API-key env vars guarantees the user's SUBSCRIPTION is
     // used (those vars would otherwise switch to metered API billing).
-    juce::StringArray args {
+    // Permission / privacy hardening (task #66): macOS attributes the child's
+    // filesystem access to the parent PedalForge bundle, so if claude reads the
+    // cwd / ~/Documents / the Photos library, the USER gets scary "PedalForge
+    // would like to access …" TCC prompts. We shut that down at the source:
+    //   --tools ""             disable ALL built-in tools — our protocol is pure
+    //                          text, so it never needs Bash/Read/Glob; with no
+    //                          tools it cannot touch the filesystem.
+    //   --setting-sources user load only ~/.claude; skip project/local settings
+    //                          discovery that walks the cwd tree.
+    //   (cwd confinement below) run inside an app-owned scratch dir.
+    juce::StringArray inner {
         "/usr/bin/env", "-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN",
         bin,
         "-p", prompt,
         "--output-format", "json",
         "--model", modelAlias,
-        "--permission-mode", "dontAsk",      // can't run its own tools; text only
+        "--permission-mode", "dontAsk",
+        "--tools", "",                       // no built-in tools at all (#66)
+        "--setting-sources", "user",         // skip cwd-tree settings discovery
         "--strict-mcp-config"                // skip project MCP discovery (faster startup)
     };
 
@@ -160,13 +173,23 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
         // omits the dashes, which --session-id rejects.
         sessionId = juce::Uuid().toDashedString();
         const auto sys = buildProtocolSystemPrompt (systemPrompt, tools);
-        args.addArray ({ "--session-id", sessionId, "--system-prompt", sys });
+        inner.addArray ({ "--session-id", sessionId, "--system-prompt", sys });
         sessionStarted = true;
     }
     else
     {
-        args.addArray ({ "--resume", sessionId });
+        inner.addArray ({ "--resume", sessionId });
     }
+
+    // Confine the child to an app-owned scratch directory. The /bin/sh wrapper
+    // does `cd <scratch>` then exec's the real command. Every argument is passed
+    // as a SEPARATE positional parameter ($1, $2, …), so the prompt/system-prompt
+    // text is never re-parsed by the shell — no quoting/escaping hazards even
+    // with newlines or quotes in the content.
+    const auto scratch = pf::paths::getAiScratchDir().getFullPathName();
+    juce::StringArray args { "/bin/sh", "-c", "cd \"$1\" && shift && exec \"$@\"",
+                             "pf-ai", scratch };
+    args.addArray (inner);
 
     juce::ChildProcess proc;
     if (! proc.start (args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))

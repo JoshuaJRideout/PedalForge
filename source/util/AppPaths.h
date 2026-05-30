@@ -108,6 +108,15 @@ namespace pf::paths
     inline juce::File getControllersDir()  { return makeChild ("controllers"); }
     inline juce::File getAutomationsDir()  { return makeChild ("automations"); }
     inline juce::File getSnapshotsDir()    { return makeChild ("snapshots"); }
+    inline juce::File getPresetsDir()      { return makeChild ("Presets"); }
+
+    // Scratch working directory for the spawned `claude` AI child process.
+    // Lives under our own data root (which the app may read/write WITHOUT any
+    // TCC prompt), so confining the child's cwd here keeps its startup
+    // filesystem access out of the user's Documents/Desktop/Photos — those
+    // accesses would otherwise be attributed to the PedalForge bundle and
+    // pop scary permission prompts (task #66).
+    inline juce::File getAiScratchDir()    { return makeChild ("ai_scratch"); }
 
     // Asset library subtree
     inline juce::File getLibraryDir()      { return makeChild ("Library"); }

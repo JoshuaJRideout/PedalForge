@@ -1,21 +1,24 @@
 #include "PresetManager.h"
 #include "../PluginProcessor.h"
+#include "../util/AppPaths.h"
 
 //==============================================================================
 PresetManager::PresetManager (PedalForgeProcessor& proc)
     : processor (proc)
 {
+    // Presets now live under the app data root (~/Library/.../PedalForge).
+    // Older builds used ~/Documents/PedalForge/Presets, but touching
+    // ~/Documents triggers a "would like to access your Documents folder"
+    // TCC prompt (task #66 / #63). We deliberately do NOT scan the old
+    // location at launch — that would re-introduce the very prompt we're
+    // removing, even for fresh installs. Any pre-existing presets stay on
+    // disk in Documents; relocate them manually if needed.
 }
 
 //==============================================================================
 juce::File PresetManager::getPresetsDirectory() const
 {
-    auto dir = juce::File::getSpecialLocation (
-                   juce::File::userDocumentsDirectory)
-                   .getChildFile ("PedalForge")
-                   .getChildFile ("Presets");
-    dir.createDirectory();
-    return dir;
+    return pf::paths::getPresetsDir();   // ~/Library/.../PedalForge/Presets
 }
 
 juce::StringArray PresetManager::getPresetNames() const
