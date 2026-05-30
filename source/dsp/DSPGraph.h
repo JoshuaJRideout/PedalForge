@@ -213,6 +213,7 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "disp_vu")      return std::make_unique<VUMeterNode>();
     if (type == "disp_tuner")   return std::make_unique<TunerDisplayNode>();
     if (type == "disp_7seg")    return std::make_unique<SevenSegNode>();
+    if (type == "disp_easy")    return std::make_unique<EasyDisplayNode>();
     if (type == "disp_text")    return std::make_unique<TextScreenNode>();
     if (type == "disp_console") return std::make_unique<ConsoleScreenNode>();
     if (type == "disp_scope")   return std::make_unique<OscilloscopeNode>();

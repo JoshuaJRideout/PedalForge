@@ -854,3 +854,107 @@ public:
         }
     }
 };
+
+//==============================================================================
+// ─── EASY DISPLAY ───────────────────────────────────────────────────────────
+//
+// The "Easy" of the two display types: a configurable text-grid menu. Carries a
+// ScreenDesign (JSON) and exposes EXPLICIT ports built from its menu items -
+// each item declares its own port:
+//   "out"  -> a Control output (value/toggle/trigger/list) you wire to params
+//   "in"   -> a Control input  (readout: read another node's value to display)
+//   "none" -> navigation/display only (submenu, label)
+//
+// This node is the model + I/O substrate; the faceplate menu renderer and the
+// encoder/select/back navigation are a later slice. Output items emit their
+// stored value; readout items capture their incoming value for display.
+//
+// ScreenDesign JSON (v1):
+// { "kind":"easy", "grid":{"lines":4,"cols":16}, "font":12,
+//   "fg":"FFFFFFFF", "bg":"FF101010",
+//   "items":[ {"id":"level","type":"value","label":"Level","port":"out",
+//              "min":0,"max":1,"step":0.01,"value":0.5,"fmt":"%.0f%%"},
+//             {"id":"meter","type":"readout","label":"In","port":"in","fmt":"%.1f"} ] }
+//==============================================================================
+class EasyDisplayNode : public DSPNode
+{
+public:
+    EasyDisplayNode() : DSPNode ("disp_easy", "Easy Display")
+    {
+        setScreenJSON (defaultScreenJSON());
+    }
+
+    /** Replace the ScreenDesign (rebuilds the explicit ports from its items). */
+    void setScreenJSON (const juce::String& json)
+    {
+        auto parsed = juce::JSON::parse (json);
+        if (parsed.isObject()) screen = parsed;
+        rebuildPorts();
+    }
+    juce::String getScreenJSON() const { return juce::JSON::toString (screen); }
+
+    juce::var toJSON() const override
+    {
+        auto v = DSPNode::toJSON();
+        if (auto* o = v.getDynamicObject()) o->setProperty ("screen", screen);
+        return v;
+    }
+    void fromJSON (const juce::var& json) override
+    {
+        DSPNode::fromJSON (json);
+        if (auto* o = json.getDynamicObject())
+            if (o->hasProperty ("screen")) { screen = o->getProperty ("screen"); rebuildPorts(); }
+    }
+
+    void process (const float** in, int numIn, float** out, int numOut, int n) override
+    {
+        for (size_t i = 0; i < outItems.size() && (int) i < numOut; ++i)
+            if (out[i] != nullptr)
+            {
+                const float v = outItems[i].value;
+                for (int s = 0; s < n; ++s) out[i][s] = v;
+            }
+        for (size_t i = 0; i < inItems.size() && (int) i < numIn; ++i)
+            inItems[i].displayValue = (in[i] != nullptr) ? in[i][0] : 0.0f;
+    }
+
+    bool isDisplayNode()  const override { return true; }
+    juce::String getDisplayType() const override { return "easy_display"; }
+
+private:
+    struct ItemPort { juce::String id; float value = 0.0f; float displayValue = 0.0f; };
+    juce::var screen;
+    std::vector<ItemPort> outItems;   // aligned to outputPorts (declaration order)
+    std::vector<ItemPort> inItems;    // aligned to inputPorts
+
+    void rebuildPorts()
+    {
+        clearInputs();
+        clearOutputs();
+        outItems.clear();
+        inItems.clear();
+
+        if (auto* items = screen.getProperty ("items", juce::var()).getArray())
+            for (const auto& iv : *items)
+            {
+                const auto id   = iv.getProperty ("id", "").toString();
+                const auto port = iv.getProperty ("port", "none").toString();
+                if (id.isEmpty()) continue;
+                if (port == "out")
+                {
+                    addOutput (id, NodePort::Control);
+                    outItems.push_back ({ id, (float) (double) iv.getProperty ("value", 0.0), 0.0f });
+                }
+                else if (port == "in")
+                {
+                    addInput (id, NodePort::Control);
+                    inItems.push_back ({ id, 0.0f, 0.0f });
+                }
+            }
+    }
+
+    static juce::String defaultScreenJSON()
+    {
+        return R"({"kind":"easy","grid":{"lines":4,"cols":16},"font":12,"fg":"FFFFFFFF","bg":"FF101010","items":[{"id":"level","type":"value","label":"Level","port":"out","min":0,"max":1,"step":0.01,"value":0.5,"fmt":"%.0f%%"},{"id":"meter","type":"readout","label":"In","port":"in","fmt":"%.1f"}]})";
+    }
+};

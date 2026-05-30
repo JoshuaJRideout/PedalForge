@@ -199,6 +199,7 @@ public:
             { "disp_text",      "Text Screen",        "Nodes/Displays/Screens",     "Text-based screen." },
             { "disp_console",   "Console Screen",     "Nodes/Displays/Screens",     "Text log output." },
             { "disp_pixel",     "Pixel Display (32x16)", "Nodes/Displays/Screens",  "Custom 32x16 addressable pixel grid." },
+            { "disp_easy",      "Easy Display (menu)", "Nodes/Displays/Screens",   "Configurable text-grid menu; items expose explicit value/readout/trigger ports you wire to other nodes." },
             { "disp_shader",    "Shader Display",     "Nodes/Displays/Screens",     "Code-driven math visualization grid." },
 
             { "disp_vu",        "VU Meter",           "Nodes/Displays/Instruments", "Analog-style VU level meter." },
