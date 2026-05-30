@@ -6,6 +6,7 @@
 #include "../engine/AudioGraphEngine.h"
 #include "../dsp/ExpressionVM.h"
 #include "../dsp/DSPGraph.h"
+#include "../dsp/ControlSurfaceSync.h"
 #include "../pedals/PedalRegistry.h"
 #include "ExpressionTokeniser.h"
 #include "LookAndFeel.h"
@@ -1151,6 +1152,13 @@ private:
                 auto newProc = std::make_unique<GraphPedalProcessor> (
                     activePedal->name, juce::JSON::toString (graphJSON));
                 engine->updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+
+                // Auto-create / remove faceplate widgets for control-surface and
+                // display "screen" nodes (e.g. Easy Display) the script declared,
+                // so they appear on the pedal face immediately — the same
+                // reconciliation the node-graph editor runs on every edit.
+                syncControlSurfaceNodes (*activePedal->design, tempGraph);
+
                 engine->saveUndoState();
 
                 setStatus ("Graph applied to pedal!", juce::Colour (0xFF10B981));

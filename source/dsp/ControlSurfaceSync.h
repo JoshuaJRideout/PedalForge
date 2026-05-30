@@ -38,11 +38,25 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
     // user-facing value first.
     struct Snap { int id; juce::String type; juce::String label; juce::String primaryParam; int positions; };
     std::vector<Snap> ctrlNodes;
-    std::set<int> validNodeIDs;     // control-surface nodes only
+    std::set<int> validNodeIDs;     // control-surface + auto-placed display nodes
     std::set<int> allNodeIDs;       // every live node — for user-mapping orphan detection
     for (const auto& [nid, node] : graph.getNodes())
     {
         if (node) allNodeIDs.insert (nid);
+
+        // Easy Display is a full-screen widget rather than a knob, so it doesn't
+        // go through the control-surface path — but, like a knob, it should
+        // auto-appear on the faceplate when added to the graph. (Small gadget
+        // displays — LED/VU/scope — stay user-placed; only the "screen" display
+        // types auto-place here.) primaryParam "display" makes the synthetic
+        // mapping nodeParam "<id>_display", which the poller resolves to the node.
+        if (node && node->isDisplayNode() && node->getDisplayType() == "easy_display")
+        {
+            ctrlNodes.push_back ({ nid, "easy_display", node->getName(), "display", 0 });
+            validNodeIDs.insert (nid);
+            continue;
+        }
+
         if (node && node->isControlSurface())
         {
             auto t = node->getControlType();
@@ -149,6 +163,8 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
         { c.width = 56; c.height = 56; c.positions = cn.positions; }
         else if (c.type == "fader")
         { c.width = 30; c.height = 120; }
+        else if (c.type == "easy_display")
+        { c.width = 130; c.height = 90; }
         else
         { c.width = 40; c.height = 40; }
 

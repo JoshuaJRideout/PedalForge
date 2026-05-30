@@ -455,8 +455,17 @@ void PlayTabComponent::timerCallback()
                                             {
                                                 wasDisplay = true;
                                                 juce::String baseControlID = mapping.controlID;
-                                                
-                                                if (auto* px = targetNode->getPixelData())
+
+                                                if (targetNode->getDisplayType() == "easy_display")
+                                                {
+                                                    juce::String text = targetNode->getDisplayText();
+                                                    if (instance.controlTexts[baseControlID] != text)
+                                                    {
+                                                        instance.controlTexts[baseControlID] = text;
+                                                        needsRepaint = true;
+                                                    }
+                                                }
+                                                else if (auto* px = targetNode->getPixelData())
                                                 {
                                                     instance.controlData[baseControlID] = *px;
                                                     needsRepaint = true;

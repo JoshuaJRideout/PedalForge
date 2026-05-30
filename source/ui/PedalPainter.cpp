@@ -131,6 +131,22 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         }
         else if (ctrl.type == "rgb_led")
             HardwareDrawing::drawRGBLED (g, ctrlBounds, val, val * 0.5f, 1.0f - val, &styles);
+        else if (ctrl.type == "easy_display")
+        {
+            // Easy Display: the node renders its menu (cursor + live values) into
+            // grid text via renderMenuText(); the poller drops it in controlTexts.
+            juce::String txt;
+            auto textIt = controlTexts.find (ctrl.controlID);
+            if (textIt != controlTexts.end()) txt = textIt->second;
+            if (txt.isEmpty()) txt = "Easy Display";
+
+            juce::StringArray lines;
+            lines.addLines (txt);
+
+            styles.fontSize = ctrl.fontSize > 0 ? (ctrl.fontSize * sc) : 0.0f;
+            HardwareDrawing::drawTextScreen (g, ctrlBounds, lines, -1, &styles);
+            continue; // menu text is drawn inside the screen — no label below
+        }
         else if (ctrl.type == "text_screen" || ctrl.type == "console")
         {
             juce::String txt = ctrl.label.isNotEmpty() ? ctrl.label : "Ready";

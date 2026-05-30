@@ -908,53 +908,301 @@ public:
 
     void process (const float** in, int numIn, float** out, int numOut, int n) override
     {
-        for (size_t i = 0; i < outItems.size() && (int) i < numOut; ++i)
-            if (out[i] != nullptr)
+        // ── Navigation inputs (encoder / select / back) live after the readout
+        //    inputs, at navBase. The audio thread is the sole writer of nav
+        //    state; the UI reads it via renderMenuText() through atomics.
+        const int encPort  = navBase;
+        const int selPort  = navBase + 1;
+        const int backPort = navBase + 2;
+        const float enc  = (encPort  < numIn && in[encPort])  ? in[encPort][n - 1]  : 0.0f;
+        const bool  sel  = (selPort  < numIn && in[selPort])  ? in[selPort][n - 1]  > 0.5f : false;
+        const bool  back = (backPort < numIn && in[backPort]) ? in[backPort][n - 1] > 0.5f : false;
+        handleNav (enc, sel, back);
+
+        // ── Emit value-item outputs (held value, block-rate).
+        for (const auto& it : items)
+            if (it.outIndex >= 0 && it.outIndex < numOut && out[it.outIndex] != nullptr)
             {
-                const float v = outItems[i].value;
-                for (int s = 0; s < n; ++s) out[i][s] = v;
+                const float v = outValues[(size_t) it.outIndex].load (std::memory_order_relaxed);
+                for (int s = 0; s < n; ++s) out[it.outIndex][s] = v;
             }
-        for (size_t i = 0; i < inItems.size() && (int) i < numIn; ++i)
-            inItems[i].displayValue = (in[i] != nullptr) ? in[i][0] : 0.0f;
+
+        // ── Capture readout inputs for display.
+        for (const auto& it : items)
+            if (it.inIndex >= 0 && it.inIndex < numIn)
+                inValues[(size_t) it.inIndex].store ((in[it.inIndex] != nullptr) ? in[it.inIndex][0] : 0.0f,
+                                                      std::memory_order_relaxed);
+
+        // ── One-shot trigger pulse: it was emitted at 1.0 this block; clear it
+        //    so the output returns to 0 next block.
+        if (pulseIndex >= 0)
+        {
+            outValues[(size_t) pulseIndex].store (0.0f, std::memory_order_relaxed);
+            pulseIndex = -1;
+        }
     }
 
     bool isDisplayNode()  const override { return true; }
     juce::String getDisplayType() const override { return "easy_display"; }
+    juce::String getDisplayText() const override { return renderMenuText(); }
+
+    /** Render the active page's items into grid text lines (cursor marker +
+        live values), ready for the faceplate text-screen painter. Called on
+        the UI thread; all mutable state it reads is atomic. */
+    juce::String renderMenuText() const
+    {
+        auto grid = screen.getProperty ("grid", juce::var());
+        const int lines = juce::jlimit (1, 16, (int) (double) grid.getProperty ("lines", 4));
+        const int cols  = juce::jlimit (4, 64, (int) (double) grid.getProperty ("cols", 16));
+
+        const int count = (int) items.size();
+        const bool edit = editMode.load (std::memory_order_relaxed);
+        const int cur   = (count > 0) ? juce::jlimit (0, count - 1, cursor.load (std::memory_order_relaxed)) : 0;
+
+        // Scroll the visible window so the cursor stays on-screen.
+        int first = 0;
+        if (count > lines)
+            first = juce::jlimit (0, count - lines, cur - lines / 2);
+
+        juce::StringArray rows;
+        for (int row = 0; row < lines; ++row)
+        {
+            const int idx = first + row;
+            if (idx >= count) { rows.add ({}); continue; }
+
+            const auto& it = items[(size_t) idx];
+            const juce::String marker = (idx == cur) ? (edit ? juce::String ("*") : juce::String (">"))
+                                                     : juce::String (" ");
+            const juce::String left  = marker + " " + it.label;
+            const juce::String value = formatItemValue (it);
+
+            juce::String line;
+            if (value.isNotEmpty())
+            {
+                int pad = cols - left.length() - value.length();
+                if (pad < 1) pad = 1;
+                line = left + juce::String::repeatedString (" ", pad) + value;
+            }
+            else
+            {
+                line = left;
+            }
+            if (line.length() > cols) line = line.substring (0, cols);
+            rows.add (line);
+        }
+        return rows.joinIntoString ("\n");
+    }
 
 private:
-    struct ItemPort { juce::String id; float value = 0.0f; float displayValue = 0.0f; };
+    enum class Kind { Value, Readout, List, Toggle, Trigger, Submenu, Label, Unknown };
+
+    struct Item
+    {
+        juce::String id, label, fmt;
+        Kind kind = Kind::Unknown;
+        int outIndex = -1;          // index into outValues / output ports, or -1
+        int inIndex  = -1;          // index into inValues  / readout input ports, or -1
+        float mn = 0.0f, mx = 1.0f, step = 0.01f;
+        juce::StringArray options;  // for "list" items
+    };
+
     juce::var screen;
-    std::vector<ItemPort> outItems;   // aligned to outputPorts (declaration order)
-    std::vector<ItemPort> inItems;    // aligned to inputPorts
+    std::vector<Item> items;
+    std::vector<std::atomic<float>> outValues;   // aligned to value/list/toggle/trigger items
+    std::vector<std::atomic<float>> inValues;    // aligned to readout items
+    int navBase = 0;                             // index of the encoder nav input port
+
+    // Nav state shared audio→UI (atomic per the handoff's thread-safety rule).
+    std::atomic<int>  cursor   { 0 };
+    std::atomic<bool> editMode { false };
+
+    // Edge/delta detection — touched on the audio thread only.
+    float lastEncoder = 0.0f;
+    bool  haveEncoder = false;
+    bool  lastSelect  = false;
+    bool  lastBack    = false;
+    int   pulseIndex  = -1;       // output index pulsed high this block by a trigger
+
+    static Kind kindFromString (const juce::String& t)
+    {
+        if (t == "value")   return Kind::Value;
+        if (t == "readout") return Kind::Readout;
+        if (t == "list")    return Kind::List;
+        if (t == "toggle")  return Kind::Toggle;
+        if (t == "trigger") return Kind::Trigger;
+        if (t == "submenu") return Kind::Submenu;
+        if (t == "label")   return Kind::Label;
+        return Kind::Unknown;
+    }
 
     void rebuildPorts()
     {
         clearInputs();
         clearOutputs();
-        outItems.clear();
-        inItems.clear();
+        items.clear();
 
-        if (auto* items = screen.getProperty ("items", juce::var()).getArray())
-            for (const auto& iv : *items)
+        std::vector<float> outInit;   // initial values, collected before outValues is sized
+        int outCount = 0, inCount = 0;
+
+        if (auto* arr = screen.getProperty ("items", juce::var()).getArray())
+            for (const auto& iv : *arr)
             {
-                const auto id   = iv.getProperty ("id", "").toString();
+                Item it;
+                it.id = iv.getProperty ("id", "").toString();
+                if (it.id.isEmpty()) continue;
+                it.label = iv.getProperty ("label", it.id).toString();
+                it.fmt   = iv.getProperty ("fmt", "").toString();
+                it.kind  = kindFromString (iv.getProperty ("type", "").toString());
+                it.mn    = (float) (double) iv.getProperty ("min", 0.0);
+                it.mx    = (float) (double) iv.getProperty ("max", 1.0);
+                it.step  = (float) (double) iv.getProperty ("step", 0.01);
+                if (auto* opts = iv.getProperty ("options", juce::var()).getArray())
+                    for (const auto& o : *opts) it.options.add (o.toString());
+
                 const auto port = iv.getProperty ("port", "none").toString();
-                if (id.isEmpty()) continue;
                 if (port == "out")
                 {
-                    addOutput (id, NodePort::Control);
-                    outItems.push_back ({ id, (float) (double) iv.getProperty ("value", 0.0), 0.0f });
+                    it.outIndex = outCount++;
+                    addOutput (it.id, NodePort::Control);
+                    outInit.push_back ((float) (double) iv.getProperty ("value", 0.0));
                 }
                 else if (port == "in")
                 {
-                    addInput (id, NodePort::Control);
-                    inItems.push_back ({ id, 0.0f, 0.0f });
+                    it.inIndex = inCount++;
+                    addInput (it.id, NodePort::Control);
                 }
+                items.push_back (std::move (it));
             }
+
+        // Navigation inputs come after the readout inputs (so readout inIndex
+        // stays aligned to the leading input ports).
+        navBase = inCount;
+        addInput ("nav_encoder", NodePort::Control);
+        addInput ("nav_select",  NodePort::Gate);
+        addInput ("nav_back",    NodePort::Gate);
+
+        outValues = std::vector<std::atomic<float>> ((size_t) outCount);
+        inValues  = std::vector<std::atomic<float>> ((size_t) inCount);
+        for (size_t i = 0; i < outInit.size(); ++i)
+            outValues[i].store (outInit[i], std::memory_order_relaxed);
+
+        cursor.store (0, std::memory_order_relaxed);
+        editMode.store (false, std::memory_order_relaxed);
+        haveEncoder = false;
+        lastSelect = lastBack = false;
+        pulseIndex = -1;
+    }
+
+    void handleNav (float enc, bool sel, bool back)
+    {
+        const int count = (int) items.size();
+        if (count == 0) return;
+
+        const bool edit = editMode.load (std::memory_order_relaxed);
+        int cur = juce::jlimit (0, count - 1, cursor.load (std::memory_order_relaxed));
+
+        // Encoder rotation → cursor move (nav) or value change (edit). The
+        // encoder source emits an absolute value; we act on its delta.
+        if (! haveEncoder) { lastEncoder = enc; haveEncoder = true; }
+        const float d = enc - lastEncoder;
+        if (std::abs (d) > 1.0e-4f)
+        {
+            const int dir = (d > 0.0f) ? 1 : -1;
+            if (edit)
+                applyEdit (items[(size_t) cur], dir);
+            else
+                cursor.store (juce::jlimit (0, count - 1, cur + dir), std::memory_order_relaxed);
+            lastEncoder = enc;
+        }
+
+        // Select (rising edge) → enter/exit edit, flip a toggle, or fire a trigger.
+        if (sel && ! lastSelect)
+        {
+            const auto& it = items[(size_t) cur];
+            switch (it.kind)
+            {
+                case Kind::Value:
+                case Kind::List:
+                    editMode.store (! edit, std::memory_order_relaxed);
+                    break;
+                case Kind::Toggle:
+                    if (it.outIndex >= 0)
+                    {
+                        const float v = outValues[(size_t) it.outIndex].load (std::memory_order_relaxed) > 0.5f ? 0.0f : 1.0f;
+                        outValues[(size_t) it.outIndex].store (v, std::memory_order_relaxed);
+                    }
+                    break;
+                case Kind::Trigger:
+                    if (it.outIndex >= 0)
+                    {
+                        outValues[(size_t) it.outIndex].store (1.0f, std::memory_order_relaxed);
+                        pulseIndex = it.outIndex;
+                    }
+                    break;
+                default:
+                    break;  // submenu / readout / label: no-op until pages land
+            }
+        }
+        lastSelect = sel;
+
+        // Back (rising edge) → leave edit mode (page-pop arrives with pages).
+        if (back && ! lastBack)
+            editMode.store (false, std::memory_order_relaxed);
+        lastBack = back;
+    }
+
+    void applyEdit (const Item& it, int dir)
+    {
+        if (it.outIndex < 0) return;
+        float v = outValues[(size_t) it.outIndex].load (std::memory_order_relaxed);
+        if (it.kind == Kind::Value)
+        {
+            const float step = (it.step > 1.0e-6f) ? it.step : (it.mx - it.mn) * 0.05f;
+            v = juce::jlimit (it.mn, it.mx, v + (float) dir * step);
+        }
+        else if (it.kind == Kind::List)
+        {
+            const int nOpt = juce::jmax (1, it.options.size());
+            v = (float) juce::jlimit (0, nOpt - 1, (int) std::lround (v) + dir);
+        }
+        outValues[(size_t) it.outIndex].store (v, std::memory_order_relaxed);
+    }
+
+    juce::String formatItemValue (const Item& it) const
+    {
+        switch (it.kind)
+        {
+            case Kind::Value:
+            {
+                const float v = (it.outIndex >= 0) ? outValues[(size_t) it.outIndex].load (std::memory_order_relaxed) : 0.0f;
+                return it.fmt.isNotEmpty() ? juce::String::formatted (it.fmt, v) : juce::String (v, 2);
+            }
+            case Kind::Readout:
+            {
+                const float v = (it.inIndex >= 0) ? inValues[(size_t) it.inIndex].load (std::memory_order_relaxed) : 0.0f;
+                return it.fmt.isNotEmpty() ? juce::String::formatted (it.fmt, v) : juce::String (v, 2);
+            }
+            case Kind::List:
+            {
+                const float v = (it.outIndex >= 0) ? outValues[(size_t) it.outIndex].load (std::memory_order_relaxed) : 0.0f;
+                const int idx = juce::jlimit (0, juce::jmax (0, it.options.size() - 1), (int) std::lround (v));
+                return it.options.isEmpty() ? juce::String (idx) : it.options[idx];
+            }
+            case Kind::Toggle:
+            {
+                const float v = (it.outIndex >= 0) ? outValues[(size_t) it.outIndex].load (std::memory_order_relaxed) : 0.0f;
+                return v > 0.5f ? juce::String ("On") : juce::String ("Off");
+            }
+            case Kind::Submenu: return ">";
+            case Kind::Trigger:
+            case Kind::Label:
+            case Kind::Unknown:
+            default:            return {};
+        }
     }
 
     static juce::String defaultScreenJSON()
     {
-        return R"({"kind":"easy","grid":{"lines":4,"cols":16},"font":12,"fg":"FFFFFFFF","bg":"FF101010","items":[{"id":"level","type":"value","label":"Level","port":"out","min":0,"max":1,"step":0.01,"value":0.5,"fmt":"%.0f%%"},{"id":"meter","type":"readout","label":"In","port":"in","fmt":"%.1f"}]})";
+        return R"({"kind":"easy","grid":{"lines":4,"cols":16},"font":12,"fg":"FFFFFFFF","bg":"FF101010","items":[{"id":"level","type":"value","label":"Level","port":"out","min":0,"max":1,"step":0.01,"value":0.5,"fmt":"%.2f"},{"id":"mode","type":"list","label":"Mode","port":"out","options":["Hall","Plate","Room"],"value":0},{"id":"meter","type":"readout","label":"In","port":"in","fmt":"%.1f"}]})";
     }
 };

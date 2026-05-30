@@ -231,6 +231,53 @@ void PedalboardGrid::timerCallback()
                             }
                             else
                             {
+                                // Display nodes (meters, scopes, Easy Display menu) publish their
+                                // live state into the controlText/Value/Data maps directly.
+                                bool wasDisplay = false;
+                                int targetNodeID = mapping.nodeParam.upToFirstOccurrenceOf("_", false, false).getIntValue();
+                                if (auto* graphProc = dynamic_cast<GraphPedalProcessor*>(proc))
+                                {
+                                    auto getDSPNode = [&](int id) -> DSPNode* {
+                                        if (auto* nn = graphProc->getDSPGraph().getNode(id)) return nn;
+                                        if (auto* nn = graphProc->getDSPGraph().getNode(id - 1)) return nn;
+                                        if (auto* nn = graphProc->getDSPGraph().getNode(id + 1)) return nn;
+                                        return nullptr;
+                                    };
+                                    if (auto* targetNode = getDSPNode(targetNodeID))
+                                    {
+                                        if (targetNode->isDisplayNode())
+                                        {
+                                            wasDisplay = true;
+                                            juce::String baseControlID = mapping.controlID;
+
+                                            if (targetNode->getDisplayType() == "easy_display")
+                                            {
+                                                juce::String text = targetNode->getDisplayText();
+                                                if (instance.controlTexts[baseControlID] != text)
+                                                {
+                                                    instance.controlTexts[baseControlID] = text;
+                                                    needsRepaint = true;
+                                                }
+                                            }
+                                            else if (auto* px = targetNode->getPixelData())
+                                            {
+                                                instance.controlData[baseControlID] = *px;
+                                                needsRepaint = true;
+                                            }
+                                            else
+                                            {
+                                                float val = targetNode->getDisplayValue();
+                                                if (std::abs(instance.controlValues[baseControlID] - val) > 0.001f)
+                                                {
+                                                    instance.controlValues[baseControlID] = val;
+                                                    needsRepaint = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (!wasDisplay)
                                 for (auto* p : params)
                                 {
                                     if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))

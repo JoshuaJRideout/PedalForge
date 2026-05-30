@@ -152,6 +152,11 @@ public:
     virtual float getDisplayValue() const { return 0.0f; }
     virtual const std::vector<float>* getPixelData() const { return nullptr; }
 
+    /** Text-grid display nodes (e.g. the Easy Display menu) return their
+        current rendered screen here so the faceplate poller can drop it into
+        the pedal's controlTexts. Empty for non-text displays. */
+    virtual juce::String getDisplayText() const { return {}; }
+
     /** Control-surface nodes (Knob, Fader, Button, Toggle, Selector, XY pad)
         produce a control signal that the user manipulates from the pedal face.
         When isControlSurface() is true, PedalDesign auto-creates a matching UI

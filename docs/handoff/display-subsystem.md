@@ -52,10 +52,47 @@ DONE + bridge-verified (commits):
   `run_script mode=fx`. Verified: agent ran `addNode("disp_easy")` + `setScreen`
   with 2 value items + 1 readout -> console "2 out / 1 in ports", config
   round-trips.
+- **Slice 2 (this pass)** -- faceplate menu renderer + navigation. Done across
+  the five spots below; bridge-verified visually (agent screenshotted the board
+  tile and read back `> Gain 4.0 / Mode Plate / Mix 50% / In 0.00` with the
+  cursor on line 1, list/value/readout/% formatting all correct).
+  - `EasyDisplayNode` (`PeripheralNodeLibrary.h`): nav input ports
+    (`nav_encoder` Control + `nav_select`/`nav_back` Gate) appended after the
+    readout inputs at `navBase`; atomic `cursor`/`editMode`; item values moved to
+    `std::vector<std::atomic<float>>` (out + readout) so audio writes / UI reads
+    are race-free. `handleNav()` state machine in `process()`: encoder delta moves
+    the cursor (nav) or edits the selected value/list (edit-mode); select
+    enters/exits edit, flips a toggle, or one-shot-pulses a trigger; back leaves
+    edit. `renderMenuText()` formats the active items into grid lines (cursor
+    marker + live values, scroll window). Surfaced via a new base virtual
+    `DSPNode::getDisplayText()`.
+  - Pollers: `PlayTabComponent.cpp` + `PedalboardGrid.cpp` -- in the display-node
+    branch, `getDisplayType()=="easy_display"` -> `controlTexts[id] =
+    getDisplayText()`. **PedalboardGrid had no display polling at all** before;
+    added the whole `isDisplayNode()` branch there (so meters/scopes now animate
+    on the board tile too, not just the Play tab).
+  - `PedalPainter.cpp`: new `easy_display` control case -> `drawTextScreen` with
+    the rendered menu lines.
+  - **Open question RESOLVED (auto-place, not editor-only):**
+    `syncControlSurfaceNodes` (`ControlSurfaceSync.h`) now also auto-creates a
+    faceplate `Control` (type `easy_display`, 130x90) + `Mapping`
+    (`<id>_display`) for `disp_easy` nodes -- gated to that display type so
+    existing user-placed LED/VU/scope gadgets are untouched. Also called from
+    `compileGraphBuilder` after the graph commit (against the scripting tab's own
+    `activePedal`, NOT the editor callback -- the headless/bridge path targets a
+    pedal that is not the editor's focused one), so scripted/AI displays get a
+    widget immediately.
+  - GOTCHA found while verifying: the AI bridge has no `focus_pedal` tool, and
+    `switch_tab tab=Pedal` does NOT re-point the Designer canvas at a scripted
+    pedal -- the Designer shows the *editor's* `activePedal`. To see a scripted
+    pedal render, `add_pedal_to_board` it and screenshot the **Board** tab (or
+    `read_pedal_design` to confirm the control/mapping data).
 
-So today the model + node + explicit ports + scriptable/AI authoring all work.
-What does NOT exist yet: the display is not drawn on the faceplate, has no menu
-navigation, no Advanced/Canvas-2D node, and no visual editor.
+So today the model + node + explicit ports + scriptable/AI authoring + faceplate
+render + menu nav all work. What does NOT exist yet: the Advanced/Canvas-2D node
+(slice 4) and the visual editor (slice 5). Nav is implemented but only
+render-verified; driving the encoder/select inputs end-to-end (wire control nodes
+-> nav inputs, rotate, confirm cursor moves) is still worth an interactive pass.
 
 ## 3. ScreenDesign JSON schema (v1)
 
