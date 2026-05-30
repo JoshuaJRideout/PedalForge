@@ -36,7 +36,19 @@ namespace
             "- Every change is undoable (Cmd-Z), so act without excessive "
             "confirmation — but DO summarise what you changed.\n"
             "- After finishing, call show_toast with a one-line summary.\n"
-            "- Be concise. You're a side panel, not a chatbot.";
+            "- Be concise. You're a side panel, not a chatbot.\n\n"
+            "CRITICAL workflow rules (avoid these common mistakes):\n"
+            "- create_pedal and add_pedal_to_board RETURN {uuid,name}. ALWAYS "
+            "use that exact returned uuid in follow-up calls. NEVER make up a "
+            "uuid like 'ped-001'.\n"
+            "- A call that needs a uuid from create_pedal must be a SEPARATE, "
+            "LATER step — do NOT batch create_pedal together with a "
+            "run_script that uses its uuid (the uuid isn't known until "
+            "create_pedal returns).\n"
+            "- Pedals you add are AUTO-WIRED left-to-right into the chain. You "
+            "do NOT need a board script to connect them.\n"
+            "- run_script mode=board CLEARS the board and only re-adds FACTORY "
+            "pedals — it deletes custom pedals. Don't use it after create_pedal.";
     }
 }
 
@@ -88,16 +100,58 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
 
     // Agent callbacks (fire on the message thread).
     agent->onTurnStarted   = [this] { updateBusyState (true); appendActivity ("…thinking"); };
-    agent->onAssistantText = [this] (const juce::String& t) { appendTranscript ("Claude", t); };
-    agent->onToolActivity  = [this] (const juce::String& t) { appendActivity (t); };
+    agent->onAssistantText = [this] (const juce::String& t)
+    {
+        appendTranscript ("Claude", t);
+        if (remoteActive) remoteResponse << "CLAUDE: " << t << "\n";
+    };
+    agent->onToolActivity  = [this] (const juce::String& t)
+    {
+        appendActivity (t);
+        if (remoteActive) remoteResponse << "  · " << t << "\n";
+    };
     agent->onError         = [this] (const juce::String& e)
     {
         appendActivity ("⚠ " + e);
         pf::toastError ("AI: " + e);
+        if (remoteActive) remoteResponse << "  ⚠ ERROR: " << e << "\n";
     };
-    agent->onTurnFinished  = [this] { updateBusyState (false); };
+    agent->onTurnFinished  = [this]
+    {
+        updateBusyState (false);
+        if (remoteActive)
+        {
+            remoteResponse << "[turn complete]\n";
+            remoteRespFile.replaceWithText (remoteResponse);
+            remoteActive = false;
+        }
+    };
 
     setExpanded (false);
+
+    // Poll for remote prompts (testing/automation bridge).
+    startTimerHz (3);
+}
+
+//==============================================================================
+void AiAssistantPanel::timerCallback()
+{
+    if (remoteActive || agent->isBusy()) return;            // one at a time
+    if (! remoteCmdFile.existsAsFile())   return;
+
+    auto cmd = remoteCmdFile.loadFileAsString().trim();
+    remoteCmdFile.deleteFile();                              // consume it
+    if (cmd.isEmpty()) return;
+    if (! provider.isConfigured()) return;
+
+    remoteActive = true;
+    remoteResponse.clear();
+    remoteResponse << "PROMPT: " << cmd << "\n";
+    remoteRespFile.replaceWithText ("(working…)\n");        // signal "in progress"
+
+    setExpanded (true);
+    appendTranscript ("You (remote)", cmd);
+    agent->sendUserMessage (cmd);
 }
 
 AiAssistantPanel::~AiAssistantPanel() = default;

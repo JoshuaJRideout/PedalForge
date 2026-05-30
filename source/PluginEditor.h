@@ -63,6 +63,7 @@ public:
     void showToast (const juce::String& message) override;
     juce::String listFactoryPedals() override;
     juce::String addPedalToBoard (const juce::String& pedalId, juce::String& errorOut) override;
+    juce::String createBlankPedal (const juce::String& name, juce::String& errorOut) override;
     juce::String getScriptApiReference() override;
     juce::String runBoardScript (const juce::String& source) override;
     juce::String runPedalScript (const juce::String& pedalUuid, const juce::String& source) override;

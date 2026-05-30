@@ -93,7 +93,7 @@ void AiAgent::run()
     conversation.push_back (Message::user (pendingUserText));
     pendingUserText.clear();
 
-    constexpr int kMaxToolRounds = 12;   // guard against runaway tool loops
+    constexpr int kMaxToolRounds = 30;   // headroom for multi-step builds; guards runaway loops
     for (int round = 0; round < kMaxToolRounds; ++round)
     {
         if (threadShouldExit()) break;

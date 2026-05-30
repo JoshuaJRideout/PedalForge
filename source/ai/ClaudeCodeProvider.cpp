@@ -156,7 +156,9 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
     // only the newest turn. Big speed win on multi-round tasks.
     if (! sessionStarted)
     {
-        sessionId = juce::Uuid().toString();
+        // Claude Code requires a dashed UUID (8-4-4-4-12); juce::Uuid::toString()
+        // omits the dashes, which --session-id rejects.
+        sessionId = juce::Uuid().toDashedString();
         const auto sys = buildProtocolSystemPrompt (systemPrompt, tools);
         args.addArray ({ "--session-id", sessionId, "--system-prompt", sys });
         sessionStarted = true;

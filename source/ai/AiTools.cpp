@@ -157,11 +157,46 @@ std::vector<ToolDef> buildToolDefs()
         "Emit a pedal's current DSP graph as an editable FX script.",
         schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
 
+    //── Unified, high-level primitives (preferred) ───────────────────────
+    defs.push_back ({ "get_state",
+        "Snapshot of what the user is looking at and has: active tab, focused "
+        "pedal, and all pedals on the board (uuid+name). Call this to orient.",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "run_script",
+        "Run a PedalForge script. THE primary build tool — use it for boards, "
+        "pedals, FX graphs and DSP. Call get_script_api once to learn the "
+        "commands. mode=board operates on the whole board; mode=pedal/fx/dsp "
+        "need pedal_uuid. Returns console output (fix any 'ERROR line N' and "
+        "re-run). Undoable.",
+        schemaObject ({ { "mode", stringProp ("board | pedal | fx | dsp") },
+                        { "source", stringProp ("The script source") },
+                        { "pedal_uuid", stringProp ("Target pedal uuid (for pedal/fx/dsp)") } },
+                      { "mode", "source" }) });
+
+    defs.push_back ({ "create_pedal",
+        "Create a NEW blank custom pedal on the board (not a factory one) and "
+        "return {uuid, name}. Then shape it with run_script mode=pedal "
+        "(chassis/controls) and mode=fx (DSP graph).",
+        schemaObject ({ { "name", stringProp ("Name for the new pedal") } }, {}) });
+
     return defs;
 }
 
 //==============================================================================
+static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call);
+
 ToolResult dispatch (ToolHost& host, const ToolCall& call)
+{
+    auto r = dispatchImpl (host, call);
+    // Log the RESULT (truncated) too, so the audit log is a full record of
+    // what the agent did and what came back — the insider-testing trail.
+    auditLog ("RESULT " + call.name + " (" + (r.isError ? "error" : "ok") + "): "
+              + r.content.substring (0, 600));
+    return r;
+}
+
+static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
 {
     ToolResult r;
     r.toolUseId = call.id;
@@ -286,7 +321,41 @@ ToolResult dispatch (ToolHost& host, const ToolCall& call)
                         : host.readFxAsScript (uuid);
         return r;
     }
+    if (call.name == "get_state")
+    {
+        r.content = "{\"activeTab\":" + host.readActiveTab()
+                  + ",\"pedals\":" + host.listPedals() + "}";
+        return r;
+    }
+    if (call.name == "create_pedal")
+    {
+        juce::String err;
+        auto created = host.createBlankPedal (argStr (call, "name"), err);
+        if (created.isEmpty()) return fail ("create_pedal failed: " + err);
+        r.content = created;
+        return r;
+    }
+    if (call.name == "run_script")
+    {
+        auto mode = argStr (call, "mode").toLowerCase();
+        // Accept either "source" or the common "code" key.
+        auto src  = argStr (call, "source");
+        if (src.isEmpty()) src = argStr (call, "code");
+        auto uuid = argStr (call, "pedal_uuid");
+        if (mode.isEmpty() || src.isEmpty()) return fail ("Need 'mode' and 'source'");
+        if (mode == "board") { r.content = host.runBoardScript (src); return r; }
+        if (uuid.isEmpty()) return fail ("mode '" + mode + "' needs 'pedal_uuid'");
+        if (mode == "pedal") r.content = host.runPedalScript (uuid, src);
+        else if (mode == "fx") r.content = host.runFxScript (uuid, src);
+        else if (mode == "dsp") r.content = host.runDspScript (uuid, src);
+        else return fail ("Unknown mode '" + mode + "' (use board|pedal|fx|dsp)");
+        return r;
+    }
 
-    return fail ("Unknown tool: " + call.name);
+    // Unknown tool — list the real tool names so the model self-corrects
+    // instead of guessing variations.
+    juce::StringArray valid;
+    for (const auto& d : buildToolDefs()) valid.add (d.name);
+    return fail ("Unknown tool '" + call.name + "'. Valid tools: " + valid.joinIntoString (", "));
 }
 }

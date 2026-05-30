@@ -654,11 +654,18 @@ void PlayTabComponent::rebuildRouting()
     graph.addConnection ({ { lastMidiNode, juce::AudioProcessorGraph::midiChannelIndex }, 
                            { outMidiNode,   juce::AudioProcessorGraph::midiChannelIndex } });
     
-    // Passthrough extra channels (like FX Send/Return on 3-4)
-    int totalChans = graph.getNodeForId(inNode)->getProcessor()->getTotalNumOutputChannels();
-    for (int ch = 2; ch < totalChans; ++ch)
+    // Passthrough extra channels (like FX Send/Return on 3-4). Guard the
+    // node lookup — if the input node isn't present (e.g. engine mid-rebuild
+    // or restored from an unexpected state) this used to deref null and crash
+    // at startup.
+    if (auto* inNodePtr = graph.getNodeForId (inNode))
     {
-        graph.addConnection ({ { inNode, ch }, { outNode, ch } });
+        if (auto* proc = inNodePtr->getProcessor())
+        {
+            const int totalChans = proc->getTotalNumOutputChannels();
+            for (int ch = 2; ch < totalChans; ++ch)
+                graph.addConnection ({ { inNode, ch }, { outNode, ch } });
+        }
     }
 }
 

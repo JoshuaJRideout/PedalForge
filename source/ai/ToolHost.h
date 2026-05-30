@@ -63,6 +63,12 @@ namespace pf::ai
         virtual juce::String addPedalToBoard (const juce::String& pedalId,
                                               juce::String& errorOut) = 0;
 
+        /** Create a NEW blank custom pedal on the board (not a factory one),
+            optionally named, and return JSON { uuid, name }. The agent then
+            shapes it with pedal/fx scripts. "" + errorOut on failure. */
+        virtual juce::String createBlankPedal (const juce::String& name,
+                                               juce::String& errorOut) = 0;
+
         //======================================================================
         // Scripting-engine access (#65) — the "do anything" surface. Each runs
         // a PedalForge script and returns the console output (success summary

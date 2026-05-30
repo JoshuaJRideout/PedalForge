@@ -1048,6 +1048,43 @@ juce::String PedalForgeEditor::addPedalToBoard (const juce::String& pedalId, juc
     return {};
 }
 
+juce::String PedalForgeEditor::createBlankPedal (const juce::String& name, juce::String& errorOut)
+{
+    // A fresh custom pedal = a minimal tutorial pedal (passthrough graph +
+    // empty-ish design) that the agent then reshapes via pedal/fx scripts.
+    juce::StringArray before;
+    for (const auto& inst : processorRef.getGraphEngine().getPedalInstances())
+        if (inst.design != nullptr) before.add (inst.design->uuid);
+
+    grid.addPedalAtGrid ("factory:hello_gain", -1.0f, -1.0f);
+
+    for (auto& inst : processorRef.getGraphEngine().getPedalInstances())
+    {
+        if (inst.design == nullptr) continue;
+        if (before.contains (inst.design->uuid)) continue;
+        // Found the new pedal — rename it if requested. (We mutate through a
+        // const-ref's shared_ptr, which is allowed; see findByUuid note.)
+        if (name.isNotEmpty())
+        {
+            auto* mut = processorRef.getGraphEngine().getPedalInstance (inst.nodeID);
+            if (mut != nullptr)
+            {
+                mut->name = name;
+                if (mut->design != nullptr) mut->design->name = name;
+            }
+        }
+        grid.refreshSelectedPedal();
+        grid.repaint();
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("uuid", inst.design->uuid);
+        o->setProperty ("name", name.isNotEmpty() ? name : inst.name);
+        return juce::JSON::toString (juce::var (o));
+    }
+
+    errorOut = "Could not create a new pedal.";
+    return {};
+}
+
 //==============================================================================
 // Scripting-engine tools (#65). Each routes through the ScriptingTabComponent's
 // existing compile logic via its headless entry points. Pedal-scoped scripts
@@ -1061,11 +1098,17 @@ juce::String PedalForgeEditor::getScriptApiReference()
 
 juce::String PedalForgeEditor::runBoardScript (const juce::String& source)
 {
-    // Board scripts operate on the engine, not a specific pedal.
+    // Board scripts CLEAR and rebuild the board — every existing PedalInstance
+    // is freed. So any pointer we hold into the old instances (activePedal,
+    // the scripting tab's active pedal, the grid selection) is about to
+    // dangle. Drop them BEFORE running, and do NOT restore activePedal
+    // afterward (it would be a use-after-free).
+    activePedal = nullptr;
+    grid.deselectAll();
     scriptingTab.setActivePedal (nullptr, &processorRef.getGraphEngine());
+
     auto out = scriptingTab.runScriptHeadless (ScriptingTabComponent::ScriptMode::Board, source);
-    // Restore the visible tab's pedal context + refresh the board view.
-    scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
+
     grid.rebuildFromEngine();
     grid.repaint();
     return out;

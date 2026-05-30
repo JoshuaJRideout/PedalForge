@@ -15,7 +15,8 @@
 // Owns the ClaudeProvider and AiAgent. The agent talks to the rest of the
 // app through the ToolHost the editor passes in.
 //==============================================================================
-class AiAssistantPanel : public juce::Component
+class AiAssistantPanel : public juce::Component,
+                         private juce::Timer
 {
 public:
     explicit AiAssistantPanel (pf::ai::ToolHost& host);
@@ -60,6 +61,18 @@ private:
 
     bool expanded = false;
     juce::String activeTabName { "Play" };
+
+    //==========================================================================
+    // Remote-prompt bridge (testing/automation): the app watches a command
+    // file; when it appears, the prompt runs through the REAL in-app agent
+    // against the LIVE engine, and the turn's transcript is written to a
+    // response file. Lets an external driver (e.g. a developer agent) use the
+    // app as a user would and read back what happened.
+    void timerCallback() override;
+    bool remoteActive = false;
+    juce::String remoteResponse;
+    juce::File remoteCmdFile  { "/tmp/pedalforge_ai_cmd.txt" };
+    juce::File remoteRespFile { "/tmp/pedalforge_ai_response.txt" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AiAssistantPanel)
 };
