@@ -234,6 +234,29 @@ std::vector<ToolDef> buildToolDefs()
         "Remove all pedals from the Play tab chain (start a tone from scratch).",
         schemaObject ({}, {}) });
 
+    // ── ROUTE TAB ── manual audio routing on the Board. Board pedals are
+    // auto-wired left-to-right; use these for custom topologies (parallel
+    // splits, FX loops) and to inspect the signal graph.
+    defs.push_back ({ "read_routing",
+        "Show the Board's audio routing: every source -> dest connection "
+        "(INPUT, OUTPUT, and pedals by name).",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "connect_pedals",
+        "Wire one Board pedal's output into another's input (stereo). Both must "
+        "be on the Board. Use get_state for uuids. Does not remove existing "
+        "wiring - read_routing first and disconnect_pedals if you need to "
+        "re-route rather than add a parallel path.",
+        schemaObject ({ { "from", stringProp ("Source pedal uuid (or 'input'/'output')") },
+                        { "to",   stringProp ("Destination pedal uuid (or 'input'/'output')") } },
+                      { "from", "to" }) });
+
+    defs.push_back ({ "disconnect_pedals",
+        "Remove the audio connection from one Board pedal to another.",
+        schemaObject ({ { "from", stringProp ("Source pedal uuid") },
+                        { "to",   stringProp ("Destination pedal uuid") } },
+                      { "from", "to" }) });
+
     return defs;
 }
 
@@ -426,6 +449,16 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         auto pedal = argStr (call, "pedal");
         if (pedal.isEmpty()) return fail ("Missing 'pedal'");
         r.content = host.playAddPedal (pedal);
+        return r;
+    }
+    if (call.name == "read_routing") { r.content = host.readRouting(); return r; }
+    if (call.name == "connect_pedals" || call.name == "disconnect_pedals")
+    {
+        auto from = argStr (call, "from");
+        auto to   = argStr (call, "to");
+        if (from.isEmpty() || to.isEmpty()) return fail ("Missing 'from'/'to'");
+        r.content = (call.name == "connect_pedals") ? host.connectPedals (from, to)
+                                                     : host.disconnectPedals (from, to);
         return r;
     }
     if (call.name == "run_script")

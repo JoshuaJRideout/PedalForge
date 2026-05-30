@@ -133,5 +133,13 @@ namespace pf::ai
         virtual juce::String readPlayChain() = 0;                            // current chain, in order
         virtual juce::String playAddPedal (const juce::String& pedalName) = 0; // append a pedal
         virtual juce::String playClear() = 0;                                // empty the chain
+
+        //======================================================================
+        // ROUTE TAB — manual audio routing between board pedals. Pedals added
+        // to the board are auto-wired left-to-right; these let the agent build
+        // custom topologies (parallel chains, splits) and inspect the graph.
+        virtual juce::String readRouting() = 0;                                              // list connections
+        virtual juce::String connectPedals (const juce::String& fromUuid, const juce::String& toUuid) = 0;
+        virtual juce::String disconnectPedals (const juce::String& fromUuid, const juce::String& toUuid) = 0;
     };
 }

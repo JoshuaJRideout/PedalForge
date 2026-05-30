@@ -1335,3 +1335,76 @@ juce::String PedalForgeEditor::playClear()
     playTab->clearChain();
     return "Cleared the play chain.";
 }
+
+//==============================================================================
+// ROUTE tools — manual audio routing on the board graph.
+juce::String PedalForgeEditor::readRouting()
+{
+    auto& eng = processorRef.getGraphEngine();
+    auto& graph = eng.getGraph();
+    auto label = [&] (juce::AudioProcessorGraph::NodeID id) -> juce::String
+    {
+        if (id == eng.getAudioInputNodeID())  return "INPUT";
+        if (id == eng.getAudioOutputNodeID()) return "OUTPUT";
+        if (auto* inst = eng.getPedalInstance (id)) return inst->name;
+        return "node#" + juce::String (id.uid);
+    };
+
+    juce::StringArray lines;   // deduped: stereo L/R collapse to one
+    for (const auto& c : graph.getConnections())
+    {
+        if (c.source.channelIndex == juce::AudioProcessorGraph::midiChannelIndex)
+            continue;   // audio only here
+        lines.addIfNotAlreadyThere (label (c.source.nodeID) + " -> " + label (c.destination.nodeID));
+    }
+    if (lines.isEmpty()) return "Board audio routing: (no connections).";
+    lines.sort (false);
+    return "Board audio routing (audio flows source -> dest):\n  " + lines.joinIntoString ("\n  ");
+}
+
+// Resolve a routing endpoint — a board-pedal uuid, or "input"/"output" for the
+// board's audio I/O nodes. Returns false if not found / not on the Board.
+bool PedalForgeEditor::resolveRoutingNode (const juce::String& token,
+                                           juce::AudioProcessorGraph::NodeID& outId,
+                                           juce::String& outName)
+{
+    auto& eng = processorRef.getGraphEngine();
+    const auto t = token.trim().toLowerCase();
+    if (t == "input")  { outId = eng.getAudioInputNodeID();  outName = "INPUT";  return true; }
+    if (t == "output") { outId = eng.getAudioOutputNodeID(); outName = "OUTPUT"; return true; }
+    if (auto* inst = findInstanceByUuid (token))
+        if (eng.getPedalInstance (inst->nodeID) != nullptr)   // must be on the Board
+        {
+            outId = inst->nodeID; outName = inst->name; return true;
+        }
+    return false;
+}
+
+juce::String PedalForgeEditor::connectPedals (const juce::String& fromUuid, const juce::String& toUuid)
+{
+    auto& eng = processorRef.getGraphEngine();
+    juce::AudioProcessorGraph::NodeID aId, bId; juce::String aName, bName;
+    if (! resolveRoutingNode (fromUuid, aId, aName)) return "ERROR: '" + fromUuid + "' is not a Board pedal (or 'input'/'output').";
+    if (! resolveRoutingNode (toUuid,   bId, bName)) return "ERROR: '" + toUuid   + "' is not a Board pedal (or 'input'/'output').";
+
+    const bool ok0 = eng.connect (aId, 0, bId, 0);
+    const bool ok1 = eng.connect (aId, 1, bId, 1);
+    if (! ok0 && ! ok1)
+        return "Could not connect " + aName + " -> " + bName
+             + " (already connected, or would form an illegal cycle).";
+    return "Connected " + aName + " -> " + bName + ".\n" + readRouting();
+}
+
+juce::String PedalForgeEditor::disconnectPedals (const juce::String& fromUuid, const juce::String& toUuid)
+{
+    auto& eng = processorRef.getGraphEngine();
+    juce::AudioProcessorGraph::NodeID aId, bId; juce::String aName, bName;
+    if (! resolveRoutingNode (fromUuid, aId, aName)) return "ERROR: '" + fromUuid + "' is not a Board pedal (or 'input'/'output').";
+    if (! resolveRoutingNode (toUuid,   bId, bName)) return "ERROR: '" + toUuid   + "' is not a Board pedal (or 'input'/'output').";
+
+    const bool ok0 = eng.disconnect (aId, 0, bId, 0);
+    const bool ok1 = eng.disconnect (aId, 1, bId, 1);
+    if (! ok0 && ! ok1)
+        return "No connection " + aName + " -> " + bName + " to remove.";
+    return "Disconnected " + aName + " -> " + bName + ".\n" + readRouting();
+}

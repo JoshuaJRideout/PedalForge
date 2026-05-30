@@ -69,7 +69,11 @@ namespace
             "with), use the play tools (list_play_presets, load_play_preset, "
             "read_play_chain, play_add_pedal, play_clear) - do NOT build a Board "
             "with create_pedal/add_pedal_to_board. The Board tab is for "
-            "arranging & designing pedals; the Play tab is for playing them.";
+            "arranging & designing pedals; the Play tab is for playing them.\n"
+            "- ROUTING: Board pedals auto-wire left-to-right. For custom signal "
+            "paths (parallel splits, FX loops) use read_routing to see the graph, "
+            "and connect_pedals / disconnect_pedals (endpoints are board pedal "
+            "uuids, or 'input'/'output' for the board's audio I/O).";
     }
 }
 

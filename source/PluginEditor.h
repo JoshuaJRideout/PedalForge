@@ -80,6 +80,9 @@ public:
     juce::String readPlayChain() override;
     juce::String playAddPedal (const juce::String& pedalName) override;
     juce::String playClear() override;
+    juce::String readRouting() override;
+    juce::String connectPedals (const juce::String& fromUuid, const juce::String& toUuid) override;
+    juce::String disconnectPedals (const juce::String& fromUuid, const juce::String& toUuid) override;
 
 
 private:
@@ -150,6 +153,12 @@ private:
 
     // Find a live pedal instance by its design uuid (for the AI ToolHost).
     PedalInstance* findInstanceByUuid (const juce::String& uuid);
+
+    // Resolve a routing endpoint (board-pedal uuid, or "input"/"output") to a
+    // graph node id for the Route tools. Returns false if not on the Board.
+    bool resolveRoutingNode (const juce::String& token,
+                             juce::AudioProcessorGraph::NodeID& outId,
+                             juce::String& outName);
 
     static constexpr int toolbarHeight = 44;
 
