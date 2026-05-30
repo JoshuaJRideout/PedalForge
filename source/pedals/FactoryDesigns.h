@@ -26,6 +26,60 @@ namespace FactoryDesigns
         d.controls.push_back(led);
     }
 
+    /** Spawn a Knob NODE bound to a target node's parameter, and place its twin
+        control on the faceplate. This is the honest "control = node" pattern:
+        the knob's output is WIRED into the target param's CV input — exactly what
+        a user does by hand in the FX tab. The knob's range + default are taken
+        from the target param (set the target param to the intended default
+        BEFORE calling this), so the knob sweeps the param's natural range and
+        starts where the pedal wants it. Returns the new knob node id.
+
+        Requires the target node to already be in the graph (addNode auto-exposes
+        its "<param>_cv" input, which this wires into). */
+    inline int addBoundKnob (DSPGraph& g, PedalDesign& d,
+                             const juce::String& label, float faceX, float faceY,
+                             int targetNodeID, const juce::String& paramId,
+                             float faceW = 42.0f, float faceH = 42.0f)
+    {
+        auto* target = g.getNode (targetNodeID);
+        if (target == nullptr) return -1;
+        auto* tp = target->getParam (paramId);
+        if (tp == nullptr) return -1;
+
+        const float pmin = tp->minVal, pmax = tp->maxVal;
+        const float def  = tp->get();   // current value = the intended default
+        const float norm = (pmax > pmin) ? juce::jlimit (0.0f, 1.0f, (def - pmin) / (pmax - pmin)) : 0.0f;
+
+        int knobID = g.addNode (createNodeByType ("ctrl_knob"));
+        if (auto* k = g.getNode (knobID))
+        {
+            k->setName (label);
+            if (auto* p = k->getParam ("min"))   p->set (pmin);
+            if (auto* p = k->getParam ("max"))   p->set (pmax);
+            if (auto* p = k->getParam ("value")) p->set (norm);
+            k->visualX = target->visualX;
+            k->visualY = target->visualY - 140.0f;
+        }
+
+        // Wire knob.out -> target's "<paramId>_cv" input (auto-exposed by addNode).
+        int cvPort = -1;
+        const auto& ins = target->getInputPorts();
+        for (int i = 0; i < (int) ins.size(); ++i)
+            if (ins[(size_t) i].name == paramId + "_cv") { cvPort = i; break; }
+        if (cvPort >= 0)
+            g.connect (knobID, 0, targetNodeID, cvPort);
+
+        // Faceplate twin, bonded by the auto_node_<id> convention.
+        PedalDesign::Control c;
+        c.type = "knob"; c.width = faceW; c.height = faceH;
+        c.x = faceX; c.y = faceY; c.label = label;
+        c.controlID = "auto_node_" + juce::String (knobID);
+        c.defaultValue = norm;
+        d.controls.push_back (c);
+        d.mappings.push_back ({ c.controlID, juce::String (knobID) + "_value" });
+        return knobID;
+    }
+
     /** Adds MIDI In, two Expression Ins, and MIDI Out ports to any pedal design.
      *  This makes every factory pedal behave like real hardware — it can receive
      *  MIDI CC/PC/Note and expression pedal signals from the Routing Tab, and
@@ -417,33 +471,53 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Overdrive";
         d->category = "Drive";
-        d->tags = { "overdrive", "tube", "warm", "crunch" };
+        d->tags = { "overdrive", "tube", "warm", "crunch", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFFFBBF24);
-        
+
         addBypassAndLED(*d);
 
-        float y = 30.0f;
-        float gap = 45.0f;
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 35; knob.height = 35;
-            knob.x = d->chassisW / 2.0f - 17.5f;
-            knob.y = y + i * gap;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Gain";
-        d->controls[3].label = "Tone";
-        d->controls[4].label = "Vol";
+        // Declared graph: In -> Gain -> SoftClip -> ToneStack -> Volume -> Out.
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int gainID = g.addNode (createNodeByType ("gain"));
+        int clipID = g.addNode (createNodeByType ("softclip"));
+        int toneID = g.addNode (createNodeByType ("tonestack"));
+        int volID  = g.addNode (createNodeByType ("gain"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
-        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
-        d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        g.getNode (gainID)->setName ("Drive Gain");
+        g.getNode (volID)->setName ("Volume");
+        g.getNode (gainID)->getParam ("gain")->set (20.0f);
+        g.getNode (volID)->getParam ("gain")->set (-6.0f);
+        g.getNode (clipID)->getParam ("drive")->set (8.0f);   // fixed clip character
+
+        float gx = 60.0f;
+        for (int id : { inID, gainID, clipID, toneID, volID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 240.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, gainID, 0);
+        g.connect (gainID, 0, clipID, 0);
+        g.connect (clipID, 0, toneID, 0);
+        g.connect (toneID, 0, volID, 0);
+        g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 17.5f;
+        addBoundKnob (g, *d, "Gain", cx, 30.0f,  gainID, "gain",   35, 35);
+        addBoundKnob (g, *d, "Tone", cx, 75.0f,  toneID, "treble", 35, 35);
+        addBoundKnob (g, *d, "Vol",  cx, 120.0f, volID,  "gain",   35, 35);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
+
+        StickyNote n;
+        n.text = "Overdrive: Gain -> Soft Clip -> Tone -> Volume.\nEach knob is a "
+                 "Knob node whose output is wired into the effect it controls.";
+        n.bounds = { 40, 380, 380, 90 };
+        d->fxNotes.push_back (n);
+
         addStandardPorts (*d);
         return d;
     }
@@ -453,32 +527,48 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Distortion";
         d->category = "Drive";
+        d->tags = { "distortion", "high-gain", "tutorial" };
         d->chassisW = 140.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFFF97316);
-        
+
         addBypassAndLED(*d);
 
-        float y = 40.0f;
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 35; knob.height = 35;
-            knob.x = 20.0f + (i % 2) * 60.0f;
-            knob.y = y + (i / 2) * 50.0f;
-            if (i == 2) knob.x = d->chassisW / 2.0f - 17.5f; // Center third knob
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Gain";
-        d->controls[3].label = "Tone";
-        d->controls[4].label = "Vol";
+        // Declared graph: In -> Gain -> HardClip -> ToneStack -> Volume -> Out.
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int gainID = g.addNode (createNodeByType ("gain"));
+        int clipID = g.addNode (createNodeByType ("hardclip"));
+        int toneID = g.addNode (createNodeByType ("tonestack"));
+        int volID  = g.addNode (createNodeByType ("gain"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_gain"}); // GainNode pre
-        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
-        d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        g.getNode (gainID)->setName ("Drive Gain");
+        g.getNode (volID)->setName ("Volume");
+        g.getNode (gainID)->getParam ("gain")->set (30.0f);
+        g.getNode (volID)->getParam ("gain")->set (-10.0f);
+        g.getNode (clipID)->getParam ("drive")->set (12.0f);
+        g.getNode (clipID)->getParam ("threshold")->set (0.4f);
+
+        float gx = 60.0f;
+        for (int id : { inID, gainID, clipID, toneID, volID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 240.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, gainID, 0);
+        g.connect (gainID, 0, clipID, 0);
+        g.connect (clipID, 0, toneID, 0);
+        g.connect (toneID, 0, volID, 0);
+        g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 17.5f;
+        addBoundKnob (g, *d, "Gain", 20.0f, 40.0f, gainID, "gain",   35, 35);
+        addBoundKnob (g, *d, "Tone", 80.0f, 40.0f, toneID, "treble", 35, 35);
+        addBoundKnob (g, *d, "Vol",  cx,    90.0f, volID,  "gain",   35, 35);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
+
         addStandardPorts (*d);
         return d;
     }
@@ -488,30 +578,47 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Fuzz";
         d->category = "Drive";
+        d->tags = { "fuzz", "vintage", "tutorial" };
         d->chassisW = 140.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFFDC2626);
         addBypassAndLED(*d);
 
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 40; knob.height = 40;
-            knob.x = 20.0f + (i % 2) * 60.0f;
-            knob.y = 30.0f + (i / 2) * 55.0f;
-            if (i == 2) knob.x = d->chassisW / 2.0f - 20.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Fuzz";
-        d->controls[3].label = "Tone";
-        d->controls[4].label = "Vol";
+        // Declared graph: In -> Pre-Gain -> Fuzz -> ToneStack -> Volume -> Out.
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int gainID = g.addNode (createNodeByType ("gain"));
+        int fuzzID = g.addNode (createNodeByType ("fuzz"));
+        int toneID = g.addNode (createNodeByType ("tonestack"));
+        int volID  = g.addNode (createNodeByType ("gain"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "3_gain"}); // FuzzNode gain
-        d->mappings.push_back({"knob_2", "4_treble"}); // ToneStackNode
-        d->mappings.push_back({"knob_3", "5_gain"}); // GainNode post
+        g.getNode (gainID)->setName ("Pre-Gain");
+        g.getNode (volID)->setName ("Volume");
+        g.getNode (gainID)->getParam ("gain")->set (10.0f);
+        g.getNode (volID)->getParam ("gain")->set (-12.0f);
+        g.getNode (fuzzID)->getParam ("gain")->set (60.0f);
+        g.getNode (fuzzID)->getParam ("bias")->set (0.15f);
+
+        float gx = 60.0f;
+        for (int id : { inID, gainID, fuzzID, toneID, volID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 240.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, gainID, 0);
+        g.connect (gainID, 0, fuzzID, 0);
+        g.connect (fuzzID, 0, toneID, 0);
+        g.connect (toneID, 0, volID, 0);
+        g.connect (volID, 0, outID, 0);
+        g.connect (volID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 20.0f;
+        addBoundKnob (g, *d, "Fuzz", 20.0f, 30.0f, fuzzID, "gain",   40, 40);
+        addBoundKnob (g, *d, "Tone", 80.0f, 30.0f, toneID, "treble", 40, 40);
+        addBoundKnob (g, *d, "Vol",  cx,    85.0f, volID,  "gain",   40, 40);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
+
         addStandardPorts (*d);
         return d;
     }

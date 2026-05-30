@@ -38,6 +38,18 @@ inline juce::File getPedalLibraryDir()
     return dir;
 }
 
+inline std::shared_ptr<PedalDesign> loadDesignOrDefault(const juce::String& name, std::function<std::shared_ptr<PedalDesign>()> factory);
+
+/** Build a pedal's processor straight from its design's DECLARED effectsGraph —
+    the honest path (no hidden C++ GraphPedalFactory graph). Use this as the
+    processor factory for any pedal whose design carries a complete graph. */
+inline std::unique_ptr<juce::AudioProcessor> processorFromDeclaredGraph (
+    const juce::String& name, std::function<std::shared_ptr<PedalDesign>()> designFactory)
+{
+    auto d = loadDesignOrDefault (name, designFactory);
+    return std::make_unique<GraphPedalProcessor> (d->name, juce::JSON::toString (d->effectsGraph));
+}
+
 inline std::shared_ptr<PedalDesign> loadDesignOrDefault(const juce::String& name, std::function<std::shared_ptr<PedalDesign>()> factory)
 {
     juce::File overrideFile = getPedalLibraryDir().getChildFile(name + ".json");
@@ -388,26 +400,22 @@ inline std::vector<PedalInfo> getFactoryPedals()
           juce::Colour (0xFF4ADE80),    // green
           // Honest build: the processor IS the design's declared effectsGraph
           // (no hidden C++ graph). See FactoryDesigns::createCleanBoost.
-          [] () -> std::unique_ptr<juce::AudioProcessor> {
-              auto d = loadDesignOrDefault ("Clean Boost", FactoryDesigns::createCleanBoost);
-              return std::make_unique<GraphPedalProcessor> (
-                  d->name, juce::JSON::toString (d->effectsGraph));
-          },
+          [] { return processorFromDeclaredGraph ("Clean Boost", FactoryDesigns::createCleanBoost); },
           [] { return loadDesignOrDefault("Clean Boost", FactoryDesigns::createCleanBoost); } },
 
         { "Overdrive",    "Drive",      1, 2, 3,
           juce::Colour (0xFFFBBF24),    // yellow/orange
-          [] { return GraphPedalFactory::createOverdrive(); },
+          [] { return processorFromDeclaredGraph ("Overdrive", FactoryDesigns::createOverdrive); },
           [] { return loadDesignOrDefault("Overdrive", FactoryDesigns::createOverdrive); } },
 
         { "Distortion",   "Drive",      1, 2, 3,
           juce::Colour (0xFFF97316),    // orange
-          [] { return GraphPedalFactory::createDistortion(); },
+          [] { return processorFromDeclaredGraph ("Distortion", FactoryDesigns::createDistortion); },
           [] { return loadDesignOrDefault("Distortion", FactoryDesigns::createDistortion); } },
 
         { "Fuzz",         "Drive",      1, 2, 3,
           juce::Colour (0xFFDC2626),    // red
-          [] { return GraphPedalFactory::createFuzz(); },
+          [] { return processorFromDeclaredGraph ("Fuzz", FactoryDesigns::createFuzz); },
           [] { return loadDesignOrDefault("Fuzz", FactoryDesigns::createFuzz); } },
 
         // ─── MODULATION ────────────────────────────────────────────────────

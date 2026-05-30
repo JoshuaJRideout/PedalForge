@@ -314,99 +314,12 @@ namespace GraphPedalFactory
 
     // ─── DRIVE ───────────────────────────────────────────────────────────────────
 
-    // Clean Boost is now an HONEST build: its DSP graph is declared in the
-    // PedalDesign (FactoryDesigns::createCleanBoost) and the registry builds the
-    // processor straight from that graph — no hidden C++ factory here. This is
-    // the template the other basic pedals are being migrated to.
-
-    /** 2. Overdrive: Input → Gain → SoftClip → ToneStack → Gain(vol) → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createOverdrive()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Overdrive");
-        auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());
-        int gainID  = g.addNode (std::make_unique<GainNode>());
-        int clipID  = g.addNode (std::make_unique<SoftClipNode>());
-        int toneID  = g.addNode (std::make_unique<ToneStackNode>());
-        int volID   = g.addNode (std::make_unique<GainNode>());
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(gainID)->setName ("Drive Gain");
-        g.getNode(volID)->setName ("Volume");
-        g.getNode(gainID)->getParam("gain")->set (20.0f);
-        g.getNode(volID)->getParam("gain")->set (-6.0f);
-        g.getNode(clipID)->getParam("drive")->set (8.0f);
-
-        g.connect (inID, 0, gainID, 0);
-        g.connect (gainID, 0, clipID, 0);
-        g.connect (clipID, 0, toneID, 0);
-        g.connect (toneID, 0, volID, 0);
-        g.connect (volID, 0, outID, 0);
-        g.connect (volID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
-
-    /** 3. Distortion: Input → Gain → HardClip → ToneStack → Gain(vol) → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createDistortion()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Distortion");
-        auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());
-        int gainID  = g.addNode (std::make_unique<GainNode>());
-        int clipID  = g.addNode (std::make_unique<HardClipNode>());
-        int toneID  = g.addNode (std::make_unique<ToneStackNode>());
-        int volID   = g.addNode (std::make_unique<GainNode>());
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(gainID)->setName ("Drive Gain");
-        g.getNode(volID)->setName ("Volume");
-        g.getNode(gainID)->getParam("gain")->set (30.0f);
-        g.getNode(volID)->getParam("gain")->set (-10.0f);
-        g.getNode(clipID)->getParam("drive")->set (12.0f);
-        g.getNode(clipID)->getParam("threshold")->set (0.4f);
-
-        g.connect (inID, 0, gainID, 0);
-        g.connect (gainID, 0, clipID, 0);
-        g.connect (clipID, 0, toneID, 0);
-        g.connect (toneID, 0, volID, 0);
-        g.connect (volID, 0, outID, 0);
-        g.connect (volID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
-
-    /** 4. Fuzz: Input → Gain → FuzzNode → ToneStack → Gain(vol) → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createFuzz()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Fuzz");
-        auto& g = proc->getDSPGraph();
-        int inID    = g.addNode (std::make_unique<AudioInputNode>());
-        int gainID  = g.addNode (std::make_unique<GainNode>());
-        int fuzzID  = g.addNode (std::make_unique<FuzzNode>());
-        int toneID  = g.addNode (std::make_unique<ToneStackNode>());
-        int volID   = g.addNode (std::make_unique<GainNode>());
-        int outID   = g.addNode (std::make_unique<AudioOutputNode>());
-
-        g.getNode(gainID)->setName ("Pre-Gain");
-        g.getNode(volID)->setName ("Volume");
-        g.getNode(gainID)->getParam("gain")->set (10.0f);
-        g.getNode(volID)->getParam("gain")->set (-12.0f);
-        g.getNode(fuzzID)->getParam("gain")->set (60.0f);
-        g.getNode(fuzzID)->getParam("bias")->set (0.15f);
-
-        g.connect (inID, 0, gainID, 0);
-        g.connect (gainID, 0, fuzzID, 0);
-        g.connect (fuzzID, 0, toneID, 0);
-        g.connect (toneID, 0, volID, 0);
-        g.connect (volID, 0, outID, 0);
-        g.connect (volID, 0, outID, 1);
-
-        proc->rebuildParameters();
-        return proc;
-    }
+    // ── HONEST builds (no hidden C++ graph) ──────────────────────────────────
+    // Clean Boost, Overdrive, Distortion and Fuzz now declare their full DSP
+    // graph + control-surface-node twins in their PedalDesign
+    // (FactoryDesigns::create*); the registry builds the processor straight from
+    // that declared effectsGraph via processorFromDeclaredGraph(). Their old
+    // hand-built C++ graphs that used to live here have been retired.
 
     // ─── MODULATION ──────────────────────────────────────────────────────────────
 

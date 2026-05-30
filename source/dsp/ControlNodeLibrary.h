@@ -21,8 +21,10 @@ public:
     {
         addOutput ("out", NodePort::Control);
         addParam ("value", "Value", 0.0f, 1.0f, 0.5f);
-        addParam ("min", "Min", 0.0f, 1000.0f, 0.0f);
-        addParam ("max", "Max", 0.0f, 1000.0f, 1.0f);
+        // Output range — wide enough to map onto ANY target param (incl. negative
+        // ranges like gain dB), so a Knob wired to a CV input can drive its full span.
+        addParam ("min", "Min", -10000.0f, 10000.0f, 0.0f);
+        addParam ("max", "Max", -10000.0f, 10000.0f, 1.0f);
         // Curve: 0 = linear, 1 = logarithmic, 2 = exponential
         addParam ("curve", "Curve (0=lin,1=log,2=exp)", 0.0f, 2.0f, 0.0f);
 
@@ -78,8 +80,8 @@ public:
     {
         addOutput ("out", NodePort::Control);
         addParam ("value", "Value", 0.0f, 1.0f, 0.5f);
-        addParam ("min", "Min", 0.0f, 1000.0f, 0.0f);
-        addParam ("max", "Max", 0.0f, 1000.0f, 1.0f);
+        addParam ("min", "Min", -10000.0f, 10000.0f, 0.0f);
+        addParam ("max", "Max", -10000.0f, 10000.0f, 1.0f);
         addParam ("curve",       "Curve (0=lin,1=log,2=exp)", 0.0f, 2.0f, 0.0f);
         addParam ("stepped",     "Stepped (0=smooth,1=stepped)", 0.0f, 1.0f, 0.0f);
         addParam ("steps",       "Steps (when stepped)",      2.0f, 64.0f, 8.0f);
