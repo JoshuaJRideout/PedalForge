@@ -198,6 +198,14 @@ std::vector<ToolDef> buildToolDefs()
         "isn't silent or clipping into garbage).",
         schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
 
+    defs.push_back ({ "screenshot",
+        "Your EYES: capture what is currently on screen and return it as an "
+        "image you can actually look at - use it to see layout, colours, knob "
+        "positions, meters, or to check your visual work against what the user "
+        "describes. Optional 'target': \"app\" (default, the whole current "
+        "view), \"board\", or \"pedal:<uuid>\".",
+        schemaObject ({ { "target", stringProp ("What to capture: app (default), board, or pedal:<uuid>") } }, {}) });
+
     return defs;
 }
 
@@ -365,6 +373,14 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         auto uuid = argStr (call, "pedal_uuid");
         if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
         r.content = host.probePedal (uuid);
+        return r;
+    }
+    if (call.name == "screenshot")
+    {
+        auto b64 = host.captureView (argStr (call, "target"));
+        if (b64.isEmpty()) return fail ("screenshot failed - could not render the view.");
+        r.imageBase64 = b64;
+        r.content = "Screenshot captured - the image is attached below; look at it.";
         return r;
     }
     if (call.name == "run_script")

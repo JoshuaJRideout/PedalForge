@@ -74,6 +74,7 @@ public:
     juce::String readFxAsScript (const juce::String& pedalUuid) override;
     juce::String verifyPedal (const juce::String& pedalUuid) override;
     juce::String probePedal (const juce::String& pedalUuid) override;
+    juce::String captureView (const juce::String& target) override;
 
 
 private:

@@ -115,5 +115,12 @@ namespace pf::ai
             (bright/dark), noise floor, DC, latency/tail, NaN sanity, plus a
             one-line diagnosis. Complements verifyPedal (topology vs. audio). */
         virtual juce::String probePedal (const juce::String& pedalUuid) = 0;
+
+        /** The agent's "eyes": render a view to a PNG and return it base64-
+            encoded (or "" on failure). `target` selects what to capture:
+            "app"/"" = the whole editor (what the user sees), "board" = the
+            pedalboard, "pedal:<uuid>" = a specific pedal's face. The provider
+            forwards the image to the model as an image block. */
+        virtual juce::String captureView (const juce::String& target) = 0;
     };
 }

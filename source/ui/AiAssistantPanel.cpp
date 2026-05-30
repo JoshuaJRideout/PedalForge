@@ -59,7 +59,10 @@ namespace
             "- Then call probe_pedal to HEAR it: confirm the audio isn't silent, "
             "the effect actually does what it should (a fuzz distorts, a boost "
             "boosts), and there's no NaN/garbage. Report the gain/THD/tone you "
-            "measured, not just that it's wired.";
+            "measured, not just that it's wired.\n"
+            "- You also have EYES: call screenshot to capture the current view "
+            "and actually SEE it (layout, colours, knob positions, meters). Use "
+            "it to check your visual work or to understand what the user sees.";
     }
 }
 

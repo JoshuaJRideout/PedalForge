@@ -1264,3 +1264,32 @@ juce::String PedalForgeEditor::probePedal (const juce::String& pedalUuid)
     const auto json = gproc->saveGraph();
     return pf::ai::probeAudio (inst->name, json);
 }
+
+juce::String PedalForgeEditor::captureView (const juce::String& target)
+{
+    // MVP: snapshot the whole editor (exactly what the user currently sees on
+    // the active tab). `target` is accepted for forward-compat (board / pedal:
+    // <uuid>) but currently always renders the live editor view.
+    juce::ignoreUnused (target);
+
+    auto bounds = getLocalBounds();
+    if (bounds.isEmpty()) return {};
+
+    auto img = createComponentSnapshot (bounds, true);   // renders all children
+    if (! img.isValid()) return {};
+
+    // Cap the longest edge so the base64 payload + vision token cost stay sane.
+    const int maxEdge = 1400;
+    const int w = img.getWidth(), h = img.getHeight();
+    if (juce::jmax (w, h) > maxEdge)
+    {
+        const float scale = (float) maxEdge / (float) juce::jmax (w, h);
+        img = img.rescaled (juce::roundToInt (w * scale), juce::roundToInt (h * scale),
+                            juce::Graphics::highResamplingQuality);
+    }
+
+    juce::PNGImageFormat png;
+    juce::MemoryOutputStream mos;
+    if (! png.writeImageToStream (img, mos)) return {};
+    return juce::Base64::toBase64 (mos.getData(), mos.getDataSize());
+}

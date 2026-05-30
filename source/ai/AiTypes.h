@@ -38,6 +38,10 @@ namespace pf::ai
         juce::String toolUseId;
         juce::String content;
         bool         isError = false;
+        // Optional base64-encoded PNG the tool produced (e.g. a screenshot).
+        // When set, the provider delivers it to the model as an image block so
+        // the agent can actually SEE the rendered UI (task #67, "eyes").
+        juce::String imageBase64;
     };
 
     //==========================================================================

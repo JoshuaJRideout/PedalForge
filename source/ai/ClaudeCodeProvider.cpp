@@ -31,6 +31,55 @@ namespace
         }
         return {};
     }
+
+    // Build a single stream-json user message line: a text block plus one image
+    // block per base64 PNG. juce::JSON handles all escaping.
+    juce::String buildStreamJsonInput (const juce::String& text,
+                                       const std::vector<juce::String>& imagesB64)
+    {
+        juce::Array<juce::var> content;
+        {
+            auto* t = new juce::DynamicObject();
+            t->setProperty ("type", "text");
+            t->setProperty ("text", text);
+            content.add (juce::var (t));
+        }
+        for (const auto& b64 : imagesB64)
+        {
+            auto* src = new juce::DynamicObject();
+            src->setProperty ("type", "base64");
+            src->setProperty ("media_type", "image/png");
+            src->setProperty ("data", b64);
+            auto* img = new juce::DynamicObject();
+            img->setProperty ("type", "image");
+            img->setProperty ("source", juce::var (src));
+            content.add (juce::var (img));
+        }
+        auto* msg = new juce::DynamicObject();
+        msg->setProperty ("role", "user");
+        msg->setProperty ("content", content);
+        auto* root = new juce::DynamicObject();
+        root->setProperty ("type", "user");
+        root->setProperty ("message", juce::var (msg));
+        return juce::JSON::toString (juce::var (root), true);   // one line
+    }
+
+    // stream-json output is JSONL; the final {"type":"result",...} object has
+    // the same shape as the single-object json envelope. Find it (search from
+    // the end — it's emitted last).
+    juce::var extractResultObjectFromStream (const juce::String& raw)
+    {
+        auto lines = juce::StringArray::fromLines (raw);
+        for (int i = lines.size(); --i >= 0;)
+        {
+            auto line = lines[i].trim();
+            if (line.isEmpty() || ! line.startsWith ("{")) continue;
+            auto v = juce::JSON::parse (line);
+            if (v.isObject() && v.getProperty ("type", "").toString() == "result")
+                return v;
+        }
+        return {};
+    }
 }
 
 //==============================================================================
@@ -139,6 +188,15 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
 
     const auto prompt = renderLatestTurn (conversation);
 
+    // Did the latest tool-results turn produce any images (screenshot tool)?
+    // If so we must use stream-json input to deliver them as image blocks (#67).
+    std::vector<juce::String> images;
+    if (! conversation.empty())
+        for (const auto& tr : conversation.back().toolResults)
+            if (tr.imageBase64.isNotEmpty())
+                images.push_back (tr.imageBase64);
+    const bool vision = ! images.empty();
+
     // /usr/bin/env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p …
     // Stripping the API-key env vars guarantees the user's SUBSCRIPTION is
     // used (those vars would otherwise switch to metered API billing).
@@ -148,21 +206,28 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
     // would like to access …" TCC prompts. We shut that down at the source:
     //   --tools ""             disable ALL built-in tools — our protocol is pure
     //                          text, so it never needs Bash/Read/Glob; with no
-    //                          tools it cannot touch the filesystem.
+    //                          tools it cannot touch the filesystem. Images ride
+    //                          inline via stream-json, so this stays enforced
+    //                          even for "eyes" (#67).
     //   --setting-sources user load only ~/.claude; skip project/local settings
     //                          discovery that walks the cwd tree.
     //   (cwd confinement below) run inside an app-owned scratch dir.
     juce::StringArray inner {
         "/usr/bin/env", "-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN",
         bin,
-        "-p", prompt,
-        "--output-format", "json",
         "--model", modelAlias,
         "--permission-mode", "dontAsk",
         "--tools", "",                       // no built-in tools at all (#66)
         "--setting-sources", "user",         // skip cwd-tree settings discovery
         "--strict-mcp-config"                // skip project MCP discovery (faster startup)
     };
+
+    if (vision)
+        // Prompt + image blocks arrive on stdin as a stream-json user message.
+        inner.addArray ({ "-p", "--input-format", "stream-json",
+                          "--output-format", "stream-json", "--verbose" });
+    else
+        inner.addArray ({ "-p", prompt, "--output-format", "json" });
 
     // Session reuse: first turn creates a session (with the system prompt);
     // later turns --resume it so the prompt cache stays warm and we send
@@ -185,10 +250,21 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
     // does `cd <scratch>` then exec's the real command. Every argument is passed
     // as a SEPARATE positional parameter ($1, $2, …), so the prompt/system-prompt
     // text is never re-parsed by the shell — no quoting/escaping hazards even
-    // with newlines or quotes in the content.
+    // with newlines or quotes in the content. For vision, the stream-json
+    // payload is written to a scratch file and redirected onto stdin.
     const auto scratch = pf::paths::getAiScratchDir().getFullPathName();
-    juce::StringArray args { "/bin/sh", "-c", "cd \"$1\" && shift && exec \"$@\"",
-                             "pf-ai", scratch };
+    juce::StringArray args;
+    if (vision)
+    {
+        auto stdinFile = pf::paths::getAiScratchDir().getChildFile ("ai_vision_input.json");
+        stdinFile.replaceWithText (buildStreamJsonInput (prompt, images));
+        args = { "/bin/sh", "-c", "cd \"$1\" && in=\"$2\" && shift 2 && exec \"$@\" < \"$in\"",
+                 "pf-ai", scratch, stdinFile.getFullPathName() };
+    }
+    else
+    {
+        args = { "/bin/sh", "-c", "cd \"$1\" && shift && exec \"$@\"", "pf-ai", scratch };
+    }
     args.addArray (inner);
 
     juce::ChildProcess proc;
@@ -201,10 +277,13 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
     auto raw = proc.readAllProcessOutput();   // blocks until exit
     proc.waitForProcessToFinish (1000);
 
-    auto parsed = juce::JSON::parse (raw);
+    // Both paths converge on a single result envelope object.
+    auto parsed = vision ? extractResultObjectFromStream (raw) : juce::JSON::parse (raw);
     if (! parsed.isObject())
     {
-        resp.error = "Claude Code returned no JSON. Output: " + raw.substring (0, 300);
+        resp.error = "Claude Code returned no "
+                     + juce::String (vision ? "result object (stream-json)" : "JSON")
+                     + ". Output: " + raw.substring (0, 300);
         return resp;
     }
 
