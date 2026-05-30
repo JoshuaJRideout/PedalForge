@@ -442,38 +442,38 @@ inline std::vector<PedalInfo> getFactoryPedals()
         // ─── TIME & DYNAMICS ───────────────────────────────────────────────
         { "Delay",        "Time",       1, 2, 3,
           juce::Colour (0xFF38BDF8),    // blue
-          [] { return GraphPedalFactory::createDelay(); },
+          [] { return processorFromDeclaredGraph ("Delay", FactoryDesigns::createDelay); },
           [] { return loadDesignOrDefault("Delay", FactoryDesigns::createDelay); } },
 
         { "Reverb",       "Time",       1, 2, 3,
           juce::Colour (0xFF22D3EE),    // cyan
-          [] { return GraphPedalFactory::createReverb(); },
+          [] { return processorFromDeclaredGraph ("Reverb", FactoryDesigns::createReverb); },
           [] { return loadDesignOrDefault("Reverb", FactoryDesigns::createReverb); } },
 
         { "Compressor",   "Dynamics",   1, 2, 2,
           juce::Colour (0xFF34D399),    // emerald
-          [] { return GraphPedalFactory::createCompressor(); },
+          [] { return processorFromDeclaredGraph ("Compressor", FactoryDesigns::createCompressor); },
           [] { return loadDesignOrDefault("Compressor", FactoryDesigns::createCompressor); } },
 
         { "Noise Gate",   "Dynamics",   1, 2, 1,
           juce::Colour (0xFF9CA3AF),    // gray
-          [] { return GraphPedalFactory::createNoiseGate(); },
+          [] { return processorFromDeclaredGraph ("Noise Gate", FactoryDesigns::createNoiseGate); },
           [] { return loadDesignOrDefault("Noise Gate", FactoryDesigns::createNoiseGate); } },
 
         // ─── EQ / FILTER / UTILITY ─────────────────────────────────────────
         { "Parametric EQ","EQ",         2, 2, 9,
           juce::Colour (0xFF60A5FA),    // light blue
-          [] { return GraphPedalFactory::createParametricEQ(); },
+          [] { return processorFromDeclaredGraph ("Parametric EQ", FactoryDesigns::createParametricEQ); },
           [] { return loadDesignOrDefault("Parametric EQ", FactoryDesigns::createParametricEQ); } },
 
         { "Tone Control", "EQ",         1, 2, 1,
           juce::Colour (0xFF818CF8),    // indigo
-          [] { return GraphPedalFactory::createToneControl(); },
+          [] { return processorFromDeclaredGraph ("Tone Control", FactoryDesigns::createToneControl); },
           [] { return loadDesignOrDefault("Tone Control", FactoryDesigns::createToneControl); } },
 
         { "Cabinet Sim",  "Utility",    1, 2, 2,
           juce::Colour (0xFFFCD34D),    // amber
-          [] { return GraphPedalFactory::createCabinetSim(); },
+          [] { return processorFromDeclaredGraph ("Cabinet Sim", FactoryDesigns::createCabinetSim); },
           [] { return loadDesignOrDefault("Cabinet Sim", FactoryDesigns::createCabinetSim); } },
 
         { "VST/AU Host",  "Utility",    1, 2, 0,

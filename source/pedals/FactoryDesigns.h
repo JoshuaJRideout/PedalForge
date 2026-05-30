@@ -818,30 +818,42 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Delay";
         d->category = "Time";
-        d->tags = { "delay", "echo", "repeat" };
+        d->tags = { "delay", "echo", "repeat", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF38BDF8);
         addBypassAndLED(*d);
 
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 35; knob.height = 35;
-            knob.x = d->chassisW / 2.0f - 17.5f;
-            knob.y = 30.0f + i * 45.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Time";
-        d->controls[3].label = "Fdbk";
-        d->controls[4].label = "Mix";
+        // In -> Split; dry to Mix, wet through a feedback Delay; Mix -> Out.
+        DSPGraph g;
+        int inID    = g.addNode (createNodeByType ("audio_input"));
+        int splitID = g.addNode (createNodeByType ("split"));
+        int delID   = g.addNode (createNodeByType ("delay"));
+        int mixID   = g.addNode (createNodeByType ("mix"));
+        int outID   = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "3_time"}); // DelayNode time
-        d->mappings.push_back({"knob_2", "3_feedback"}); // DelayNode feedback
-        d->mappings.push_back({"knob_3", "4_mix"}); // MixNode mix
+        g.getNode (delID)->getParam ("time")->set (0.4f);
+        g.getNode (delID)->getParam ("feedback")->set (0.4f);
+        g.getNode (mixID)->getParam ("mix")->set (0.3f);
+
+        float gx = 60.0f;
+        for (int id : { inID, splitID, delID, mixID, outID })
+        { g.getNode (id)->visualX = gx; g.getNode (id)->visualY = 240.0f; gx += 170.0f; }
+
+        g.connect (inID, 0, splitID, 0);
+        g.connect (splitID, 0, mixID, 0);
+        g.connect (splitID, 1, delID, 0);
+        g.connect (delID, 0, mixID, 1);
+        g.connect (mixID, 0, outID, 0);
+        g.connect (mixID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 17.5f;
+        addBoundKnob (g, *d, "Time", cx, 30.0f,  delID, "time",     35, 35);
+        addBoundKnob (g, *d, "Fdbk", cx, 75.0f,  delID, "feedback", 35, 35);
+        addBoundKnob (g, *d, "Mix",  cx, 120.0f, mixID, "mix",      35, 35);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -851,28 +863,34 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Reverb";
         d->category = "Time";
-        d->tags = { "reverb", "space", "ambient" };
+        d->tags = { "reverb", "space", "ambient", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF22D3EE);
         addBypassAndLED(*d);
 
-        for (int i=0; i<2; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 40; knob.height = 40;
-            knob.x = d->chassisW / 2.0f - 20.0f;
-            knob.y = 40.0f + i * 55.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Size";
-        d->controls[3].label = "Mix";
+        DSPGraph g;
+        int inID  = g.addNode (createNodeByType ("audio_input"));
+        int revID = g.addNode (createNodeByType ("reverb"));
+        int outID = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_size"}); // Reverb size
-        d->mappings.push_back({"knob_2", "2_mix"}); // Reverb mix
+        g.getNode (revID)->getParam ("size")->set (0.7f);
+        g.getNode (revID)->getParam ("mix")->set (0.4f);
+
+        g.getNode (inID)->visualX  = 60.0f;  g.getNode (inID)->visualY  = 240.0f;
+        g.getNode (revID)->visualX = 340.0f; g.getNode (revID)->visualY = 240.0f;
+        g.getNode (outID)->visualX = 620.0f; g.getNode (outID)->visualY = 240.0f;
+
+        g.connect (inID, 0, revID, 0);
+        g.connect (revID, 0, outID, 0);
+        g.connect (revID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 20.0f;
+        addBoundKnob (g, *d, "Size", cx, 40.0f, revID, "size", 40, 40);
+        addBoundKnob (g, *d, "Mix",  cx, 95.0f, revID, "mix",  40, 40);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -882,28 +900,34 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Compressor";
         d->category = "Dynamics";
-        d->tags = { "compressor", "dynamics", "sustain" };
+        d->tags = { "compressor", "dynamics", "sustain", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF34D399);
         addBypassAndLED(*d);
 
-        for (int i=0; i<2; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 40; knob.height = 40;
-            knob.x = d->chassisW / 2.0f - 20.0f;
-            knob.y = 40.0f + i * 55.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Thresh";
-        d->controls[3].label = "Ratio";
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int compID = g.addNode (createNodeByType ("compressor"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_threshold"}); 
-        d->mappings.push_back({"knob_2", "2_ratio"}); 
+        g.getNode (compID)->getParam ("threshold")->set (-20.0f);
+        g.getNode (compID)->getParam ("ratio")->set (4.0f);
+
+        g.getNode (inID)->visualX   = 60.0f;  g.getNode (inID)->visualY   = 240.0f;
+        g.getNode (compID)->visualX = 340.0f; g.getNode (compID)->visualY = 240.0f;
+        g.getNode (outID)->visualX  = 620.0f; g.getNode (outID)->visualY  = 240.0f;
+
+        g.connect (inID, 0, compID, 0);
+        g.connect (compID, 0, outID, 0);
+        g.connect (compID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 20.0f;
+        addBoundKnob (g, *d, "Thresh", cx, 40.0f, compID, "threshold", 40, 40);
+        addBoundKnob (g, *d, "Ratio",  cx, 95.0f, compID, "ratio",     40, 40);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -913,22 +937,31 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Noise Gate";
         d->category = "Dynamics";
+        d->tags = { "noise gate", "dynamics", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF9CA3AF);
         addBypassAndLED(*d);
 
-        PedalDesign::Control knob;
-        knob.type = "knob";
-        knob.width = 45; knob.height = 45;
-        knob.x = d->chassisW / 2.0f - 22.5f;
-        knob.y = 50.0f;
-        knob.label = "Thresh";
-        knob.controlID = "knob_1";
-        d->controls.push_back(knob);
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int gateID = g.addNode (createNodeByType ("noisegate"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_threshold"}); 
+        g.getNode (gateID)->getParam ("threshold")->set (-50.0f);
+
+        g.getNode (inID)->visualX   = 60.0f;  g.getNode (inID)->visualY   = 240.0f;
+        g.getNode (gateID)->visualX = 340.0f; g.getNode (gateID)->visualY = 240.0f;
+        g.getNode (outID)->visualX  = 620.0f; g.getNode (outID)->visualY  = 240.0f;
+
+        g.connect (inID, 0, gateID, 0);
+        g.connect (gateID, 0, outID, 0);
+        g.connect (gateID, 0, outID, 1);
+
+        addBoundKnob (g, *d, "Thresh", d->chassisW / 2.0f - 22.5f, 50.0f, gateID, "threshold", 45, 45);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -938,34 +971,46 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Parametric EQ";
         d->category = "EQ";
+        d->tags = { "eq", "parametric", "filter", "tutorial" };
         d->chassisW = 200.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF60A5FA);
         addBypassAndLED(*d);
 
-        for (int band=0; band<3; ++band)
+        // Three series parametric-EQ bands, each with Freq/Gain/Q knobs.
+        DSPGraph g;
+        int inID  = g.addNode (createNodeByType ("audio_input"));
+        int eqIDs[3];
+        const char* bandNames[3] = { "Low", "Mid", "High" };
+        const float bandFreq[3]  = { 250.0f, 1000.0f, 4000.0f };
+        for (int b = 0; b < 3; ++b)
         {
-            for (int p=0; p<3; ++p)
-            {
-                PedalDesign::Control knob;
-                knob.type = "knob";
-                knob.width = 30; knob.height = 30;
-                knob.x = 25.0f + band * 60.0f;
-                knob.y = 30.0f + p * 45.0f;
-                knob.controlID = "knob_" + juce::String(band*3 + p + 1);
-                d->controls.push_back(knob);
+            eqIDs[b] = g.addNode (createNodeByType ("peq"));
+            g.getNode (eqIDs[b])->setName (bandNames[b]);
+            g.getNode (eqIDs[b])->getParam ("freq")->set (bandFreq[b]);
+        }
+        int outID = g.addNode (createNodeByType ("audio_output"));
 
-                if (p == 0) d->controls.back().label = "Freq";
-                if (p == 1) d->controls.back().label = "Gain";
-                if (p == 2) d->controls.back().label = "Q";
+        g.getNode (inID)->visualX = 60.0f; g.getNode (inID)->visualY = 320.0f;
+        for (int b = 0; b < 3; ++b) { g.getNode (eqIDs[b])->visualX = 240.0f + b * 200.0f; g.getNode (eqIDs[b])->visualY = 320.0f; }
+        g.getNode (outID)->visualX = 240.0f + 3 * 200.0f; g.getNode (outID)->visualY = 320.0f;
 
-                juce::String nodeID = juce::String(2 + band); // eq1 is 2, eq2 is 3, eq3 is 4
-                juce::String paramID = (p == 0) ? "freq" : (p == 1) ? "gain" : "q";
-                d->mappings.push_back({knob.controlID, nodeID + "_" + paramID});
-            }
+        g.connect (inID, 0, eqIDs[0], 0);
+        g.connect (eqIDs[0], 0, eqIDs[1], 0);
+        g.connect (eqIDs[1], 0, eqIDs[2], 0);
+        g.connect (eqIDs[2], 0, outID, 0);
+        g.connect (eqIDs[2], 0, outID, 1);
+
+        for (int b = 0; b < 3; ++b)
+        {
+            float x = 25.0f + b * 60.0f;
+            addBoundKnob (g, *d, "Freq", x, 30.0f, eqIDs[b], "freq", 30, 30);
+            addBoundKnob (g, *d, "Gain", x, 75.0f, eqIDs[b], "gain", 30, 30);
+            addBoundKnob (g, *d, "Q",    x, 120.0f, eqIDs[b], "q",   30, 30);
         }
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -975,29 +1020,32 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Tone Control";
         d->category = "EQ";
+        d->tags = { "eq", "tone", "bass", "mid", "treble", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFF818CF8);
         addBypassAndLED(*d);
 
-        for (int i=0; i<3; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 30; knob.height = 30;
-            knob.x = d->chassisW / 2.0f - 15.0f;
-            knob.y = 30.0f + i * 45.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Bass";
-        d->controls[3].label = "Mid";
-        d->controls[4].label = "Treble";
+        DSPGraph g;
+        int inID   = g.addNode (createNodeByType ("audio_input"));
+        int toneID = g.addNode (createNodeByType ("tonestack"));
+        int outID  = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_bass"}); 
-        d->mappings.push_back({"knob_2", "2_mid"}); 
-        d->mappings.push_back({"knob_3", "2_treble"}); 
+        g.getNode (inID)->visualX   = 60.0f;  g.getNode (inID)->visualY   = 240.0f;
+        g.getNode (toneID)->visualX = 340.0f; g.getNode (toneID)->visualY = 240.0f;
+        g.getNode (outID)->visualX  = 620.0f; g.getNode (outID)->visualY  = 240.0f;
+
+        g.connect (inID, 0, toneID, 0);
+        g.connect (toneID, 0, outID, 0);
+        g.connect (toneID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 15.0f;
+        addBoundKnob (g, *d, "Bass",   cx, 30.0f,  toneID, "bass",   30, 30);
+        addBoundKnob (g, *d, "Mid",    cx, 75.0f,  toneID, "mid",    30, 30);
+        addBoundKnob (g, *d, "Treble", cx, 120.0f, toneID, "treble", 30, 30);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }
@@ -1007,27 +1055,34 @@ namespace FactoryDesigns
         auto d = std::make_shared<PedalDesign>();
         d->name = "Cabinet Sim";
         d->category = "Utility";
+        d->tags = { "cabinet", "speaker", "ir-lite", "tutorial" };
         d->chassisW = 120.0f;
         d->chassisH = 200.0f;
         d->chassisColour = juce::Colour(0xFFFCD34D);
         addBypassAndLED(*d);
 
-        for (int i=0; i<2; ++i)
-        {
-            PedalDesign::Control knob;
-            knob.type = "knob";
-            knob.width = 40; knob.height = 40;
-            knob.x = d->chassisW / 2.0f - 20.0f;
-            knob.y = 40.0f + i * 55.0f;
-            knob.controlID = "knob_" + juce::String(i+1);
-            d->controls.push_back(knob);
-        }
-        d->controls[2].label = "Cutoff";
-        d->controls[3].label = "Res";
+        DSPGraph g;
+        int inID  = g.addNode (createNodeByType ("audio_input"));
+        int cabID = g.addNode (createNodeByType ("cabinet"));
+        int outID = g.addNode (createNodeByType ("audio_output"));
 
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_cutoff"}); 
-        d->mappings.push_back({"knob_2", "2_resonance"}); 
+        g.getNode (cabID)->getParam ("cutoff")->set (3500.0f);
+        g.getNode (cabID)->getParam ("resonance")->set (0.5f);
+
+        g.getNode (inID)->visualX  = 60.0f;  g.getNode (inID)->visualY  = 240.0f;
+        g.getNode (cabID)->visualX = 340.0f; g.getNode (cabID)->visualY = 240.0f;
+        g.getNode (outID)->visualX = 620.0f; g.getNode (outID)->visualY = 240.0f;
+
+        g.connect (inID, 0, cabID, 0);
+        g.connect (cabID, 0, outID, 0);
+        g.connect (cabID, 0, outID, 1);
+
+        const float cx = d->chassisW / 2.0f - 20.0f;
+        addBoundKnob (g, *d, "Cutoff", cx, 40.0f, cabID, "cutoff",    40, 40);
+        addBoundKnob (g, *d, "Res",    cx, 95.0f, cabID, "resonance", 40, 40);
+
+        d->effectsGraph = g.toJSON();
+        d->mappings.push_back ({ "bypass_switch", "bypass" });
         addStandardPorts (*d);
         return d;
     }

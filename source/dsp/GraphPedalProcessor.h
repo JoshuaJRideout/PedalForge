@@ -359,8 +359,11 @@ namespace GraphPedalFactory
     }
 #endif
 
-    // ─── TIME & DYNAMICS ────────────────────────────────────────────────────────
-
+    // ─── TIME & DYNAMICS / EQ / UTILITY ──────────────────────────────────────────
+    // Delay, Reverb, Compressor, Noise Gate, Parametric EQ, Tone Control and
+    // Cabinet Sim are HONEST builds now — declared graph + control-node twins in
+    // FactoryDesigns::create*. Their old C++ graphs below are retired.
+#if 0
     /** 9. Delay: Input → Split → Delay (w/ feedback) → Mix → Output */
     inline std::unique_ptr<GraphPedalProcessor> createDelay()
     {
@@ -515,6 +518,7 @@ namespace GraphPedalFactory
         proc->rebuildParameters();
         return proc;
     }
+#endif // retired Time/Dynamics/EQ/Utility C++ graphs
 
     inline std::unique_ptr<GraphPedalProcessor> createNAMAmp()
     {
