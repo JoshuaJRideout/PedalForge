@@ -72,6 +72,7 @@ public:
     juce::String readBoardAsScript() override;
     juce::String readPedalAsScript (const juce::String& pedalUuid) override;
     juce::String readFxAsScript (const juce::String& pedalUuid) override;
+    juce::String verifyPedal (const juce::String& pedalUuid) override;
 
 
 private:

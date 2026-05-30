@@ -180,6 +180,14 @@ std::vector<ToolDef> buildToolDefs()
         "(chassis/controls) and mode=fx (DSP graph).",
         schemaObject ({ { "name", stringProp ("Name for the new pedal") } }, {}) });
 
+    defs.push_back ({ "verify_pedal",
+        "Inspect a pedal's LIVE DSP graph: lists nodes, every connection, "
+        "whether audio actually flows audio_input -> audio_output, and orphan "
+        "nodes. ALWAYS call this after building an FX graph — a script can "
+        "report 'ok' while connections silently failed, and this is the only "
+        "way to confirm the audio path is intact. Fix and re-run if broken.",
+        schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
+
     return defs;
 }
 
@@ -333,6 +341,13 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         auto created = host.createBlankPedal (argStr (call, "name"), err);
         if (created.isEmpty()) return fail ("create_pedal failed: " + err);
         r.content = created;
+        return r;
+    }
+    if (call.name == "verify_pedal")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
+        r.content = host.verifyPedal (uuid);
         return r;
     }
     if (call.name == "run_script")

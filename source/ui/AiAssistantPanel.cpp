@@ -48,7 +48,14 @@ namespace
             "- Pedals you add are AUTO-WIRED left-to-right into the chain. You "
             "do NOT need a board script to connect them.\n"
             "- run_script mode=board CLEARS the board and only re-adds FACTORY "
-            "pedals — it deletes custom pedals. Don't use it after create_pedal.";
+            "pedals — it deletes custom pedals. Don't use it after create_pedal.\n"
+            "- FX graphs build the COMPLETE graph each run: you MUST create an "
+            "audio_input and audio_output node and wire a path between them, "
+            "referencing nodes by the var you assigned (never a bare type name).\n"
+            "- After building an FX graph, ALWAYS call verify_pedal — a script "
+            "can say 'ok' while connections silently failed. If verify reports a "
+            "BROKEN audio path or a 'Connection failed' WARNING appeared, FIX it "
+            "and re-run before telling the user you're done.";
     }
 }
 

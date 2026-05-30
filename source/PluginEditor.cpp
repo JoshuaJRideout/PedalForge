@@ -5,6 +5,7 @@
 #include "pedals/PedalRegistry.h"
 #include "ui/PlayTabComponent.h"
 #include "peripherals/displays/modes/MidiMonitorMode.h"
+#include <set>
 
 #if JucePlugin_Build_Standalone
 extern void OpenStandaloneAudioSettingsDialog();
@@ -1176,4 +1177,73 @@ juce::String PedalForgeEditor::readFxAsScript (const juce::String& pedalUuid)
     auto s = scriptingTab.emitScript (ScriptingTabComponent::ScriptMode::GraphBuilder);
     scriptingTab.setActivePedal (activePedal, &processorRef.getGraphEngine());
     return s;
+}
+
+juce::String PedalForgeEditor::verifyPedal (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+
+    auto* node = processorRef.getGraphEngine().getGraph().getNodeForId (inst->nodeID);
+    auto* gproc = (node != nullptr) ? dynamic_cast<GraphPedalProcessor*> (node->getProcessor()) : nullptr;
+    if (gproc == nullptr) return "ERROR: pedal '" + inst->name + "' has no DSP graph.";
+
+    auto& dsp = gproc->getDSPGraph();
+    const auto& nodes = dsp.getNodes();
+    const auto& conns = dsp.getConnections();
+
+    juce::String r;
+    r << "Pedal \"" << inst->name << "\" DSP graph:\n";
+    r << "Nodes (" << (int) nodes.size() << "):\n";
+    std::vector<int> inputIds, outputIds;
+    for (const auto& [id, n] : nodes)
+    {
+        if (n == nullptr) continue;
+        r << "  #" << id << " " << n->getType() << "\n";
+        if (n->getType() == "audio_input")  inputIds.push_back (id);
+        if (n->getType() == "audio_output") outputIds.push_back (id);
+    }
+
+    r << "Connections (" << (int) conns.size() << "):\n";
+    for (const auto& c : conns)
+        r << "  #" << c.sourceNodeID << ":" << c.sourcePort
+          << " -> #" << c.destNodeID << ":" << c.destPort << "\n";
+
+    // Reachability: BFS from any audio_input to any audio_output.
+    bool audioPathOk = false;
+    if (! inputIds.empty() && ! outputIds.empty())
+    {
+        std::set<int> visited;
+        std::vector<int> frontier = inputIds;
+        while (! frontier.empty())
+        {
+            int cur = frontier.back(); frontier.pop_back();
+            if (! visited.insert (cur).second) continue;
+            for (auto out : outputIds) if (cur == out) { audioPathOk = true; break; }
+            if (audioPathOk) break;
+            for (const auto& c : conns)
+                if (c.sourceNodeID == cur && ! visited.count (c.destNodeID))
+                    frontier.push_back (c.destNodeID);
+        }
+    }
+
+    // Orphans: nodes with no connection at all.
+    juce::StringArray orphans;
+    for (const auto& [id, n] : nodes)
+    {
+        bool used = false;
+        for (const auto& c : conns)
+            if (c.sourceNodeID == id || c.destNodeID == id) { used = true; break; }
+        if (! used && n != nullptr) orphans.add ("#" + juce::String (id) + " " + n->getType());
+    }
+
+    r << "\nDIAGNOSIS:\n";
+    if (inputIds.empty())  r << "  ! No audio_input node — add one.\n";
+    if (outputIds.empty()) r << "  ! No audio_output node — add one.\n";
+    r << (audioPathOk ? "  OK: audio flows audio_input -> audio_output.\n"
+                      : "  ! BROKEN: no connected path from audio_input to audio_output. "
+                        "Audio will be SILENT. Check your connect() calls.\n");
+    if (! orphans.isEmpty())
+        r << "  ! Orphaned (unconnected) nodes: " << orphans.joinIntoString (", ") << "\n";
+    return r;
 }

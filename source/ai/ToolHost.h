@@ -101,5 +101,12 @@ namespace pf::ai
         virtual juce::String readBoardAsScript() = 0;
         virtual juce::String readPedalAsScript (const juce::String& pedalUuid) = 0;
         virtual juce::String readFxAsScript (const juce::String& pedalUuid) = 0;
+
+        /** Inspect a pedal's LIVE DSP graph and report ground truth the agent
+            can't otherwise see: node list, every connection, whether audio
+            actually flows audio_input -> … -> audio_output, and orphaned
+            (unconnected) nodes. The agent calls this after building to catch
+            failed connections and fix them. */
+        virtual juce::String verifyPedal (const juce::String& pedalUuid) = 0;
     };
 }
