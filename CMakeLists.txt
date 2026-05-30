@@ -257,3 +257,25 @@ add_custom_target(wiki-reference
     COMMENT "Regenerating docs/wiki/reference/expression-vm-functions.md from ExpressionVM registry"
     VERBATIM
 )
+
+# ─── UTF-8 literal guard ───────────────────────────────────────────
+# Prevents regressions of the mojibake bug class: juce::String(const char*)
+# decodes as ASCII/Latin-1, so a bare UTF-8 literal like "…" renders as "â€¦".
+# The guard FAILS the build only on NEW un-wrapped non-ASCII literals; the
+# pre-existing debt is baselined in cmake/utf8_baseline.txt (burn it down and
+# regenerate with --write-baseline). Skipped silently if Python isn't found.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+    add_custom_target(utf8-guard ALL
+        COMMAND ${Python3_EXECUTABLE}
+                "${CMAKE_SOURCE_DIR}/cmake/check_utf8_literals.py"
+                source
+                --baseline cmake/utf8_baseline.txt
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"   # relative paths must match baseline sigs
+        COMMENT "Checking for un-wrapped non-ASCII string literals (mojibake guard)"
+        VERBATIM
+    )
+    add_dependencies(PedalForge utf8-guard)
+else()
+    message(STATUS "Python3 not found — skipping UTF-8 literal guard.")
+endif()
