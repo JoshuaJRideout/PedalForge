@@ -23,6 +23,10 @@ faust/generated/*.h
 *.dylib
 *.so
 
+# Python (cmake helper scripts)
+__pycache__/
+*.pyc
+
 # Test binaries
 test_dijkstra
 
