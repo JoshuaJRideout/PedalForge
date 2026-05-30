@@ -35,8 +35,8 @@ The variable name on the left of `addPedal` is local to the script and re-used b
 ### Minimal chain
 
 ```
-ts = addPedal("Hello Gain")
-dly = addPedal("Delay Lab")
+ts = addPedal("Clean Boost")
+dly = addPedal("Delay")
 connect(ts, 0, dly, 0)
 focus(ts)
 ```
@@ -45,7 +45,7 @@ focus(ts)
 
 ```
 in_amp = addPedal("Filter Sweep", 80, 200)
-mid    = addPedal("Tremolo 101", 280, 200)
+mid    = addPedal("Tremolo", 280, 200)
 fx     = addPedal("Mini Synth", 480, 200)
 
 connect(in_amp, 0, mid, 0)

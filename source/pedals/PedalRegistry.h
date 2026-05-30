@@ -339,25 +339,12 @@ inline std::vector<PedalInfo> getFactoryPedals()
 {
     std::vector<PedalInfo> pedals = {
         // ─── TUTORIAL ──────────────────────────────────────────────────────
-        { "Hello Gain",   "Tutorial",   1, 2, 1,
-          juce::Colour (0xFF6EE7B7),    // mint green
-          [] { return GraphPedalFactory::createTutorialHelloGain(); },
-          [] { return loadDesignOrDefault("Hello Gain", FactoryDesigns::createTutorialHelloGain); } },
-
+        // (Hello Gain / Tremolo 101 / Delay Lab removed — they duplicated the
+        //  Clean Boost / Tremolo / Delay basics, which now carry teaching notes.)
         { "Filter Sweep", "Tutorial",   1, 2, 2,
           juce::Colour (0xFF93C5FD),    // light blue
           [] { return GraphPedalFactory::createTutorialFilterSweep(); },
           [] { return loadDesignOrDefault("Filter Sweep", FactoryDesigns::createTutorialFilterSweep); } },
-
-        { "Tremolo 101",  "Tutorial",   1, 2, 2,
-          juce::Colour (0xFFFDA4AF),    // salmon pink
-          [] { return GraphPedalFactory::createTutorialTremolo101(); },
-          [] { return loadDesignOrDefault("Tremolo 101", FactoryDesigns::createTutorialTremolo101); } },
-
-        { "Delay Lab",    "Tutorial",   1, 2, 3,
-          juce::Colour (0xFF7DD3FC),    // sky blue
-          [] { return GraphPedalFactory::createTutorialDelayLab(); },
-          [] { return loadDesignOrDefault("Delay Lab", FactoryDesigns::createTutorialDelayLab); } },
 
         { "Mini Synth",   "Tutorial",   1, 2, 4,
           juce::Colour (0xFFC084FC),    // purple

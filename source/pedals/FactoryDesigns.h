@@ -809,6 +809,14 @@ namespace FactoryDesigns
 
         d->effectsGraph = g.toJSON();
         d->mappings.push_back ({ "bypass_switch", "bypass" });
+
+        StickyNote n;
+        n.text = "Tremolo: an LFO cycles the volume.\nThe LFO is bipolar (-1..1), so we "
+                 "map it to a 0..1 gain with +1 then /2 (the constant nodes), then "
+                 "Multiply the audio by it. Rate/Depth knobs drive the LFO.";
+        n.bounds = { 60, 360, 360, 110 };
+        d->fxNotes.push_back (n);
+
         addStandardPorts (*d);
         return d;
     }
@@ -854,6 +862,14 @@ namespace FactoryDesigns
 
         d->effectsGraph = g.toJSON();
         d->mappings.push_back ({ "bypass_switch", "bypass" });
+
+        StickyNote n;
+        n.text = "Delay teaches parallel routing: Split sends the signal two ways - "
+                 "a dry path straight to Mix, and a wet path through the Delay (with "
+                 "feedback for repeats). Mix blends them. Time/Fdbk/Mix knobs drive it.";
+        n.bounds = { 60, 360, 380, 110 };
+        d->fxNotes.push_back (n);
+
         addStandardPorts (*d);
         return d;
     }
@@ -1340,53 +1356,7 @@ namespace FactoryDesigns
     // ─── TUTORIAL ────────────────────────────────────────────────────────────────
 
     /** Tutorial 1 — Hello Gain */
-    inline std::shared_ptr<PedalDesign> createTutorialHelloGain()
-    {
-        auto d = std::make_shared<PedalDesign>();
-        d->name = "Hello Gain";
-        d->category = "Tutorial";
-        d->tags = { "beginner", "gain", "basics", "first-pedal" };
-        d->chassisW = 120.0f;
-        d->chassisH = 200.0f;
-        d->chassisColour = juce::Colour(0xFF6EE7B7); // mint green
-
-        // Title label
-        PedalDesign::Control title;
-        title.type = "label";
-        title.label = "HELLO GAIN";
-        title.controlID = "lbl_title";
-        title.x = 10.0f; title.y = 8.0f;
-        title.width = 100.0f; title.height = 20.0f;
-        d->controls.push_back(title);
-
-        // Level knob
-        PedalDesign::Control knob;
-        knob.type = "knob";
-        knob.width = 45; knob.height = 45;
-        knob.x = d->chassisW / 2.0f - 22.5f;
-        knob.y = 50.0f;
-        knob.label = "Level";
-        knob.controlID = "knob_1";
-        d->controls.push_back(knob);
-
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_gain"}); // node 2 = GainNode
-
-        StickyNote note;
-        note.text = "Tutorial 1: Hello Gain\n\nThis is the simplest possible guitar pedal! It takes the audio input, runs it through a Gain Node to boost or cut the level, and sends it directly to the output.\n\nTweak the \"Level\" knob on the chassis to control the Gain Node's gain parameter (in decibels).";
-        note.bounds = { 300, 100, 280, 175 };
-        note.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note);
-
-        StickyNote note2;
-        note2.text = "The Gain Node (Node 2)\n\nThis is where the volume change happens! It scales the amplitude of the incoming audio samples. Tweak the \"Level\" knob on the chassis to see the gain parameter adjust in real-time.";
-        note2.bounds = { 300, 290, 280, 130 };
-        note2.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note2);
-
-        addStandardPorts (*d);
-        return d;
-    }
+    // (createTutorialHelloGain removed — duplicated Clean Boost.)
 
     /** Tutorial 2 — Filter Sweep */
     inline std::shared_ptr<PedalDesign> createTutorialFilterSweep()
@@ -1448,136 +1418,8 @@ namespace FactoryDesigns
         return d;
     }
 
-    /** Tutorial 3 — Tremolo 101 */
-    inline std::shared_ptr<PedalDesign> createTutorialTremolo101()
-    {
-        auto d = std::make_shared<PedalDesign>();
-        d->name = "Tremolo 101";
-        d->category = "Tutorial";
-        d->tags = { "modulation", "lfo", "tremolo", "beginner" };
-        d->chassisW = 120.0f;
-        d->chassisH = 200.0f;
-        d->chassisColour = juce::Colour(0xFFFDA4AF); // salmon pink
-
-        // Title label
-        PedalDesign::Control title;
-        title.type = "label";
-        title.label = "TREMOLO 101";
-        title.controlID = "lbl_title";
-        title.x = 5.0f; title.y = 8.0f;
-        title.width = 110.0f; title.height = 20.0f;
-        d->controls.push_back(title);
-
-        // Rate knob
-        PedalDesign::Control k1;
-        k1.type = "knob";
-        k1.width = 40; k1.height = 40;
-        k1.x = d->chassisW / 2.0f - 20.0f;
-        k1.y = 40.0f;
-        k1.label = "Rate";
-        k1.controlID = "knob_1";
-        d->controls.push_back(k1);
-
-        // Depth knob
-        PedalDesign::Control k2;
-        k2.type = "knob";
-        k2.width = 40; k2.height = 40;
-        k2.x = d->chassisW / 2.0f - 20.0f;
-        k2.y = 95.0f;
-        k2.label = "Depth";
-        k2.controlID = "knob_2";
-        d->controls.push_back(k2);
-
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "1_rate"});  // node 1 = LFONode
-        d->mappings.push_back({"knob_2", "1_depth"});
-
-        StickyNote note;
-        note.text = "Tutorial 3: Tremolo 101\n\nHere, we use a Low Frequency Oscillator (LFO) to automate the guitar's volume, creating a classic tremolo effect.\n\n- The LFO generates a cycling wave.\n- We scale the wave from bipolar (-1 to +1) to unipolar (0 to 1) using the Add (+1) and Divide (/2) nodes.\n- The scaled LFO modulates a Multiply Node, scaling the guitar's audio signal.";
-        note.bounds = { 350, 100, 300, 215 };
-        note.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note);
-
-        StickyNote note2;
-        note2.text = "LFO Bipolar-to-Unipolar Scaling\n\n- Node 1 (LFO) oscillates between -1.0 and +1.0.\n- Node 4 (Add) offsets it by +1.0 (now 0.0 to 2.0).\n- Node 5 (Divide) halves it by 2.0 (now 0.0 to 1.0).\nThis prevents phase inversion during multiplication!";
-        note2.bounds = { 350, 330, 300, 130 };
-        note2.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note2);
-
-        addStandardPorts (*d);
-        return d;
-    }
-
-    /** Tutorial 4 — Delay Lab */
-    inline std::shared_ptr<PedalDesign> createTutorialDelayLab()
-    {
-        auto d = std::make_shared<PedalDesign>();
-        d->name = "Delay Lab";
-        d->category = "Tutorial";
-        d->tags = { "delay", "parallel", "split", "mix", "signal-flow" };
-        d->chassisW = 140.0f;
-        d->chassisH = 200.0f;
-        d->chassisColour = juce::Colour(0xFF7DD3FC); // sky blue
-
-        // Title label
-        PedalDesign::Control title;
-        title.type = "label";
-        title.label = "DELAY LAB";
-        title.controlID = "lbl_title";
-        title.x = 20.0f; title.y = 8.0f;
-        title.width = 100.0f; title.height = 20.0f;
-        d->controls.push_back(title);
-
-        // Time knob
-        PedalDesign::Control k1;
-        k1.type = "knob";
-        k1.width = 35; k1.height = 35;
-        k1.x = d->chassisW / 2.0f - 17.5f;
-        k1.y = 30.0f;
-        k1.label = "Time";
-        k1.controlID = "knob_1";
-        d->controls.push_back(k1);
-
-        // Feedback knob
-        PedalDesign::Control k2;
-        k2.type = "knob";
-        k2.width = 35; k2.height = 35;
-        k2.x = d->chassisW / 2.0f - 17.5f;
-        k2.y = 75.0f;
-        k2.label = "Fdbk";
-        k2.controlID = "knob_2";
-        d->controls.push_back(k2);
-
-        // Mix knob
-        PedalDesign::Control k3;
-        k3.type = "knob";
-        k3.width = 35; k3.height = 35;
-        k3.x = d->chassisW / 2.0f - 17.5f;
-        k3.y = 120.0f;
-        k3.label = "Mix";
-        k3.controlID = "knob_3";
-        d->controls.push_back(k3);
-
-        d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_time"});     // node 2 = DelayNode
-        d->mappings.push_back({"knob_2", "2_feedback"});
-        d->mappings.push_back({"knob_3", "3_mix"});      // node 3 = MixNode
-
-        StickyNote note;
-        note.text = "Tutorial 4: Delay Lab\n\nThis pedal demonstrates parallel signal routing!\n\n- We use a Split Node to send the guitar audio down two parallel paths:\n  1. Dry path (unprocessed).\n  2. Wet path (routed through the Delay Node).\n- We mix these dry and wet signals back together using a Mix Node before sending them to the output.";
-        note.bounds = { 400, 100, 300, 215 };
-        note.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note);
-
-        StickyNote note2;
-        note2.text = "Parallel Dry/Wet Signal Paths\n\n- Node 1 (Split) copies the mono audio input to two independent pathways.\n- Node 2 (Delay) delays the wet path and feeds its output back to create repeating echoes.\n- Node 3 (Mix) mixes the original dry and delayed wet signals safely.";
-        note2.bounds = { 400, 330, 300, 130 };
-        note2.colour = juce::Colour(0xFFFFEB3B);
-        d->fxNotes.push_back(note2);
-
-        addStandardPorts (*d);
-        return d;
-    }
+    // (Tutorials 3 & 4 — Tremolo 101 / Delay Lab — removed; they duplicated the
+    //  Tremolo and Delay basics, which now carry teaching notes.)
 
     /** Tutorial 5 — Mini Synth */
     inline std::shared_ptr<PedalDesign> createTutorialMiniSynth()
