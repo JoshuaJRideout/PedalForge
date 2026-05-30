@@ -121,6 +121,9 @@ public:
         Logger::writeToLog ("Version: " + getApplicationVersion());
         Logger::writeToLog ("Command Line: " + commandLine);
         Logger::writeToLog ("Log File: " + logFile.getFullPathName());
+       #if JUCE_MAC
+        Logger::writeToLog ("App Nap: disabled (real-time audio + automation bridge)");
+       #endif
         Logger::writeToLog ("==================================================");
 
         mainWindow.reset (createWindow());
