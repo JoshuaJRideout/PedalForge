@@ -206,6 +206,34 @@ std::vector<ToolDef> buildToolDefs()
         "view), \"board\", or \"pedal:<uuid>\".",
         schemaObject ({ { "target", stringProp ("What to capture: app (default), board, or pedal:<uuid>") } }, {}) });
 
+    // ── PLAY TAB ── the live performance rig. SEPARATE from the Board: its own
+    // pedal chain + tone presets. To "set up the Play tab", use THESE, not the
+    // board tools (create_pedal / add_pedal_to_board / board script).
+    defs.push_back ({ "list_play_presets",
+        "List the Play tab's tone presets (built-in like 'High Gain Lead' + any "
+        "saved). The Play tab is the live performance rig - a SEPARATE pedal "
+        "chain from the Board.",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "read_play_chain",
+        "Show the pedals currently in the Play tab chain, in signal order.",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "load_play_preset",
+        "Load a named tone preset onto the Play tab (replaces the current play "
+        "chain). Get names from list_play_presets.",
+        schemaObject ({ { "name", stringProp ("Preset name to load") } }, { "name" }) });
+
+    defs.push_back ({ "play_add_pedal",
+        "Append a factory (or saved custom) pedal to the Play tab chain by name "
+        "(e.g. 'Distortion', 'Wah', 'Delay'). Use list_factory_pedals for valid "
+        "names. Build a tone by adding pedals in signal order.",
+        schemaObject ({ { "pedal", stringProp ("Factory/custom pedal name") } }, { "pedal" }) });
+
+    defs.push_back ({ "play_clear",
+        "Remove all pedals from the Play tab chain (start a tone from scratch).",
+        schemaObject ({}, {}) });
+
     return defs;
 }
 
@@ -381,6 +409,23 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         if (b64.isEmpty()) return fail ("screenshot failed - could not render the view.");
         r.imageBase64 = b64;
         r.content = "Screenshot captured - the image is attached below; look at it.";
+        return r;
+    }
+    if (call.name == "list_play_presets") { r.content = host.listPlayPresets(); return r; }
+    if (call.name == "read_play_chain")   { r.content = host.readPlayChain();   return r; }
+    if (call.name == "play_clear")        { r.content = host.playClear();       return r; }
+    if (call.name == "load_play_preset")
+    {
+        auto name = argStr (call, "name");
+        if (name.isEmpty()) return fail ("Missing 'name'");
+        r.content = host.loadPlayPreset (name);
+        return r;
+    }
+    if (call.name == "play_add_pedal")
+    {
+        auto pedal = argStr (call, "pedal");
+        if (pedal.isEmpty()) return fail ("Missing 'pedal'");
+        r.content = host.playAddPedal (pedal);
         return r;
     }
     if (call.name == "run_script")

@@ -20,6 +20,15 @@ public:
     void rebuildRouting();
     void loadPreset (const juce::String& presetName);
 
+    //==========================================================================
+    // Programmatic control surface for the AI agent's play_* tools. The Play
+    // tab is a SEPARATE live rig from the Board (own engine + presets), so the
+    // agent needs these to "set up the Play tab" rather than the board.
+    juce::StringArray getPresetNames();                                 // built-in + user
+    juce::String      describeChain();                                  // current signal chain
+    bool              addPedalToChain (const juce::String& pedalName);  // append (factory/custom)
+    void              clearChain();                                     // remove all play pedals
+
     void handleSlotClicked (int slotIndex);
     void handlePedalDropped (int slotIndex, const juce::String& pedalName);
     void handleSlotSwapped (int sourceSlot, int targetSlot);

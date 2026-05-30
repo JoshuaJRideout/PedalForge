@@ -960,6 +960,68 @@ void PlayTabComponent::rebuildPresetMenu()
     }
 }
 
+//==============================================================================
+// AI agent control surface (the play_* tools).
+juce::StringArray PlayTabComponent::getPresetNames()
+{
+    juce::StringArray names { "Clean & Space", "Classic Rock", "High Gain Lead",
+                              "Ambient Shimmer", "Blues Crunch", "Funk Wah Clean",
+                              "Worship Ambient", "Country Slap" };
+    // userPresets is repopulated by rebuildPresetMenu; refresh so saved tones show.
+    rebuildPresetMenu();
+    for (const auto& [name, file] : userPresets) names.addIfNotAlreadyThere (name);
+    return names;
+}
+
+juce::String PlayTabComponent::describeChain()
+{
+    juce::String r;
+    int n = 0;
+    for (const auto& s : slots)
+    {
+        if (s->pedalId.uid == 0) continue;
+        if (auto* inst = playEngine.getPedalInstance (s->pedalId))
+        {
+            juce::String nm = (inst->design != nullptr && inst->design->name.isNotEmpty())
+                                  ? inst->design->name : inst->name;
+            r << "  " << (++n) << ". " << nm
+              << (inst->category.isNotEmpty() ? "  [" + inst->category + "]" : "") << "\n";
+        }
+    }
+    return n == 0 ? juce::String ("Play chain is empty.")
+                  : "Play chain (signal flows in order):\n" + r;
+}
+
+bool PlayTabComponent::addPedalToChain (const juce::String& pedalName)
+{
+    // Reuse the first empty slot; otherwise append a new one (mirrors + Add Slot).
+    int idx = -1;
+    for (int i = 0; i < (int) slots.size(); ++i)
+        if (slots[(size_t) i]->pedalId.uid == 0) { idx = i; break; }
+
+    if (idx < 0)
+    {
+        auto s = std::make_unique<Slot>();
+        s->recommendedCategory = "Any";
+        s->label = "Pedal";
+        slots.push_back (std::move (s));
+        rebuildSlots();
+        idx = (int) slots.size() - 1;
+    }
+
+    handlePedalDropped (idx, pedalName);   // loads factory or custom pedal into slot
+    return idx < (int) slots.size() && slots[(size_t) idx]->pedalId.uid != 0;
+}
+
+void PlayTabComponent::clearChain()
+{
+    auto instances = playEngine.getPedalInstances();   // copy: removal mutates the source
+    for (auto& inst : instances)
+        if (inst.boardId == "play_board")
+            playEngine.removePedal (inst.nodeID);
+    rebuildSlots();
+}
+
 void PlayTabComponent::clearSlot (int slotIndex)
 {
     if (slotIndex < 0 || slotIndex >= (int) slots.size()) return;

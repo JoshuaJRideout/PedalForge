@@ -122,5 +122,16 @@ namespace pf::ai
             pedalboard, "pedal:<uuid>" = a specific pedal's face. The provider
             forwards the image to the model as an image block. */
         virtual juce::String captureView (const juce::String& target) = 0;
+
+        //======================================================================
+        // PLAY TAB — the live performance rig. This is a SEPARATE pedal chain
+        // from the Board (its own engine + tone presets), so it needs its own
+        // tools; the board tools (create_pedal / add_pedal_to_board / board
+        // script) do NOT touch it.
+        virtual juce::String listPlayPresets() = 0;                          // built-in + saved
+        virtual juce::String loadPlayPreset (const juce::String& name) = 0;  // replace chain w/ preset
+        virtual juce::String readPlayChain() = 0;                            // current chain, in order
+        virtual juce::String playAddPedal (const juce::String& pedalName) = 0; // append a pedal
+        virtual juce::String playClear() = 0;                                // empty the chain
     };
 }

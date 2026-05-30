@@ -75,6 +75,11 @@ public:
     juce::String verifyPedal (const juce::String& pedalUuid) override;
     juce::String probePedal (const juce::String& pedalUuid) override;
     juce::String captureView (const juce::String& target) override;
+    juce::String listPlayPresets() override;
+    juce::String loadPlayPreset (const juce::String& name) override;
+    juce::String readPlayChain() override;
+    juce::String playAddPedal (const juce::String& pedalName) override;
+    juce::String playClear() override;
 
 
 private:

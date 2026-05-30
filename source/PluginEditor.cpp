@@ -1293,3 +1293,45 @@ juce::String PedalForgeEditor::captureView (const juce::String& target)
     if (! png.writeImageToStream (img, mos)) return {};
     return juce::Base64::toBase64 (mos.getData(), mos.getDataSize());
 }
+
+//==============================================================================
+// PLAY TAB tools — the live performance rig (separate engine + presets).
+juce::String PedalForgeEditor::listPlayPresets()
+{
+    if (playTab == nullptr) return "ERROR: Play tab unavailable.";
+    return "Play-tab tone presets (built-in + saved):\n  "
+           + playTab->getPresetNames().joinIntoString ("\n  ")
+           + "\n(load one with load_play_preset, or build a chain with play_add_pedal.)";
+}
+
+juce::String PedalForgeEditor::loadPlayPreset (const juce::String& name)
+{
+    if (playTab == nullptr) return "ERROR: Play tab unavailable.";
+    if (! playTab->getPresetNames().contains (name))
+        return "No play preset named '" + name + "'. Available: "
+               + playTab->getPresetNames().joinIntoString (", ");
+    playTab->loadPreset (name);
+    return "Loaded play preset '" + name + "'.\n" + playTab->describeChain();
+}
+
+juce::String PedalForgeEditor::readPlayChain()
+{
+    if (playTab == nullptr) return "ERROR: Play tab unavailable.";
+    return playTab->describeChain();
+}
+
+juce::String PedalForgeEditor::playAddPedal (const juce::String& pedalName)
+{
+    if (playTab == nullptr) return "ERROR: Play tab unavailable.";
+    if (! playTab->addPedalToChain (pedalName))
+        return "Could not add '" + pedalName + "' to the play chain - not a known "
+               "factory or saved pedal. Call list_factory_pedals for valid names.";
+    return "Added '" + pedalName + "' to the play chain.\n" + playTab->describeChain();
+}
+
+juce::String PedalForgeEditor::playClear()
+{
+    if (playTab == nullptr) return "ERROR: Play tab unavailable.";
+    playTab->clearChain();
+    return "Cleared the play chain.";
+}

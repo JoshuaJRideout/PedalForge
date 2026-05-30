@@ -62,7 +62,14 @@ namespace
             "measured, not just that it's wired.\n"
             "- You also have EYES: call screenshot to capture the current view "
             "and actually SEE it (layout, colours, knob positions, meters). Use "
-            "it to check your visual work or to understand what the user sees.";
+            "it to check your visual work or to understand what the user sees.\n"
+            "- PLAY TAB vs BOARD: the Play tab is the live PERFORMANCE rig - a "
+            "SEPARATE pedal chain from the Board, with its own tone presets. If "
+            "the user asks to set up / change the PLAY tab (or a tone to play "
+            "with), use the play tools (list_play_presets, load_play_preset, "
+            "read_play_chain, play_add_pedal, play_clear) - do NOT build a Board "
+            "with create_pedal/add_pedal_to_board. The Board tab is for "
+            "arranging & designing pedals; the Play tab is for playing them.";
     }
 }
 
