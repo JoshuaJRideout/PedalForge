@@ -82,8 +82,8 @@ LibraryComponent::LibraryComponent()
     {
         juce::PopupMenu m;
         m.addSectionHeader ("Snapshot");
-        m.addItem ("Export full snapshot…",   [this] { exportSnapshotFlow(); });
-        m.addItem ("Import snapshot…",        [this] { importSnapshotFlow(); });
+        m.addItem ("Export full snapshot...",   [this] { exportSnapshotFlow(); });
+        m.addItem ("Import snapshot...",        [this] { importSnapshotFlow(); });
         m.addSeparator();
         m.addItem ("What is this?", false, false, [] {});
         m.addItem (juce::CharPointer_UTF8 ("\xe2\x80\xa2 Bundle every design, board, preset, image"), false, false, [] {});
@@ -144,7 +144,7 @@ LibraryComponent::LibraryComponent()
             // place. One toast per failure for per-file detail; a single
             // summary toast for the success counts.
             for (const auto& msg : failMessages)
-                pf::toastError ("Import failed — " + msg);
+                pf::toastError ("Import failed - " + msg);
 
             if (created + updated > 0)
             {
@@ -1720,7 +1720,7 @@ void LibraryComponent::exportSnapshotFlow()
                                         + ".pfsnapshot");
 
     snapshotChooser = std::make_unique<juce::FileChooser> (
-        "Save snapshot…", suggested, "*.pfsnapshot");
+        "Save snapshot...", suggested, "*.pfsnapshot");
 
     auto flags = juce::FileBrowserComponent::saveMode
                | juce::FileBrowserComponent::canSelectFiles
@@ -1735,7 +1735,7 @@ void LibraryComponent::exportSnapshotFlow()
         if (! dest.hasFileExtension ("pfsnapshot"))
             dest = dest.withFileExtension ("pfsnapshot");
 
-        pf::toastInfo ("Building snapshot…");
+        pf::toastInfo ("Building snapshot...");
         // Run on a background thread — zipping can take a few seconds.
         juce::Thread::launch ([sp, dest]
         {
@@ -1745,11 +1745,11 @@ void LibraryComponent::exportSnapshotFlow()
                 if (sp == nullptr) return;
                 if (r.success)
                 {
-                    pf::toastInfo ("Snapshot saved — " + r.message);
+                    pf::toastInfo ("Snapshot saved - " + r.message);
                 }
                 else
                 {
-                    pf::toastError ("Snapshot failed — " + r.message);
+                    pf::toastError ("Snapshot failed - " + r.message);
                 }
             });
         });
@@ -1759,7 +1759,7 @@ void LibraryComponent::exportSnapshotFlow()
 void LibraryComponent::importSnapshotFlow()
 {
     snapshotChooser = std::make_unique<juce::FileChooser> (
-        "Restore from snapshot…", juce::File{}, "*.pfsnapshot");
+        "Restore from snapshot...", juce::File{}, "*.pfsnapshot");
 
     auto flags = juce::FileBrowserComponent::openMode
                | juce::FileBrowserComponent::canSelectFiles;
@@ -1783,7 +1783,7 @@ void LibraryComponent::importSnapshotFlow()
             juce::ModalCallbackFunction::create ([sp, src] (int result)
             {
                 if (sp == nullptr || result != 1) return;
-                pf::toastInfo ("Restoring snapshot…");
+                pf::toastInfo ("Restoring snapshot...");
                 juce::Thread::launch ([sp, src]
                 {
                     auto r = pf::snapshot::importSnapshotMerge (src, /*overwrite*/ false);
@@ -1792,12 +1792,12 @@ void LibraryComponent::importSnapshotFlow()
                         if (sp == nullptr) return;
                         if (r.kind == pf::snapshot::ImportResult::Imported)
                         {
-                            pf::toastInfo ("Snapshot restored — " + r.message);
+                            pf::toastInfo ("Snapshot restored - " + r.message);
                             sp->refreshAssets();
                         }
                         else
                         {
-                            pf::toastError ("Snapshot failed — " + r.message);
+                            pf::toastError ("Snapshot failed - " + r.message);
                         }
                     });
                 });

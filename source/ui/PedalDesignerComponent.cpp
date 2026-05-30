@@ -1980,9 +1980,9 @@ public:
         setupBtn (btnUp, [this] { moveSelected(-1); });
         setupBtn (btnDown, [this] { moveSelected(1); });
         setupBtn (btnLock, [this] { toggleLock(); });
-        btnUp.setButtonText ("▲");
-        btnDown.setButtonText ("▼");
-        btnLock.setButtonText ("🔒");
+        btnUp.setButtonText (juce::String (juce::CharPointer_UTF8 ("\xe2\x96\xb2")));
+        btnDown.setButtonText (juce::String (juce::CharPointer_UTF8 ("\xe2\x96\xbc")));
+        btnLock.setButtonText (juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x94\x92")));
         listBox.setRowHeight (28);
     }
 
@@ -2054,7 +2054,7 @@ public:
         {
             g.setColour (juce::Colour (0xFFFF9944));
             g.setFont (juce::FontOptions (11.0f));
-            g.drawText ("🔒", w - 24, 0, 20, h, juce::Justification::centred);
+            g.drawText (juce::String (juce::CharPointer_UTF8 ("\xf0\x9f\x94\x92")), w - 24, 0, 20, h, juce::Justification::centred);
         }
 
         // Bottom separator

@@ -180,7 +180,7 @@ std::unique_ptr<juce::InputStream> Tone3000Client::createStreamForUrl (const juc
     auto token = oauth.getAccessTokenRefreshingIfNeeded();
     if (token.isEmpty())
     {
-        juce::Logger::writeToLog ("[Tone3000] No access token — sign-in required.");
+        juce::Logger::writeToLog ("[Tone3000] No access token - sign-in required.");
         return nullptr;
     }
 

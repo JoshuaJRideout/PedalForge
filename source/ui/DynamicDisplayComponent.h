@@ -432,17 +432,17 @@ public:
             
             juce::String trackInfo = "Tr " + juce::String (t + 1) + "  " + modeStrings[mode];
             if (mode == 0) // Note Mode
-                trackInfo += " (" + getMidiNoteName(val1) + ") ▼";
+                trackInfo += " (" + getMidiNoteName(val1) + juce::String (juce::CharPointer_UTF8 (") \xe2\x96\xbc"));
             else if (mode == 1) // CC
-                trackInfo += " (CC" + juce::String(val1) + ") ▼";
+                trackInfo += " (CC" + juce::String(val1) + juce::String (juce::CharPointer_UTF8 (") \xe2\x96\xbc"));
             else
-                trackInfo += " ▼";
+                trackInfo += juce::String (juce::CharPointer_UTF8 (" \xe2\x96\xbc"));
             
             g.drawText (trackInfo, 10.0f, rowY, labelW - 15.0f, rowH * 0.5f, juce::Justification::bottomLeft);
             
             g.setColour (juce::Colour (0xFF6B7280));
             g.setFont (juce::FontOptions ("Sans", 9.0f, juce::Font::plain));
-            g.drawText (divStrings[divIdx] + " div ▼  •  " + juce::String(loopLen) + " steps", 10.0f, rowY + rowH * 0.5f, labelW - 15.0f, rowH * 0.5f, juce::Justification::topLeft);
+            g.drawText (divStrings[divIdx] + juce::String (juce::CharPointer_UTF8 (" div \xe2\x96\xbc  -  ")) + juce::String(loopLen) + " steps", 10.0f, rowY + rowH * 0.5f, labelW - 15.0f, rowH * 0.5f, juce::Justification::topLeft);
 
             // Draw Grid Cells
             int playheadStep = seqNode->getCurrentStep (t);
@@ -551,7 +551,7 @@ public:
         
         juce::String modeStrings[] = { "Mode: Note", "Mode: CC", "Mode: PC", "Mode: Expr" };
         int activeMode = juce::jlimit (0, 3, (int)seqNode->getParam ("tr0_mode")->get());
-        g.drawText (modeStrings[activeMode] + " ▼", modeBtnRect, juce::Justification::centred);
+        g.drawText (modeStrings[activeMode] + juce::String (juce::CharPointer_UTF8 (" \xe2\x96\xbc")), modeBtnRect, juce::Justification::centred);
 
         // 4. Clear Button
         clearBtnRect = juce::Rectangle<float> (360.0f, 8.0f, 90.0f, 28.0f);
@@ -1834,27 +1834,27 @@ private:
         g.setColour (juce::Colour (0xFF312E81));
         g.fillRoundedRectangle (midiSnapRect, 4.0f);
         g.setColour (juce::Colours::white);
-        g.drawText (snapStrings[juce::jlimit (0, 5, snapIdx)] + " ▼", midiSnapRect, juce::Justification::centred);
+        g.drawText (snapStrings[juce::jlimit (0, 5, snapIdx)] + juce::String (juce::CharPointer_UTF8 (" \xe2\x96\xbc")), midiSnapRect, juce::Justification::centred);
 
         // Channel
         juce::Rectangle<float> midiChanRect (310.0f, 8.0f, 80.0f, 28.0f);
         g.setColour (juce::Colour (0xFF312E81));
         g.fillRoundedRectangle (midiChanRect, 4.0f);
         g.setColour (juce::Colours::white);
-        g.drawText ("Chan: " + juce::String (chan) + " ▼", midiChanRect, juce::Justification::centred);
+        g.drawText ("Chan: " + juce::String (chan) + juce::String (juce::CharPointer_UTF8 (" \xe2\x96\xbc")), midiChanRect, juce::Justification::centred);
 
         // Octave Down / Up
         juce::Rectangle<float> midiOctDownRect (400.0f, 8.0f, 50.0f, 28.0f);
         g.setColour (juce::Colour (0xFF312E81));
         g.fillRoundedRectangle (midiOctDownRect, 4.0f);
         g.setColour (juce::Colours::white);
-        g.drawText ("OCT ▼", midiOctDownRect, juce::Justification::centred);
+        g.drawText (juce::String (juce::CharPointer_UTF8 ("OCT \xe2\x96\xbc")), midiOctDownRect, juce::Justification::centred);
 
         juce::Rectangle<float> midiOctUpRect (455.0f, 8.0f, 50.0f, 28.0f);
         g.setColour (juce::Colour (0xFF312E81));
         g.fillRoundedRectangle (midiOctUpRect, 4.0f);
         g.setColour (juce::Colours::white);
-        g.drawText ("OCT ▲", midiOctUpRect, juce::Justification::centred);
+        g.drawText (juce::String (juce::CharPointer_UTF8 ("OCT \xe2\x96\xb2")), midiOctUpRect, juce::Justification::centred);
 
         // Clear
         juce::Rectangle<float> midiClearRect (515.0f, 8.0f, 80.0f, 28.0f);

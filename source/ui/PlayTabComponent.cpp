@@ -242,7 +242,7 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
             {
                 loadPreset ("Classic Rock");
                 presetMenu.setText ("Classic Rock", juce::dontSendNotification);
-                pf::toastInfo ("Welcome to PedalForge — loaded the Classic Rock demo. "
+                pf::toastInfo ("Welcome to PedalForge - loaded the Classic Rock demo. "
                                "Click any slot, or press Tab to swap pedals.");
             });
         }

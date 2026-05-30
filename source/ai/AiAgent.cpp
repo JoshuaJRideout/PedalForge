@@ -124,7 +124,7 @@ void AiAgent::run()
         for (const auto& call : resp.toolCalls)
         {
             if (threadShouldExit()) break;
-            fireTool ("Running " + call.name + "…");
+            fireTool ("Running " + call.name + "...");
 
             ToolResult result;
             runOnMessageThreadBlocking ([&]

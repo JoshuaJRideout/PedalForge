@@ -416,8 +416,8 @@ void MidiSettingsPanel::commitBindingEdit (BindingRow* row)
     const int cc = juce::jlimit (0, 127, row->ccInput.getText().getIntValue());
     const int ch = juce::jlimit (0, 16,  row->channelInput.getText().getIntValue());
     row->manager->setMapping (row->paramId, cc, ch);
-    pf::toastInfo ("Updated binding — " + row->paramId
-                   + " → CC " + juce::String (cc)
+    pf::toastInfo ("Updated binding - " + row->paramId
+                   + " -> CC " + juce::String (cc)
                    + (ch == 0 ? " (Omni)" : " ch " + juce::String (ch)));
     rebuildBindings();
     resized();

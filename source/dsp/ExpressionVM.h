@@ -468,7 +468,7 @@ public:
             { "exp",   OP_EXP,   1, "Math", "exp(x)",   "e raised to x." },
             { "log",   OP_LOG,   1, "Math", "log(x)",   "Natural logarithm." },
             { "log2",  OP_LOG2,  1, "Math", "log2(x)",  "Base-2 logarithm." },
-            { "tanh",  OP_TANH,  1, "Math", "tanh(x)",  "Hyperbolic tangent — common soft-clip." },
+            { "tanh",  OP_TANH,  1, "Math", "tanh(x)",  "Hyperbolic tangent - common soft-clip." },
 
             // Math — 2-arg / 3-arg
             { "min",   OP_MIN,   2, "Math", "min(a, b)",        "Minimum of a and b." },
@@ -527,7 +527,7 @@ public:
 
         juce::String md;
         md << "<!-- AUTO-GENERATED from ExpressionVM::dumpFunctionsAsMarkdown(). Do not edit by hand. -->\n\n";
-        md << "# ExpressionVM — Built-in Functions\n\n";
+        md << "# ExpressionVM - Built-in Functions\n\n";
         md << "Every function callable from a UI / DSP / FX Graph script. Generated from the registry in [ExpressionVM.h](../../source/dsp/ExpressionVM.h).\n\n";
         for (const auto& cat : categoryOrder)
         {

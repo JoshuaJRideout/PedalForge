@@ -1238,8 +1238,8 @@ juce::String PedalForgeEditor::verifyPedal (const juce::String& pedalUuid)
     }
 
     r << "\nDIAGNOSIS:\n";
-    if (inputIds.empty())  r << "  ! No audio_input node — add one.\n";
-    if (outputIds.empty()) r << "  ! No audio_output node — add one.\n";
+    if (inputIds.empty())  r << "  ! No audio_input node - add one.\n";
+    if (outputIds.empty()) r << "  ! No audio_output node - add one.\n";
     r << (audioPathOk ? "  OK: audio flows audio_input -> audio_output.\n"
                       : "  ! BROKEN: no connected path from audio_input to audio_output. "
                         "Audio will be SILENT. Check your connect() calls.\n");

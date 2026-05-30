@@ -346,7 +346,7 @@ void InventoryOverlay::PreviewPanel::paint (juce::Graphics& g)
         area.removeFromTop (2);
         g.setColour (PedalForgeLookAndFeel::textSecondary);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (currentItem->tags.joinIntoString ("  •  "), area.removeFromTop (14), juce::Justification::centredLeft);
+        g.drawText (currentItem->tags.joinIntoString ("  -  "), area.removeFromTop (14), juce::Justification::centredLeft);
     }
 
     // Preview area

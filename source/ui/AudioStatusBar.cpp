@@ -30,7 +30,7 @@ AudioStatusBar::AudioStatusBar (PedalForgeProcessor& proc)
     };
     addAndMakeVisible (muteBtn);
 
-    settingsBtn.setTooltip ("Open audio device settings…");
+    settingsBtn.setTooltip ("Open audio device settings...");
     settingsBtn.onClick = [this] { openAudioSettings(); };
     addAndMakeVisible (settingsBtn);
 
@@ -151,7 +151,7 @@ void AudioStatusBar::openInputGainMenu()
         const float g = processor.inputGain[ch].load();
         m.addItem ("Ch " + juce::String (ch + 1)
                    + "  =  " + juce::String (juce::Decibels::gainToDecibels (g), 1) + " dB"
-                   + (std::abs (g - 1.0f) < 1e-3f ? "" : "  ●"),
+                   + (std::abs (g - 1.0f) < 1e-3f ? "" : juce::String (juce::CharPointer_UTF8 ("  \xe2\x97\x8f"))),
                    false, false, [] {});
         for (auto db : { -12, -6, -3, 0, +3, +6, +12 })
         {
@@ -180,7 +180,7 @@ void AudioStatusBar::openOutputGainMenu()
         const float g = processor.outputGain[ch].load();
         m.addItem ("Ch " + juce::String (ch + 1)
                    + "  =  " + juce::String (juce::Decibels::gainToDecibels (g), 1) + " dB"
-                   + (std::abs (g - 1.0f) < 1e-3f ? "" : "  ●"),
+                   + (std::abs (g - 1.0f) < 1e-3f ? "" : juce::String (juce::CharPointer_UTF8 ("  \xe2\x97\x8f"))),
                    false, false, [] {});
         for (auto db : { -12, -6, -3, 0, +3, +6, +12 })
         {

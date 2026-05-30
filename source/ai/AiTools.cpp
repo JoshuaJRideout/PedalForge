@@ -123,7 +123,7 @@ std::vector<ToolDef> buildToolDefs()
 
     defs.push_back ({ "run_pedal_script",
         "Define a pedal's chassis and face controls by running a PEDAL script "
-        "(setMeta, setChassis, addKnob, addSwitch, mapControl, …) against the "
+        "(setMeta, setChassis, addKnob, addSwitch, mapControl, ...) against the "
         "pedal with the given uuid. Returns console output. Undoable.",
         schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") },
                         { "source", stringProp ("The pedal script source") } },
@@ -145,7 +145,7 @@ std::vector<ToolDef> buildToolDefs()
                       { "pedal_uuid", "source" }) });
 
     defs.push_back ({ "read_board_as_script",
-        "Emit the current live board as an editable BOARD script — read existing "
+        "Emit the current live board as an editable BOARD script - read existing "
         "state as code before modifying it.",
         schemaObject ({}, {}) });
 
@@ -164,7 +164,7 @@ std::vector<ToolDef> buildToolDefs()
         schemaObject ({}, {}) });
 
     defs.push_back ({ "run_script",
-        "Run a PedalForge script. THE primary build tool — use it for boards, "
+        "Run a PedalForge script. THE primary build tool - use it for boards, "
         "pedals, FX graphs and DSP. Call get_script_api once to learn the "
         "commands. mode=board operates on the whole board; mode=pedal/fx/dsp "
         "need pedal_uuid. Returns console output (fix any 'ERROR line N' and "
@@ -183,7 +183,7 @@ std::vector<ToolDef> buildToolDefs()
     defs.push_back ({ "verify_pedal",
         "Inspect a pedal's LIVE DSP graph: lists nodes, every connection, "
         "whether audio actually flows audio_input -> audio_output, and orphan "
-        "nodes. ALWAYS call this after building an FX graph — a script can "
+        "nodes. ALWAYS call this after building an FX graph - a script can "
         "report 'ok' while connections silently failed, and this is the only "
         "way to confirm the audio path is intact. Fix and re-run if broken.",
         schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
@@ -246,7 +246,7 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         juce::String err;
         if (! host.writePedalDesign (uuid, json, err))
             return fail ("write_pedal_design failed: " + err);
-        r.content = "ok — pedal design updated (user can undo with Cmd-Z)";
+        r.content = "ok - pedal design updated (user can undo with Cmd-Z)";
         return r;
     }
     if (call.name == "read_fx_graph")
@@ -266,7 +266,7 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         juce::String err;
         if (! host.writeFxGraph (uuid, json, err))
             return fail ("write_fx_graph failed: " + err);
-        r.content = "ok — FX graph rebuilt (user can undo with Cmd-Z)";
+        r.content = "ok - FX graph rebuilt (user can undo with Cmd-Z)";
         return r;
     }
     if (call.name == "show_toast")

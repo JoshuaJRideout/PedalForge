@@ -22,10 +22,10 @@ namespace
             "- PREFER SCRIPTS for any multi-step construction. The scripting "
             "tools are the most powerful path and build a whole board / pedal / "
             "FX graph in ONE call:\n"
-            "    • run_board_script  — build/arrange the whole board\n"
-            "    • run_pedal_script  — a pedal's chassis + face controls\n"
-            "    • run_fx_script     — a pedal's DSP node graph (audible)\n"
-            "    • run_dsp_script    — a per-sample DSP expression\n"
+            "    - run_board_script  - build/arrange the whole board\n"
+            "    - run_pedal_script  - a pedal's chassis + face controls\n"
+            "    - run_fx_script     - a pedal's DSP node graph (audible)\n"
+            "    - run_dsp_script    - a per-sample DSP expression\n"
             "  ALWAYS call get_script_api ONCE first to learn the exact script "
             "commands, then write correct scripts. Read existing state as code "
             "with read_board_as_script / read_pedal_as_script / read_fx_as_script.\n"
@@ -34,7 +34,7 @@ namespace
             "- Script tools return console output; if it contains 'ERROR line N', "
             "fix that line and re-run.\n"
             "- Every change is undoable (Cmd-Z), so act without excessive "
-            "confirmation — but DO summarise what you changed.\n"
+            "confirmation - but DO summarise what you changed.\n"
             "- After finishing, call show_toast with a one-line summary.\n"
             "- Be concise. You're a side panel, not a chatbot.\n\n"
             "CRITICAL workflow rules (avoid these common mistakes):\n"
@@ -42,17 +42,17 @@ namespace
             "use that exact returned uuid in follow-up calls. NEVER make up a "
             "uuid like 'ped-001'.\n"
             "- A call that needs a uuid from create_pedal must be a SEPARATE, "
-            "LATER step — do NOT batch create_pedal together with a "
+            "LATER step - do NOT batch create_pedal together with a "
             "run_script that uses its uuid (the uuid isn't known until "
             "create_pedal returns).\n"
             "- Pedals you add are AUTO-WIRED left-to-right into the chain. You "
             "do NOT need a board script to connect them.\n"
             "- run_script mode=board CLEARS the board and only re-adds FACTORY "
-            "pedals — it deletes custom pedals. Don't use it after create_pedal.\n"
+            "pedals - it deletes custom pedals. Don't use it after create_pedal.\n"
             "- FX graphs build the COMPLETE graph each run: you MUST create an "
             "audio_input and audio_output node and wire a path between them, "
             "referencing nodes by the var you assigned (never a bare type name).\n"
-            "- After building an FX graph, ALWAYS call verify_pedal — a script "
+            "- After building an FX graph, ALWAYS call verify_pedal - a script "
             "can say 'ok' while connections silently failed. If verify reports a "
             "BROKEN audio path or a 'Connection failed' WARNING appeared, FIX it "
             "and re-run before telling the user you're done.";
@@ -110,7 +110,7 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
     addAndMakeVisible (keyBtn);
 
     // Agent callbacks (fire on the message thread).
-    agent->onTurnStarted   = [this] { updateBusyState (true); appendActivity ("…thinking"); };
+    agent->onTurnStarted   = [this] { updateBusyState (true); appendActivity ("...thinking"); };
     agent->onAssistantText = [this] (const juce::String& t)
     {
         appendTranscript ("Claude", t);
@@ -123,9 +123,9 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
     };
     agent->onError         = [this] (const juce::String& e)
     {
-        appendActivity ("⚠ " + e);
+        appendActivity (juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa0 ")) + e);
         pf::toastError ("AI: " + e);
-        if (remoteActive) remoteResponse << "  ⚠ ERROR: " << e << "\n";
+        if (remoteActive) remoteResponse << juce::String (juce::CharPointer_UTF8 ("  \xe2\x9a\xa0 ERROR: ")) << e << "\n";
     };
     agent->onTurnFinished  = [this]
     {
@@ -158,7 +158,7 @@ void AiAssistantPanel::timerCallback()
     remoteActive = true;
     remoteResponse.clear();
     remoteResponse << "PROMPT: " << cmd << "\n";
-    remoteRespFile.replaceWithText ("(working…)\n");        // signal "in progress"
+    remoteRespFile.replaceWithText ("(working...)\n");        // signal "in progress"
 
     setExpanded (true);
     appendTranscript ("You (remote)", cmd);
@@ -207,15 +207,16 @@ void AiAssistantPanel::sendCurrent()
     if (! provider.isConfigured())
     {
         setExpanded (true);
-        appendActivity ("⚠ Claude Code not found. Install it from claude.com/code, then run "
-                        "`claude` once in a terminal to log in with your subscription.");
+        appendActivity (juce::String (juce::CharPointer_UTF8 (
+                        "\xe2\x9a\xa0 Claude Code not found. Install it from claude.com/code, then run "
+                        "`claude` once in a terminal to log in with your subscription.")));
         pf::toastError ("Claude Code isn't installed / on PATH.");
         return;
     }
 
     if (agent->isBusy())
     {
-        pf::toastWarn ("Assistant is still working — hang on.");
+        pf::toastWarn ("Assistant is still working - hang on.");
         return;
     }
 
@@ -230,7 +231,7 @@ void AiAssistantPanel::showStatus()
 {
     auto bin = pf::ai::ClaudeCodeProvider::findClaudeBinary();
     if (bin.isNotEmpty())
-        pf::toastInfo ("Claude Code ready — using your subscription via " + bin);
+        pf::toastInfo ("Claude Code ready - using your subscription via " + bin);
     else
         pf::toastWarn ("Claude Code not found. Install from claude.com/code and run "
                        "`claude` once to log in.");

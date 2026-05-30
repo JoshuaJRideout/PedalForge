@@ -788,9 +788,9 @@ void PedalboardGrid::ActivePedalsList::PedalRow::paint (juce::Graphics& g)
     g.setColour (PedalForgeLookAndFeel::textMuted);
     juce::String label = category;
     if (onBoard)
-        label += "  •  ON BOARD";
+        label += "  -  ON BOARD";
     else
-        label += "  •  drag to place";
+        label += "  -  drag to place";
     g.drawText (label, textArea, juce::Justification::centredLeft);
 }
 

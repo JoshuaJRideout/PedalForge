@@ -80,7 +80,7 @@ void MidiMonitorMode::paint (juce::Graphics& g)
     {
         g.setColour (juce::Colour (0xFF6B7280));
         g.setFont (juce::Font (14.0f));
-        g.drawText ("Waiting for MIDI…", bounds, juce::Justification::centred);
+        g.drawText ("Waiting for MIDI...", bounds, juce::Justification::centred);
         return;
     }
 

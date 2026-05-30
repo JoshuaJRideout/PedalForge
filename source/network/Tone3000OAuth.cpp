@@ -108,7 +108,7 @@ bool Tone3000OAuth::refresh (juce::String& outError)
         if (outError.containsIgnoreCase ("invalid_grant"))
         {
             signOut();
-            outError = "Refresh token expired — please sign in again.";
+            outError = "Refresh token expired - please sign in again.";
         }
         return false;
     }
@@ -173,7 +173,7 @@ bool Tone3000OAuth::signInBlocking (juce::String& outError)
     }
     if (returnedState != state)
     {
-        outError = "OAuth state mismatch — possible CSRF.";
+        outError = "OAuth state mismatch - possible CSRF.";
         return false;
     }
 
@@ -243,7 +243,7 @@ bool Tone3000OAuth::postTokenEndpoint (const juce::String& formBody, juce::Strin
     {
         outError = json.getProperty ("error", "").toString();
         auto desc = json.getProperty ("error_description", "").toString();
-        if (desc.isNotEmpty()) outError += " — " + desc;
+        if (desc.isNotEmpty()) outError += " - " + desc;
         return false;
     }
 

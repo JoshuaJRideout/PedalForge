@@ -331,16 +331,16 @@ public:
         s << "PEDALFORGE SCRIPTING API\n"
              "========================\n\n"
              "HOW TO BUILD A BOARD (read this first):\n"
-             "  • Pedals added with add_pedal_to_board / create_pedal are "
+             "  - Pedals added with add_pedal_to_board / create_pedal are "
              "AUTOMATICALLY placed left-to-right and AUTO-WIRED into the signal "
              "chain. You do NOT need a board script to connect them.\n"
-             "  • create_pedal and add_pedal_to_board RETURN {uuid,name}. Use "
+             "  - create_pedal and add_pedal_to_board RETURN {uuid,name}. Use "
              "that exact uuid in later calls. NEVER invent a uuid.\n"
-             "  • Data dependency: a tool that needs a uuid from create_pedal "
+             "  - Data dependency: a tool that needs a uuid from create_pedal "
              "must run in a LATER step, not batched in the same reply as the "
              "create_pedal call (the uuid doesn't exist until it returns).\n"
-             "  • run_script mode=board CLEARS the whole board and rebuilds it "
-             "from its addPedal() calls — it only adds FACTORY pedals and will "
+             "  - run_script mode=board CLEARS the whole board and rebuilds it "
+             "from its addPedal() calls - it only adds FACTORY pedals and will "
              "DELETE custom pedals. Use it only to build a board entirely from "
              "factory pedals; do NOT use it after create_pedal.\n\n"
              "Typical 'board + custom pedal' flow:\n"
@@ -348,7 +348,7 @@ public:
              "  2. create_pedal(name) -> returns {uuid}\n"
              "  3. run_script mode=pedal (chassis/controls) on that uuid\n"
              "  4. run_script mode=fx (DSP graph) on that uuid\n"
-             "  (no board script needed — everything is auto-wired)\n\n"
+             "  (no board script needed - everything is auto-wired)\n\n"
              "Run scripts with the run_script tool:\n"
              "  run_script(args={ \"mode\":\"board|pedal|fx|dsp\", \"source\":\"<script>\", \"pedal_uuid\":\"<uuid>\" })\n"
              "  - mode \"board\": no pedal_uuid needed (operates on the whole board)\n"
@@ -356,32 +356,32 @@ public:
              "  To make a brand-new custom pedal first call create_pedal(args={\"name\":\"...\"})\n"
              "  which returns {uuid,name}; then run_script mode=pedal (chassis/controls) and\n"
              "  mode=fx (DSP graph) against that uuid.\n\n"
-             "BOARD script — builds/arranges the pedalboard (cleared first, then rebuilt):\n"
+             "BOARD script - builds/arranges the pedalboard (cleared first, then rebuilt):\n"
              "  v = addPedal(\"<name or factory id>\")        // add a pedal, returns a handle\n"
              "  addPedal(\"<name>\", x, y)                    // with explicit grid position\n"
              "  connect(src, srcCh, dst, dstCh)              // wire audio: handle, channel ints\n"
              "  setPos(v, x, y)                              // move a pedal\n"
              "  focus(v)                                     // set MIDI-learn focus\n\n"
-             "PEDAL script — defines a pedal's chassis + face controls:\n"
+             "PEDAL script - defines a pedal's chassis + face controls:\n"
              "  setMeta(\"name\",\"author\",\"category\",\"description\")\n"
              "  setChassis(width, height, \"RRGGBB\")\n"
              "  addKnob(\"id\", x, y, \"label\" [, w, h])\n"
              "  addSwitch / addFootswitch / addLed / addFader / addTextScreen(\"id\", x, y, \"label\")\n"
              "  mapControl(\"controlId\", \"<nodeID>_<paramID>\")   // bind a face control to a DSP param\n\n"
-             "FX script — builds a pedal's DSP node graph (audible). It builds "
+             "FX script - builds a pedal's DSP node graph (audible). It builds "
              "the COMPLETE graph from scratch each run:\n"
-             "  in  = addNode(\"audio_input\")                // YOU must create these two —\n"
+             "  in  = addNode(\"audio_input\")                // YOU must create these two -\n"
              "  out = addNode(\"audio_output\")               // they are NOT pre-existing.\n"
              "  n   = addNode(\"<type>\")                      // gain, softclip, tonestack, delay,\n"
-             "                                               // reverb, lfo, oscillator, adsr, expression…\n"
+             "                                               // reverb, lfo, oscillator, adsr, expression...\n"
              "  connect(src, srcPort, dst, dstPort)          // ALWAYS reference nodes by the VAR you\n"
              "                                               // assigned (e.g. connect(in,0,n,0)). NEVER\n"
-             "                                               // write a bare type like connect(audio_input,…).\n"
+             "                                               // write a bare type like connect(audio_input,...).\n"
              "                                               // ports are 0-based; audio nodes have L=0,R=1.\n"
              "  setParam(n, \"paramName\", value)\n"
-             "  Wire a full path in→…→out or the pedal is SILENT. After building, the agent\n"
+             "  Wire a full path in->...->out or the pedal is SILENT. After building, the agent\n"
              "  should call verify_pedal to confirm the audio path connected.\n\n"
-             "DSP script — per-sample expression for an Expression node on the pedal.\n\n"
+             "DSP script - per-sample expression for an Expression node on the pedal.\n\n"
              "ExpressionVM functions (for DSP/UI expressions):\n";
         s << ExpressionVM::dumpFunctionsAsMarkdown();
         return s;
@@ -1093,7 +1093,7 @@ private:
 
         if (hasError)
         {
-            setStatus ("Graph build failed — see console", juce::Colour (0xFFEF4444));
+            setStatus ("Graph build failed - see console", juce::Colour (0xFFEF4444));
             return;
         }
 
@@ -1252,7 +1252,7 @@ private:
 
         if (hasError)
         {
-            setStatus ("Board script failed — see console", juce::Colour (0xFFEF4444));
+            setStatus ("Board script failed - see console", juce::Colour (0xFFEF4444));
             return;
         }
 
@@ -1524,7 +1524,7 @@ private:
 
         if (hasError)
         {
-            setStatus ("Pedal script failed — see console", juce::Colour (0xFFEF4444));
+            setStatus ("Pedal script failed - see console", juce::Colour (0xFFEF4444));
             return;
         }
 
