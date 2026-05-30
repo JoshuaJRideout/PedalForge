@@ -41,7 +41,7 @@ inline juce::File getPedalLibraryDir()
 inline std::shared_ptr<PedalDesign> loadDesignOrDefault(const juce::String& name, std::function<std::shared_ptr<PedalDesign>()> factory);
 
 /** Build a pedal's processor straight from its design's DECLARED effectsGraph —
-    the honest path (no hidden C++ GraphPedalFactory graph). Use this as the
+    the honest path (no hidden C++ factory graph). Use this as the
     processor factory for any pedal whose design carries a complete graph. */
 inline std::unique_ptr<juce::AudioProcessor> processorFromDeclaredGraph (
     const juce::String& name, std::function<std::shared_ptr<PedalDesign>()> designFactory)

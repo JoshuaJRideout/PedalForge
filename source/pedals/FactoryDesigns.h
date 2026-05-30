@@ -2,7 +2,9 @@
 
 #include "../dsp/PedalDesign.h"
 #include "../dsp/DSPGraph.h"
+#include "../dsp/ControlSurfaceSync.h"
 #include <memory>
+#include <vector>
 
 namespace FactoryDesigns
 {
@@ -78,6 +80,103 @@ namespace FactoryDesigns
         d.controls.push_back (c);
         d.mappings.push_back ({ c.controlID, juce::String (knobID) + "_value" });
         return knobID;
+    }
+
+    /** Convert every DIRECT face-control -> modulatable-param mapping in a design
+        into a wired control-surface NODE twin, so EVERY parameter is driven from
+        the FX graph (the "control = node" rule) rather than bound straight from
+        the UI control layer. For each qualifying mapping it spawns the matching
+        ctrl_* node (knob->ctrl_knob, footswitch->ctrl_button, switch->ctrl_toggle,
+        fader->ctrl_fader, selector->ctrl_selector), seeds its range/value from the
+        target param, wires its output into the param's "<param>_cv" input, and
+        re-keys the faceplate widget as the node's auto_node_<id> twin.
+
+        Idempotent + conservative — these are left exactly as-is:
+          - the master "bypass" mapping (no DSP node behind it),
+          - mappings whose target node/param is missing or NON-modulatable
+            (e.g. string filepath/editor params on loaders),
+          - controls that aren't interactive param drivers (labels, displays,
+            file/library loaders, overlay launchers),
+          - controls already twinned (auto_node_*).
+
+        Call once at the very end of a factory design, after effectsGraph is set. */
+    inline void rebindMappingsAsTwins (PedalDesign& d)
+    {
+        using namespace ControlBinding;
+
+        DSPGraph g;
+        g.fromJSON (d.effectsGraph);
+
+        auto findControl = [&] (const juce::String& id) -> PedalDesign::Control*
+        {
+            for (auto& c : d.controls) if (c.controlID == id) return &c;
+            return nullptr;
+        };
+
+        std::vector<PedalDesign::Mapping> result;
+        int spawnRow = 0;
+
+        for (const auto& m : d.mappings)
+        {
+            // Keep anything that isn't a "<nodeID>_<param>" target (e.g. "bypass").
+            const int us = m.nodeParam.indexOfChar ('_');
+            if (us <= 0) { result.push_back (m); continue; }
+
+            const int nid            = m.nodeParam.substring (0, us).getIntValue();
+            const juce::String param = m.nodeParam.substring (us + 1);
+
+            auto* target = g.getNode (nid);
+            if (target == nullptr) { result.push_back (m); continue; }
+
+            auto* tp = target->getParam (param);
+            if (tp == nullptr || ! tp->modulatable) { result.push_back (m); continue; }
+
+            auto* fc = findControl (m.controlID);
+            if (fc == nullptr || ! isBindableFaceType (fc->type)
+                || fc->controlID.startsWith (kAutoPrefix))
+            { result.push_back (m); continue; }
+
+            const juce::String nodeType = nodeTypeForFaceType (fc->type);
+            auto node = createNodeByType (nodeType);
+            if (node == nullptr) { result.push_back (m); continue; }
+
+            const float pmin = tp->minVal, pmax = tp->maxVal;
+            const float def  = tp->get();
+            const float norm = (pmax > pmin) ? juce::jlimit (0.0f, 1.0f, (def - pmin) / (pmax - pmin)) : 0.0f;
+
+            if (auto* p = node->getParam ("min"))   p->set (pmin);
+            if (auto* p = node->getParam ("max"))   p->set (pmax);
+            if (auto* p = node->getParam ("value")) p->set (norm);
+            if (fc->type == "selector")
+                if (auto* pp = node->getParam ("positions"))
+                    pp->set ((float) juce::jlimit (2, 16, fc->positions));
+
+            node->setName (fc->label.isNotEmpty() ? fc->label : param);
+            node->visualX = target->visualX - 200.0f;
+            node->visualY = target->visualY + (float) (spawnRow++) * 80.0f;
+
+            const int knobID = g.addNode (std::move (node));
+
+            // The face widget reflects the ctrl node's primary (first) param.
+            juce::String primary = "value";
+            if (auto* n = g.getNode (knobID))
+                if (! n->getParams().empty()) primary = n->getParams()[0].id;
+
+            // Wire ctrl.out -> target "<param>_cv" (auto-exposed for modulatable params).
+            int cvPort = -1;
+            const auto& ins = target->getInputPorts();
+            for (int i = 0; i < (int) ins.size(); ++i)
+                if (ins[(size_t) i].name == param + "_cv") { cvPort = i; break; }
+            if (cvPort >= 0)
+                g.connect (knobID, 0, nid, cvPort);
+
+            fc->controlID    = juce::String (kAutoPrefix) + juce::String (knobID);
+            fc->defaultValue = norm;
+            result.push_back ({ fc->controlID, juce::String (knobID) + "_" + primary });
+        }
+
+        d.mappings = result;
+        d.effectsGraph = g.toJSON();
     }
 
     /** Adds MIDI In, two Expression Ins, and MIDI Out ports to any pedal design.
@@ -230,6 +329,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"sw_track", "2_track_advance"}); // Cycle to next track
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -317,6 +417,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"sw_clr",   "2_clear"});
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1212,6 +1313,7 @@ namespace FactoryDesigns
         d->effectsGraph = juce::var(graph.release());
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1281,6 +1383,7 @@ namespace FactoryDesigns
         d->effectsGraph = juce::var(graph.release());
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1350,6 +1453,7 @@ namespace FactoryDesigns
         d->effectsGraph = juce::var(graph.release());
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1431,6 +1535,7 @@ namespace FactoryDesigns
         d->fxNotes.push_back(note2);
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1538,6 +1643,7 @@ namespace FactoryDesigns
         d->fxNotes.push_back(note2);
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1637,6 +1743,7 @@ namespace FactoryDesigns
         d->fxNotes.push_back(note2);
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1729,6 +1836,7 @@ namespace FactoryDesigns
         d->fxNotes.push_back(note2);
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1834,6 +1942,7 @@ namespace FactoryDesigns
         d->fxNotes.push_back(note2);
 
         addStandardPorts (*d);
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -1933,6 +2042,7 @@ namespace FactoryDesigns
         addStandardPorts (*d);
         addBypassAndLED (*d);
         d->isFactory = true;
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -2211,6 +2321,7 @@ namespace FactoryDesigns
 
         addStandardPorts(*d);
         d->isFactory = true;
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -2301,6 +2412,7 @@ namespace FactoryDesigns
 
         addStandardPorts(*d);
         d->isFactory = true;
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -2397,6 +2509,7 @@ namespace FactoryDesigns
 
         addStandardPorts(*d);
         d->isFactory = true;
+        rebindMappingsAsTwins (*d);
         return d;
     }
 
@@ -2499,6 +2612,7 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         addStandardPorts(*d);
         d->isFactory = true;
+        rebindMappingsAsTwins (*d);
         return d;
     }
 }
