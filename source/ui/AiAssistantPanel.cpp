@@ -55,7 +55,11 @@ namespace
             "- After building an FX graph, ALWAYS call verify_pedal - a script "
             "can say 'ok' while connections silently failed. If verify reports a "
             "BROKEN audio path or a 'Connection failed' WARNING appeared, FIX it "
-            "and re-run before telling the user you're done.";
+            "and re-run before telling the user you're done.\n"
+            "- Then call probe_pedal to HEAR it: confirm the audio isn't silent, "
+            "the effect actually does what it should (a fuzz distorts, a boost "
+            "boosts), and there's no NaN/garbage. Report the gain/THD/tone you "
+            "measured, not just that it's wired.";
     }
 }
 

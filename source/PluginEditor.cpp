@@ -5,6 +5,7 @@
 #include "pedals/PedalRegistry.h"
 #include "ui/PlayTabComponent.h"
 #include "peripherals/displays/modes/MidiMonitorMode.h"
+#include "ai/AudioProbe.h"
 #include <set>
 
 #if JucePlugin_Build_Standalone
@@ -1246,4 +1247,20 @@ juce::String PedalForgeEditor::verifyPedal (const juce::String& pedalUuid)
     if (! orphans.isEmpty())
         r << "  ! Orphaned (unconnected) nodes: " << orphans.joinIntoString (", ") << "\n";
     return r;
+}
+
+juce::String PedalForgeEditor::probePedal (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr) return "ERROR: no pedal with uuid " + pedalUuid;
+
+    auto* node = processorRef.getGraphEngine().getGraph().getNodeForId (inst->nodeID);
+    auto* gproc = (node != nullptr) ? dynamic_cast<GraphPedalProcessor*> (node->getProcessor()) : nullptr;
+    if (gproc == nullptr) return "ERROR: pedal '" + inst->name + "' has no DSP graph.";
+
+    // Snapshot the live graph (atomic param reads + immutable-from-audio-thread
+    // structure), then run the probe on a FRESH offline clone so the audio
+    // thread is never touched. See AudioProbe.h.
+    const auto json = gproc->saveGraph();
+    return pf::ai::probeAudio (inst->name, json);
 }

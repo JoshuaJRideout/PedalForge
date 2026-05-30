@@ -108,5 +108,12 @@ namespace pf::ai
             (unconnected) nodes. The agent calls this after building to catch
             failed connections and fix them. */
         virtual juce::String verifyPedal (const juce::String& pedalUuid) = 0;
+
+        /** The agent's "ears": run test signals through an offline clone of the
+            pedal's DSP graph and report how it SOUNDS — gain, clipping +
+            harmonic distortion (THD), dynamics/compression, spectral tilt
+            (bright/dark), noise floor, DC, latency/tail, NaN sanity, plus a
+            one-line diagnosis. Complements verifyPedal (topology vs. audio). */
+        virtual juce::String probePedal (const juce::String& pedalUuid) = 0;
     };
 }

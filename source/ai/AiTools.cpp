@@ -188,6 +188,16 @@ std::vector<ToolDef> buildToolDefs()
         "way to confirm the audio path is intact. Fix and re-run if broken.",
         schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
 
+    defs.push_back ({ "probe_pedal",
+        "Your EARS: runs test tones/noise/impulse through the pedal and reports "
+        "how it SOUNDS - level/gain, clipping + harmonic distortion (THD), "
+        "dynamics/compression, tone (bright/dark), noise floor, latency, and "
+        "NaN sanity, with a one-line diagnosis. Use it AFTER verify_pedal to "
+        "confirm a pedal is not just wired but actually produces sane, musical "
+        "audio (e.g. a fuzz really distorts, a boost really boosts, output "
+        "isn't silent or clipping into garbage).",
+        schemaObject ({ { "pedal_uuid", stringProp ("Target pedal uuid") } }, { "pedal_uuid" }) });
+
     return defs;
 }
 
@@ -348,6 +358,13 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         auto uuid = argStr (call, "pedal_uuid");
         if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
         r.content = host.verifyPedal (uuid);
+        return r;
+    }
+    if (call.name == "probe_pedal")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
+        r.content = host.probePedal (uuid);
         return r;
     }
     if (call.name == "run_script")
