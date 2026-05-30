@@ -177,6 +177,12 @@ target_sources(PedalForge PRIVATE
     ${NAM_SOURCES}
 )
 
+# macOS: opt out of App Nap (keeps real-time audio + the automation bridge
+# timer from being throttled when the window isn't focused).
+if(APPLE)
+    target_sources(PedalForge PRIVATE source/util/AppNap.mm)
+endif()
+
 # ─── Compile FAUST DSP files ──────────────────────────────────────
 set(FAUST_ARCH "${CMAKE_CURRENT_SOURCE_DIR}/faust/architecture/pedalforge.arch")
 set(FAUST_OUT  "${CMAKE_CURRENT_SOURCE_DIR}/faust/generated")

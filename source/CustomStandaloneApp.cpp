@@ -8,6 +8,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#include "util/AppNap.h"
 
 namespace juce
 {
@@ -95,6 +96,13 @@ public:
 
     void initialise (const String& commandLine) override
     {
+       #if JUCE_MAC
+        // Real-time audio app: never let macOS App Nap throttle our timers /
+        // audio when the window loses focus (also makes the automation bridge
+        // reliable for headless testing).
+        pf::disableAppNap();
+       #endif
+
         // Set up file logger in ~/Library/Logs/PedalForge/PedalForge.log
         auto logDir = File::getSpecialLocation (File::userHomeDirectory)
                         .getChildFile ("Library/Logs/PedalForge");
