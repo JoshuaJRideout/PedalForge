@@ -90,6 +90,9 @@ public:
     juce::String clearMidiMappings() override;
     juce::String switchTab (const juce::String& tabName) override;
     juce::String listAssets (const juce::String& category) override;
+    juce::String listWikiPages() override;
+    juce::String readWikiPage (const juce::String& pageId) override;
+    juce::String openWikiPage (const juce::String& pageId) override;
 
 
 private:

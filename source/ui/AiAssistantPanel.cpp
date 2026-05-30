@@ -78,7 +78,12 @@ namespace
             "list_pedal_params(uuid) to get the parameter id, then map_midi_cc. "
             "list/remove/clear_midi_mappings manage them.\n"
             "- NAVIGATION: you can switch_tab to any tab and screenshot to SEE "
-            "it; list_assets shows the user's NAM/IR/image/pedal/board files.";
+            "it; list_assets shows the user's NAM/IR/image/pedal/board files.\n"
+            "- WIKI/HELP: to answer questions about how PedalForge works, READ the "
+            "docs as text with read_wiki_page (list_wiki_pages first) - it's far "
+            "cheaper than screenshotting. Use open_wiki_page to bring a page up on "
+            "screen for the user when they'd benefit from reading it themselves. "
+            "Only screenshot the Wiki if you need to see its rendered layout.";
     }
 }
 

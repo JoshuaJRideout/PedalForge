@@ -311,6 +311,23 @@ std::vector<ToolDef> buildToolDefs()
         "nam | ir | image | pedal | board | all (default all).",
         schemaObject ({ { "category", stringProp ("nam | ir | image | pedal | board | all") } }, {}) });
 
+    // ── WIKI ── read docs as TEXT (cheap); show pages to the user.
+    defs.push_back ({ "list_wiki_pages",
+        "List the in-app wiki/help pages (ids + titles).",
+        schemaObject ({}, {}) });
+
+    defs.push_back ({ "read_wiki_page",
+        "Read a wiki page's markdown TEXT (cheap - prefer this over screenshotting "
+        "the Wiki tab). Use it to answer the user's questions about how PedalForge "
+        "works.",
+        schemaObject ({ { "page", stringProp ("Wiki page id from list_wiki_pages") } }, { "page" }) });
+
+    defs.push_back ({ "open_wiki_page",
+        "Bring a wiki page up on screen for the USER to read (switches to the Wiki "
+        "tab and navigates there). Use when the user asks to see a page or it would "
+        "help them.",
+        schemaObject ({ { "page", stringProp ("Wiki page id from list_wiki_pages") } }, { "page" }) });
+
     return defs;
 }
 
@@ -546,6 +563,15 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         return r;
     }
     if (call.name == "list_assets") { r.content = host.listAssets (argStr (call, "category")); return r; }
+    if (call.name == "list_wiki_pages") { r.content = host.listWikiPages(); return r; }
+    if (call.name == "read_wiki_page" || call.name == "open_wiki_page")
+    {
+        auto page = argStr (call, "page");
+        if (page.isEmpty()) return fail ("Missing 'page' (get ids from list_wiki_pages)");
+        r.content = (call.name == "read_wiki_page") ? host.readWikiPage (page)
+                                                     : host.openWikiPage (page);
+        return r;
+    }
     if (call.name == "run_script")
     {
         auto mode = argStr (call, "mode").toLowerCase();

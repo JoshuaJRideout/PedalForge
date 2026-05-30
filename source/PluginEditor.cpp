@@ -1520,3 +1520,30 @@ juce::String PedalForgeEditor::listAssets (const juce::String& category)
     return r.isEmpty() ? "No assets found (unknown category? use: nam, ir, image, pedal, board, or all)."
                        : r;
 }
+
+//==============================================================================
+// WIKI — read docs as text + bring a page up for the user.
+juce::String PedalForgeEditor::listWikiPages()
+{
+    auto pages = wikiTab.getPageList();
+    if (pages.isEmpty()) return "No wiki pages found.";
+    return "Wiki pages (use read_wiki_page <id> to read, open_wiki_page <id> to show the user):\n  "
+           + pages.joinIntoString ("\n  ");
+}
+
+juce::String PedalForgeEditor::readWikiPage (const juce::String& pageId)
+{
+    auto md = wikiTab.getPageContent (pageId);
+    if (md.isEmpty())
+        return "No wiki page '" + pageId + "'. Call list_wiki_pages for valid ids.";
+    return md;   // raw markdown — cheap for the agent to read
+}
+
+juce::String PedalForgeEditor::openWikiPage (const juce::String& pageId)
+{
+    if (wikiTab.getPageContent (pageId).isEmpty())
+        return "No wiki page '" + pageId + "'. Call list_wiki_pages for valid ids.";
+    tabWiki.setToggleState (true, juce::sendNotification);   // show the Wiki tab
+    wikiTab.navigateTo (pageId);
+    return "Opened wiki page '" + pageId + "' for the user.";
+}

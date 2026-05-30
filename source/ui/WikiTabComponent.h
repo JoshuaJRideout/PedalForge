@@ -98,6 +98,27 @@ public:
     }
 
     //==========================================================================
+    // AI agent text access (reading markdown is far cheaper than screenshots).
+    juce::StringArray getPageList() const
+    {
+        juce::StringArray out;
+        for (const auto& [id, page] : pages)
+            out.add (id + "  (" + page.title + ")");
+        out.sort (true);
+        return out;
+    }
+
+    /** Raw markdown for a page id (partial-match like navigateTo), or "". */
+    juce::String getPageContent (const juce::String& pageId) const
+    {
+        auto it = pages.find (pageId);
+        if (it == pages.end())
+            for (const auto& [id, page] : pages)
+                if (id == pageId || id.endsWith ("/" + pageId)) { it = pages.find (id); break; }
+        return it != pages.end() ? it->second.content : juce::String();
+    }
+
+    //==========================================================================
     void navigateTo (const juce::String& pageId)
     {
         auto it = pages.find (pageId);

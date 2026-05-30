@@ -157,5 +157,11 @@ namespace pf::ai
         // files so the agent knows what's available to use.
         virtual juce::String switchTab (const juce::String& tabName) = 0;
         virtual juce::String listAssets (const juce::String& category) = 0;
+
+        //======================================================================
+        // WIKI — read docs as TEXT (cheap), and bring a page up for the user.
+        virtual juce::String listWikiPages() = 0;
+        virtual juce::String readWikiPage (const juce::String& pageId) = 0;   // markdown text for the agent
+        virtual juce::String openWikiPage (const juce::String& pageId) = 0;   // navigate the user's view
     };
 }
