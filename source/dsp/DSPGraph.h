@@ -202,6 +202,10 @@ inline std::unique_ptr<DSPNode> createNodeByType (const juce::String& type)
     if (type == "ctrl_toggle")  return std::make_unique<ToggleNode>();
     if (type == "ctrl_selector") return std::make_unique<SelectorNode>();
     if (type == "ctrl_xy")      return std::make_unique<XYPadNode>();
+    if (type == "ctrl_encoder")    return std::make_unique<EncoderNode>();
+    if (type == "ctrl_pan")        return std::make_unique<PanNode>();
+    if (type == "ctrl_modwheel")   return std::make_unique<WheelNode>();
+    if (type == "ctrl_trim")       return std::make_unique<TrimNode>();
     // Display / Peripherals
     if (type == "disp_led")     return std::make_unique<LEDNode>();
     if (type == "disp_rgb_led") return std::make_unique<RGBLEDNode>();

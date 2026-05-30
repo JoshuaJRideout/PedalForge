@@ -89,6 +89,10 @@ public:
             { "ctrl_button",    "Button",            "Nodes/Controls",      "Momentary gate. Auto-spawns a footswitch (high while pressed)." },
             { "ctrl_toggle",    "Toggle",            "Nodes/Controls",      "Latching on/off. Auto-spawns a switch on the pedal face." },
             { "ctrl_selector",  "Selector",          "Nodes/Controls",      "Multi-position switch. Auto-spawns a switch on the pedal face." },
+            { "ctrl_encoder",   "Encoder",           "Nodes/Controls",      "Endless rotary that counts in steps (integer or value). Renders as a knob." },
+            { "ctrl_pan",       "Pan / Bipolar",     "Nodes/Controls",      "Centre-detented knob over a +/- range (pan, balance, bias)." },
+            { "ctrl_modwheel",  "Wheel",             "Nodes/Controls",      "Mod/pitch wheel fader with optional spring-return rest position." },
+            { "ctrl_trim",      "Trim",              "Nodes/Controls",      "Fine-adjust knob (low sensitivity) for set-and-forget calibration." },
             { "footswitch",     "Footswitch",        "Nodes/Controls",      "Latching foot-controlled stomp switch." },
 
             // ── Nodes / Memory / Files ───────────────────────────────

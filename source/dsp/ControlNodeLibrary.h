@@ -80,11 +80,27 @@ public:
         addParam ("value", "Value", 0.0f, 1.0f, 0.5f);
         addParam ("min", "Min", 0.0f, 1000.0f, 0.0f);
         addParam ("max", "Max", 0.0f, 1000.0f, 1.0f);
+        addParam ("curve",       "Curve (0=lin,1=log,2=exp)", 0.0f, 2.0f, 0.0f);
+        addParam ("stepped",     "Stepped (0=smooth,1=stepped)", 0.0f, 1.0f, 0.0f);
+        addParam ("steps",       "Steps (when stepped)",      2.0f, 64.0f, 8.0f);
+        addParam ("orientation", "Orientation (0=vert,1=horiz)", 0.0f, 1.0f, 0.0f);
+        addParam ("sensitivity", "Sensitivity (drag ratio)",  0.1f, 4.0f, 1.0f);
     }
 
     void process (const float**, int, float** out, int, int n) override
     {
         float norm = getParam("value")->get();
+        if (getParam("stepped")->get() > 0.5f)
+        {
+            const int steps = juce::jmax (2, (int) getParam("steps")->get());
+            norm = juce::jlimit (0.0f, 1.0f,
+                                 std::round (norm * (float) (steps - 1)) / (float) (steps - 1));
+        }
+        switch ((int) getParam("curve")->get()) {
+            case 1: norm = std::log10 (1.0f + norm * 9.0f); break;
+            case 2: norm = norm * norm; break;
+            default: break;
+        }
         float mn = getParam("min")->get();
         float mx = getParam("max")->get();
         float val = mn + norm * (mx - mn);
@@ -107,12 +123,18 @@ public:
     ButtonNode() : DSPNode ("ctrl_button", "Button")
     {
         addOutput ("out", NodePort::Gate);
-        addParam ("pressed", "Pressed", 0.0f, 1.0f, 0.0f);
+        addParam ("pressed",  "Pressed", 0.0f, 1.0f, 0.0f);
+        // latching: footswitch behaviour (0 = momentary/hold, 1 = latch on each tap).
+        // Honoured by the faceplate interaction; the node maps pressed -> on/off value.
+        addParam ("latching", "Latching (0=momentary,1=latch)", 0.0f, 1.0f, 0.0f);
+        addParam ("onValue",  "On value",  -1000.0f, 1000.0f, 1.0f);
+        addParam ("offValue", "Off value", -1000.0f, 1000.0f, 0.0f);
     }
 
     void process (const float**, int, float** out, int, int n) override
     {
-        float val = getParam("pressed")->get() > 0.5f ? 1.0f : 0.0f;
+        float val = getParam("pressed")->get() > 0.5f ? getParam("onValue")->get()
+                                                       : getParam("offValue")->get();
         for (int i = 0; i < n; ++i)
             out[0][i] = val;
     }
@@ -132,12 +154,15 @@ public:
     ToggleNode() : DSPNode ("ctrl_toggle", "Toggle")
     {
         addOutput ("out", NodePort::Gate);
-        addParam ("state", "State", 0.0f, 1.0f, 0.0f);
+        addParam ("state",    "State", 0.0f, 1.0f, 0.0f);
+        addParam ("onValue",  "On value",  -1000.0f, 1000.0f, 1.0f);
+        addParam ("offValue", "Off value", -1000.0f, 1000.0f, 0.0f);
     }
 
     void process (const float**, int, float** out, int, int n) override
     {
-        float val = getParam("state")->get() > 0.5f ? 1.0f : 0.0f;
+        float val = getParam("state")->get() > 0.5f ? getParam("onValue")->get()
+                                                     : getParam("offValue")->get();
         for (int i = 0; i < n; ++i)
             out[0][i] = val;
     }
@@ -159,19 +184,143 @@ public:
         addOutput ("out", NodePort::Control);
         addParam ("selection", "Selection", 0.0f, 15.0f, 0.0f);
         addParam ("positions", "Positions", 2.0f, 16.0f, 4.0f);
+        // Output mapping: 0 = raw index (0..N-1), 1 = map evenly across outMin..outMax.
+        addParam ("outputMode", "Output (0=index,1=range)", 0.0f, 1.0f, 0.0f);
+        addParam ("outMin",  "Range min", -1000.0f, 1000.0f, 0.0f);
+        addParam ("outMax",  "Range max", -1000.0f, 1000.0f, 1.0f);
+        addParam ("wrap",    "Wrap around (0/1)", 0.0f, 1.0f, 0.0f);  // faceplate feel
     }
 
     void process (const float**, int, float** out, int, int n) override
     {
-        int positions = (int) getParam("positions")->get();
+        int positions = juce::jmax (2, (int) getParam("positions")->get());
         int sel = juce::jlimit (0, positions - 1, (int) getParam("selection")->get());
         float val = (float) sel;
+        if (getParam("outputMode")->get() > 0.5f)
+        {
+            float t = (positions > 1) ? (float) sel / (float) (positions - 1) : 0.0f;
+            val = getParam("outMin")->get() + t * (getParam("outMax")->get() - getParam("outMin")->get());
+        }
         for (int i = 0; i < n; ++i)
             out[0][i] = val;
     }
 
     bool isControlSurface() const override { return true; }
     juce::String getControlType() const override { return "selector"; }
+};
+
+/**
+ * Encoder Node — Endless rotary that counts in steps (integers or values).
+ * Unlike a knob it has no fixed end stops; 'step' sets the increment per detent
+ * and 'integer' rounds the output. Renders as a knob on the face.
+ */
+class EncoderNode : public DSPNode
+{
+public:
+    EncoderNode() : DSPNode ("ctrl_encoder", "Encoder")
+    {
+        addOutput ("out", NodePort::Control);
+        addParam ("value", "Value", 0.0f, 1.0f, 0.0f);   // widget position 0-1
+        addParam ("min", "Min", -1000.0f, 1000.0f, 0.0f);
+        addParam ("max", "Max", -1000.0f, 1000.0f, 10.0f);
+        addParam ("step", "Step per detent", 0.0f, 100.0f, 1.0f);
+        addParam ("integer", "Integer (0/1)", 0.0f, 1.0f, 1.0f);
+        addParam ("wrap", "Wrap past ends (0/1)", 0.0f, 1.0f, 0.0f);   // faceplate feel
+        addParam ("sensitivity", "Sensitivity", 0.1f, 8.0f, 1.0f);
+    }
+    void process (const float**, int, float** out, int, int n) override
+    {
+        float mn = getParam("min")->get(), mx = getParam("max")->get();
+        float val = mn + getParam("value")->get() * (mx - mn);
+        const float step = getParam("step")->get();
+        if (step > 1.0e-4f) val = mn + std::round ((val - mn) / step) * step;
+        if (getParam("integer")->get() > 0.5f) val = std::round (val);
+        for (int i = 0; i < n; ++i) out[0][i] = val;
+    }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "knob"; }
+};
+
+/**
+ * Pan / Bipolar Knob — centre-detented knob spanning a +/- range (e.g. pan,
+ * balance, bias). Centre position = midpoint of min..max. Renders as a knob.
+ */
+class PanNode : public DSPNode
+{
+public:
+    PanNode() : DSPNode ("ctrl_pan", "Pan / Bipolar")
+    {
+        addOutput ("out", NodePort::Control);
+        addParam ("value", "Value", 0.0f, 1.0f, 0.5f);   // centre default
+        addParam ("min", "Min", -1000.0f, 1000.0f, -1.0f);
+        addParam ("max", "Max", -1000.0f, 1000.0f, 1.0f);
+        addParam ("centerDetent", "Centre detent (0/1)", 0.0f, 1.0f, 1.0f);  // faceplate feel
+    }
+    void process (const float**, int, float** out, int, int n) override
+    {
+        float val = getParam("min")->get()
+                  + getParam("value")->get() * (getParam("max")->get() - getParam("min")->get());
+        for (int i = 0; i < n; ++i) out[0][i] = val;
+    }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "knob"; }
+};
+
+/**
+ * Wheel — mod/pitch-wheel style fader with an optional spring-return rest
+ * position (e.g. a pitch wheel that snaps back to centre). Renders as a fader.
+ */
+class WheelNode : public DSPNode
+{
+public:
+    WheelNode() : DSPNode ("ctrl_modwheel", "Wheel")
+    {
+        addOutput ("out", NodePort::Control);
+        addParam ("value", "Value", 0.0f, 1.0f, 0.0f);
+        addParam ("min", "Min", -1000.0f, 1000.0f, 0.0f);
+        addParam ("max", "Max", -1000.0f, 1000.0f, 1.0f);
+        addParam ("springReturn", "Spring return (0/1)", 0.0f, 1.0f, 0.0f);  // faceplate feel
+        addParam ("restValue", "Rest position (0-1)", 0.0f, 1.0f, 0.0f);
+    }
+    void process (const float**, int, float** out, int, int n) override
+    {
+        float val = getParam("min")->get()
+                  + getParam("value")->get() * (getParam("max")->get() - getParam("min")->get());
+        for (int i = 0; i < n; ++i) out[0][i] = val;
+    }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "fader"; }
+};
+
+/**
+ * Trim — a fine-adjust knob (low default sensitivity, narrow range) for set-
+ * and-forget calibration. Renders as a knob.
+ */
+class TrimNode : public DSPNode
+{
+public:
+    TrimNode() : DSPNode ("ctrl_trim", "Trim")
+    {
+        addOutput ("out", NodePort::Control);
+        addParam ("value", "Value", 0.0f, 1.0f, 0.5f);
+        addParam ("min", "Min", -1000.0f, 1000.0f, 0.0f);
+        addParam ("max", "Max", -1000.0f, 1000.0f, 1.0f);
+        addParam ("curve", "Curve (0=lin,1=log,2=exp)", 0.0f, 2.0f, 0.0f);
+        addParam ("sensitivity", "Sensitivity (fine)", 0.05f, 2.0f, 0.3f);   // low = fine
+    }
+    void process (const float**, int, float** out, int, int n) override
+    {
+        float norm = getParam("value")->get();
+        switch ((int) getParam("curve")->get()) {
+            case 1: norm = std::log10 (1.0f + norm * 9.0f); break;
+            case 2: norm = norm * norm; break;
+            default: break;
+        }
+        float val = getParam("min")->get() + norm * (getParam("max")->get() - getParam("min")->get());
+        for (int i = 0; i < n; ++i) out[0][i] = val;
+    }
+    bool isControlSurface() const override { return true; }
+    juce::String getControlType() const override { return "knob"; }
 };
 
 /**
