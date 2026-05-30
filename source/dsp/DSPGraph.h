@@ -380,6 +380,7 @@ public:
 
         // Pre-allocate scratch space for processBlock to avoid audio-thread allocations
         scratchInPtrs.resize (maxNodeInputPorts, nullptr);
+        scratchConnected.resize (maxNodeInputPorts, 0);
         scratchOutPtrs.resize (maxNodeOutputPorts, nullptr);
         scratchSilence.resize (maxBlockSize, 0.0f);
         scratchDevNull.resize (maxBlockSize, 0.0f);
@@ -450,7 +451,10 @@ public:
             // Gather input buffers — use pre-allocated scratch arrays
             int numInputs = (int)node->getInputPorts().size();
             for (int i = 0; i < numInputs; ++i)
+            {
                 scratchInPtrs[i] = nullptr;
+                scratchConnected[i] = 0;
+            }
 
             for (const auto& conn : connections)
             {
@@ -458,11 +462,16 @@ public:
                 {
                     auto srcKey = std::make_pair (conn.sourceNodeID, conn.sourcePort);
                     if (portBufferMap.count (srcKey) && conn.destPort < numInputs)
+                    {
                         scratchInPtrs[conn.destPort] = bufferPool[portBufferMap[srcKey]].data();
+                        scratchConnected[conn.destPort] = 1;   // a wire feeds this port
+                    }
                 }
             }
 
-            // Use pre-allocated silence for unconnected inputs
+            // Use pre-allocated silence for unconnected inputs. (scratchConnected
+            // still records which ports were genuinely wired, so a CV source
+            // parked at 0 is distinguishable from "no wire".)
             std::fill (scratchSilence.begin(), scratchSilence.begin() + numSamples, 0.0f);
             for (int i = 0; i < numInputs; ++i)
                 if (scratchInPtrs[i] == nullptr) scratchInPtrs[i] = scratchSilence.data();
@@ -486,8 +495,9 @@ public:
             // Set MIDI buffer on node for MIDI-aware nodes
             node->setMidiBuffer (currentMidiBuffer);
 
-            // Apply block-rate CV modulation
-            node->applyControlInputs (scratchInPtrs.data(), numInputs, 0);
+            // Apply block-rate CV modulation (connectivity mask lets a wired CV
+            // source override a param authoritatively, even at value 0).
+            node->applyControlInputs (scratchInPtrs.data(), numInputs, 0, scratchConnected.data());
 
             // Process!
             node->process (scratchInPtrs.data(), numInputs, scratchOutPtrs.data(), numOutputs, numSamples);
@@ -652,6 +662,7 @@ private:
     std::vector<std::vector<float>> bufferPool;
     std::map<std::pair<int,int>, int> portBufferMap;  // Built once in topologicalSort
     std::vector<const float*> scratchInPtrs;   // Pre-allocated for processBlock
+    std::vector<char> scratchConnected;         // Per-input-port: 1 if a wire feeds it
     std::vector<float*> scratchOutPtrs;         // Pre-allocated for processBlock
     std::vector<float> scratchSilence;          // Pre-allocated silence buffer
     std::vector<float> scratchDevNull;          // Pre-allocated devnull buffer

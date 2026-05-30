@@ -593,9 +593,28 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
     if (wasPedal && activePedal != nullptr && activePedal->design != nullptr)
     {
         auto updatedDesign = pedalDesigner.getDesign();
+
+        // getDesign() rebuilds from the canvas and doesn't carry these
+        // non-designer-owned fields — preserve them or they'd be wiped on exit.
+        updatedDesign.fxNotes = activePedal->design->fxNotes;
+        updatedDesign.scripts = activePedal->design->scripts;
+
+        // Face -> graph reconcile: a newly placed interactive control spawns its
+        // bonded control-surface node, and a deleted control removes its node.
+        // nodeGraphEditor holds this pedal's FX graph (loaded on Pedal-tab entry).
+        auto& fxGraph = nodeGraphEditor.getGraph();
+        syncFaceControlsToGraph (updatedDesign, fxGraph);
+        updatedDesign.effectsGraph = fxGraph.toJSON();
+
         if (juce::JSON::toString (updatedDesign.toJSON()) != juce::JSON::toString (activePedal->design->toJSON()))
         {
             *(activePedal->design) = updatedDesign;
+
+            // Rebuild the processor so spawned/removed nodes take effect in audio.
+            auto newProc = std::make_unique<GraphPedalProcessor> (
+                activePedal->name, juce::JSON::toString (activePedal->design->effectsGraph));
+            processorRef.getGraphEngine().updatePedalProcessor (activePedal->nodeID, std::move (newProc));
+
             grid.refreshSelectedPedal();
             processorRef.getGraphEngine().saveUndoState();
         }
@@ -950,6 +969,19 @@ bool PedalForgeEditor::writePedalDesign (const juce::String& uuid,
 
     auto newDesign = PedalDesign::fromJSON (parsed);
     newDesign.uuid = uuid;   // identity is immutable — never let the agent change it
+
+    // Face -> graph reconcile so the scriptable/AI path follows the same rule as
+    // the designer: a newly placed interactive control spawns its bonded
+    // control-surface node, a removed one drops its node. This is what makes
+    // "build a whole pedal from script" produce real wired nodes, not dangling
+    // controls.
+    {
+        DSPGraph g;
+        g.fromJSON (newDesign.effectsGraph);
+        syncFaceControlsToGraph (newDesign, g);
+        newDesign.effectsGraph = g.toJSON();
+    }
+
     *(inst->design) = newDesign;
 
     // Rebuild the processor so any FX-graph changes carried in the design
@@ -957,6 +989,13 @@ bool PedalForgeEditor::writePedalDesign (const juce::String& uuid,
     auto newProc = std::make_unique<GraphPedalProcessor> (
         inst->name, juce::JSON::toString (inst->design->effectsGraph));
     eng->updatePedalProcessor (inst->nodeID, std::move (newProc));
+
+    // If this pedal is open in the editor, refresh both views.
+    if (activePedal == inst)
+    {
+        nodeGraphEditor.loadDesign (inst->design->effectsGraph);
+        pedalDesigner.loadDesign (*inst->design);
+    }
 
     grid.refreshSelectedPedal();
     grid.repaint();
@@ -1004,6 +1043,87 @@ bool PedalForgeEditor::writeFxGraph (const juce::String& pedalUuid,
     grid.refreshSelectedPedal();
     grid.repaint();
     return true;
+}
+
+//==============================================================================
+// FX-graph sticky notes — teaching annotations stored in design.fxNotes. The
+// agent uses these to make pedals self-documenting. If the edited pedal is the
+// one open in the FX editor, refresh the live view too.
+juce::String PedalForgeEditor::readFxNotes (const juce::String& pedalUuid)
+{
+    auto* inst = findInstanceByUuid (pedalUuid);
+    if (inst == nullptr || inst->design == nullptr)
+        return "ERROR: no pedal with uuid " + pedalUuid;
+
+    juce::Array<juce::var> arr;
+    const auto& notes = inst->design->fxNotes;
+    for (int i = 0; i < (int) notes.size(); ++i)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("index", i);
+        o->setProperty ("text",  notes[(size_t) i].text);
+        o->setProperty ("x",     notes[(size_t) i].bounds.getX());
+        o->setProperty ("y",     notes[(size_t) i].bounds.getY());
+        arr.add (juce::var (o));
+    }
+    return juce::JSON::toString (juce::var (arr));
+}
+
+juce::String PedalForgeEditor::addFxNote (const juce::String& pedalUuid,
+                                          const juce::String& text, int x, int y)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, pedalUuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+        return "ERROR: no pedal with uuid " + pedalUuid;
+
+    eng->saveUndoState();
+    StickyNote n;
+    n.text = text;
+    n.bounds = { x, y, 220, 130 };
+    inst->design->fxNotes.push_back (n);
+
+    if (activePedal == inst)
+        nodeGraphEditor.loadNotes (inst->design->fxNotes);
+
+    return "ok - added note " + juce::String ((int) inst->design->fxNotes.size() - 1);
+}
+
+juce::String PedalForgeEditor::editFxNote (const juce::String& pedalUuid,
+                                           int index, const juce::String& text)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, pedalUuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+        return "ERROR: no pedal with uuid " + pedalUuid;
+    if (index < 0 || index >= (int) inst->design->fxNotes.size())
+        return "ERROR: note index " + juce::String (index) + " out of range";
+
+    eng->saveUndoState();
+    inst->design->fxNotes[(size_t) index].text = text;
+
+    if (activePedal == inst)
+        nodeGraphEditor.loadNotes (inst->design->fxNotes);
+
+    return "ok - edited note " + juce::String (index);
+}
+
+juce::String PedalForgeEditor::deleteFxNote (const juce::String& pedalUuid, int index)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, pedalUuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+        return "ERROR: no pedal with uuid " + pedalUuid;
+    if (index < 0 || index >= (int) inst->design->fxNotes.size())
+        return "ERROR: note index " + juce::String (index) + " out of range";
+
+    eng->saveUndoState();
+    inst->design->fxNotes.erase (inst->design->fxNotes.begin() + index);
+
+    if (activePedal == inst)
+        nodeGraphEditor.loadNotes (inst->design->fxNotes);
+
+    return "ok - deleted note " + juce::String (index);
 }
 
 void PedalForgeEditor::showToast (const juce::String& message)

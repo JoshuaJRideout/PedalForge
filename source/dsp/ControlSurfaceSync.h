@@ -5,6 +5,32 @@
 #include <set>
 
 //==============================================================================
+// A faceplate control widget and its control-surface DSP node are two views of
+// ONE object. This table is the canonical face-type <-> node-type mapping used
+// by both reconcile directions. Interactive controls only — displays and pure
+// decoration (label/image) are not bonded here.
+namespace ControlBinding
+{
+    inline juce::String nodeTypeForFaceType (const juce::String& faceType)
+    {
+        if (faceType == "knob")       return "ctrl_knob";
+        if (faceType == "fader")      return "ctrl_fader";
+        if (faceType == "switch")     return "ctrl_toggle";
+        if (faceType == "footswitch") return "ctrl_button";
+        if (faceType == "selector")   return "ctrl_selector";
+        return {};
+    }
+
+    /** True for face widget types that should spawn/own a control-surface node. */
+    inline bool isBindableFaceType (const juce::String& faceType)
+    {
+        return nodeTypeForFaceType (faceType).isNotEmpty();
+    }
+
+    constexpr const char* kAutoPrefix = "auto_node_";
+}
+
+//==============================================================================
 /**
  * Reconcile the active pedal's PedalDesign with the control-surface nodes in
  * its DSP graph. Called whenever the FX graph changes.
@@ -145,11 +171,22 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
         juce::String autoID      = juce::String (kPrefix) + juce::String (cn.id);
 
         // Is there already a mapping that targets this node's value? If yes,
-        // assume the pairing is intact (whether auto- or user-created) and skip.
+        // assume the pairing is intact (whether auto- or user-created). Refresh
+        // the auto-managed twin's node-derived props (e.g. a selector's tick
+        // count) so "change positions in FX -> face updates" works, then skip.
         bool alreadyMapped = false;
         for (const auto& m : design.mappings)
             if (m.nodeParam == wantedParam) { alreadyMapped = true; break; }
-        if (alreadyMapped) continue;
+        if (alreadyMapped)
+        {
+            for (auto& c : design.controls)
+                if (c.controlID == autoID)
+                {
+                    if (cn.type == "selector") c.positions = cn.positions;
+                    break;
+                }
+            continue;
+        }
 
         PedalDesign::Control c;
         c.type      = cn.type;
@@ -178,5 +215,98 @@ inline void syncControlSurfaceNodes (PedalDesign& design, const DSPGraph& graph)
         design.mappings.push_back (m);
 
         advanceLayout (c.width, c.height);
+    }
+}
+
+//==============================================================================
+/**
+ * The reverse reconcile (face -> graph): the faceplate is authoritative. Run
+ * this when leaving the Pedal tab, where the user can ADD or DELETE control
+ * widgets but cannot touch the FX graph directly.
+ *
+ *   - A freshly placed, interactive control widget that is NOT yet bonded
+ *     (empty parameterID, not an auto_node_ twin, no existing mapping) spawns
+ *     its matching control-surface node, is re-keyed to "auto_node_<newID>",
+ *     and gets a mapping to the node's primary param. The user then WIRES that
+ *     node's output to an effect's parameter CV input in the FX tab.
+ *   - A control-surface node whose twin widget has been deleted is removed from
+ *     the graph (they are one object). Only control-surface node types are ever
+ *     auto-removed, so user-wired effect nodes are never touched.
+ *
+ * Controls already bound to a real node param (the legacy direct-mapping style,
+ * e.g. factory pedals) are left untouched: they have a non-empty mapping, so
+ * they are never re-spawned.
+ *
+ * Invariant relied upon: every control-surface node already has its auto_node_
+ * twin in design.controls before this runs (maintained by syncControlSurfaceNodes
+ * on every FX edit). Thus a twinless control-surface node here means "deleted on
+ * the face", not "brand new in FX".
+ */
+inline void syncFaceControlsToGraph (PedalDesign& design, DSPGraph& graph)
+{
+    using namespace ControlBinding;
+
+    auto isAutoManaged = [] (const juce::String& id) { return id.startsWith (kAutoPrefix); };
+    auto hasMapping = [&] (const juce::String& cid)
+    {
+        for (const auto& m : design.mappings) if (m.controlID == cid) return true;
+        return false;
+    };
+
+    // A. Spawn a control-surface node for each new, unbound, bindable widget.
+    int spawnRow = 0;
+    for (auto& c : design.controls)
+    {
+        if (isAutoManaged (c.controlID))       continue;   // already a twin
+        if (! isBindableFaceType (c.type))     continue;   // not an interactive control
+        if (hasMapping (c.controlID))          continue;   // already bound (factory direct map or hand-wired)
+
+        auto node = createNodeByType (nodeTypeForFaceType (c.type));
+        if (! node) continue;
+
+        // Seed node config from the widget where it has a counterpart.
+        if (c.type == "selector")
+            if (auto* pp = node->getParam ("positions"))
+                pp->set ((float) juce::jlimit (2, 16, c.positions));
+
+        // Lay the new node out in a tidy column to the right of I/O.
+        node->visualX = 320.0f;
+        node->visualY = 60.0f + (float) (spawnRow++) * 90.0f;
+
+        int newID = graph.addNode (std::move (node));
+
+        juce::String primary = "value";
+        if (auto* n = graph.getNode (newID))
+            if (! n->getParams().empty()) primary = n->getParams()[0].id;
+
+        // Re-key the widget as the node's twin and bond them.
+        c.controlID = juce::String (kAutoPrefix) + juce::String (newID);
+        PedalDesign::Mapping m;
+        m.controlID = c.controlID;
+        m.nodeParam = juce::String (newID) + "_" + primary;
+        design.mappings.push_back (m);
+    }
+
+    // B. Remove control-surface nodes whose twin widget no longer exists.
+    std::set<int> liveTwinNodeIDs;
+    for (const auto& c : design.controls)
+        if (isAutoManaged (c.controlID))
+            liveTwinNodeIDs.insert (
+                c.controlID.fromFirstOccurrenceOf (kAutoPrefix, false, false).getIntValue());
+
+    std::vector<int> toRemove;
+    for (const auto& [nid, node] : graph.getNodes())
+        if (node && node->isControlSurface() && liveTwinNodeIDs.count (nid) == 0)
+            toRemove.push_back (nid);
+
+    for (int id : toRemove)
+    {
+        graph.removeNode (id);
+        // Drop any now-dangling auto mapping for the removed node.
+        juce::String pfx = juce::String (kAutoPrefix) + juce::String (id);
+        design.mappings.erase (
+            std::remove_if (design.mappings.begin(), design.mappings.end(),
+                [&] (const PedalDesign::Mapping& m) { return m.controlID == pfx; }),
+            design.mappings.end());
     }
 }

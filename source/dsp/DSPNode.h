@@ -54,10 +54,17 @@ struct NodeParam
     float getNormalized() const { return (get() - minVal) / (maxVal - minVal); }
     void setNormalized (float n) { set (minVal + n * (maxVal - minVal)); }
 
-    /** Apply a CV modulation value non-destructively. */
-    void applyModulation (float cv)
+    /** Apply a CV modulation value non-destructively.
+
+        When a CV source is wired into this param's `_cv` input it OVERRIDES the
+        knob/base value for the block — authoritatively, even when the incoming
+        value is exactly 0 (a control node parked at the bottom of its range must
+        still drive the param to that bottom, not silently fall back to the base
+        value). `connected` is true iff the port actually has a wire feeding it;
+        the graph runtime knows this and passes it in. */
+    void applyModulation (float cv, bool connected)
     {
-        if (cv != 0.0f)
+        if (connected)
         {
             isModulated = true;
             modValue = juce::jlimit (minVal, maxVal, cv);
@@ -67,6 +74,10 @@ struct NodeParam
             isModulated = false;
         }
     }
+
+    /** Back-compat overload: with no connectivity info, treat a non-zero value
+        as "connected" (the historical behaviour). */
+    void applyModulation (float cv) { applyModulation (cv, cv != 0.0f); }
 };
 
 //==============================================================================
@@ -209,7 +220,8 @@ public:
         @param numInputs     Number of input buffers
         @param sampleIndex   Current sample index (use 0 for block-rate)
     */
-    void applyControlInputs (const float** inputBuffers, int numInputs, int sampleIndex)
+    void applyControlInputs (const float** inputBuffers, int numInputs, int sampleIndex,
+                             const char* connectedMask = nullptr)
     {
         if (paramPortStartIndex < 0) return;
 
@@ -218,11 +230,14 @@ public:
         {
             if (p.modulatable)
             {
-                if (portIdx < numInputs && inputBuffers[portIdx] != nullptr)
-                    p.applyModulation (inputBuffers[portIdx][sampleIndex]);
-                else
-                    p.applyModulation (0.0f);
-                
+                const bool hasBuf = (portIdx < numInputs && inputBuffers[portIdx] != nullptr);
+                const float cv = hasBuf ? inputBuffers[portIdx][sampleIndex] : 0.0f;
+                // A param's CV port counts as driven only when a wire actually
+                // feeds it. Without a mask, fall back to the old non-zero test.
+                const bool connected = (connectedMask != nullptr)
+                                           ? (portIdx < numInputs && connectedMask[portIdx] != 0)
+                                           : (cv != 0.0f);
+                p.applyModulation (cv, connected);
                 portIdx++;
             }
         }

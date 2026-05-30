@@ -1236,11 +1236,9 @@ public:
         descEditor.setReturnKeyStartsNewLine (true);
         setupEditor (descEditor);
 
-        paramCombo.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
-        paramCombo.setColour (juce::ComboBox::textColourId, PedalForgeLookAndFeel::textPrimary);
-        paramCombo.setColour (juce::ComboBox::outlineColourId, PedalForgeLookAndFeel::gridLine);
-        paramCombo.addListener (this);
-        addChildComponent (paramCombo);
+        // NOTE: control→parameter binding is no longer done here. The Pedal tab
+        // is purely about a widget's appearance + behaviour; binding happens by
+        // spawning the control's node and wiring it in the FX tab.
 
         auto setupCombo = [this] (juce::ComboBox& cb) {
             cb.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
@@ -1388,7 +1386,6 @@ public:
                 labelEditor.setText (hwPtr->label, juce::dontSendNotification);
                 wEditor.setText (juce::String (hwPtr->width), juce::dontSendNotification);
                 hEditor.setText (juce::String (hwPtr->height), juce::dontSendNotification);
-                rebuildParamCombo (hwPtr);
 
                 bool showImages = (hwPtr->type != "led");
                 bool showTrack = (hwPtr->type == "fader");
@@ -1429,7 +1426,6 @@ public:
                 labelEditor.setVisible (true);
                 wEditor.setVisible (true);
                 hEditor.setVisible (true);
-                paramCombo.setVisible (!isOverlayLauncher);
                 deleteButton.setVisible (true);
 
                 btnImageMain.setVisible (!isLabel);
@@ -1484,7 +1480,6 @@ public:
             tagsEditor.setVisible (true);
             tagsEditor.setText (canvas->pedalTags.joinIntoString (", "), juce::dontSendNotification);
 
-            paramCombo.setVisible (false);
             deleteButton.setVisible (false);
 
             btnImageMain.setVisible (true);
@@ -1507,7 +1502,6 @@ public:
             labelEditor.setVisible (false);
             wEditor.setVisible (false);
             hEditor.setVisible (false);
-            paramCombo.setVisible (false);
             btnImageMain.setVisible (false);
             btnImageTrack.setVisible (false);
             btnImageOff.setVisible (false);
@@ -1582,8 +1576,7 @@ public:
                 }
                 else
                 {
-                    g.drawText ("MAP TO PARAMETER", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
-                    y = paramCombo.getBottom() + 16;
+                    y = labelEditor.getBottom() + 16;
                 }
 
                 g.drawText ("CUSTOM RENDERING", m, y, getWidth()-m*2, 16, juce::Justification::centredLeft);
@@ -1712,11 +1705,14 @@ public:
             y = labelEditor.getBottom() + 28;
             bool isOverlayLauncher = hw && hw->type == "overlay_launcher";
             if (isOverlayLauncher)
+            {
                 overlayPageCombo.setBounds (m, y, getWidth()-m*2, 28);
+                y = overlayPageCombo.getBottom() + 36;
+            }
             else
-                paramCombo.setBounds       (m, y, getWidth()-m*2, 28);
-
-            y = juce::jmax (paramCombo.getBottom(), overlayPageCombo.getBottom()) + 36;
+            {
+                y = labelEditor.getBottom() + 36;
+            }
             if (isLabel)
             {
                 fontFamilyCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
@@ -1809,22 +1805,7 @@ public:
                 
             if (hw)
             {
-                if (box == &paramCombo)
-                {
-                    int s = paramCombo.getSelectedId();
-                    if (s == 1) // "(none)"
-                        hw->parameterID = "";
-                    else
-                    {
-                        // Extract the [fullID] from the display string
-                        juce::String txt = paramCombo.getText();
-                        int start = txt.lastIndexOfChar ('[');
-                        int end = txt.lastIndexOfChar (']');
-                        if (start >= 0 && end > start)
-                            hw->parameterID = txt.substring (start + 1, end);
-                    }
-                }
-                else if (box == &overlayPageCombo)
+                if (box == &overlayPageCombo)
                 {
                     int s = overlayPageCombo.getSelectedId();
                     if (s == 1) // "(none)"
@@ -1877,7 +1858,7 @@ private:
     juce::TextEditor labelEditor;
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor, categoryEditor, tagsEditor;
-    juce::ComboBox paramCombo, fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
+    juce::ComboBox fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
@@ -1886,51 +1867,6 @@ private:
     juce::TextButton btnClearImage { "Clear Images" };
     juce::TextEditor rotationEditor, sensitivityEditor;
     std::unique_ptr<juce::FileChooser> fileChooser;
-
-    void rebuildParamCombo (PlacedHardware* hw)
-    {
-        paramCombo.clear (juce::dontSendNotification);
-        paramCombo.addItem ("(none)", 1);
-
-        int itemID = 2;
-        if (effectsGraph != nullptr)
-        {
-            for (const auto& [nodeID, node] : effectsGraph->getNodes())
-            {
-                if (node->getType() == "audio_input" || node->getType() == "audio_output")
-                    continue;
-                for (const auto& param : node->getParams())
-                {
-                    juce::String fullID = juce::String (nodeID) + "_" + param.id;
-                    juce::String display = node->getName() + " : " + param.name;
-                    paramCombo.addItem (display + "  [" + fullID + "]", itemID);
-                    if (hw && matchMappingParam (hw->parameterID, fullID))
-                    {
-                        hw->parameterID = fullID; // self-heal in-memory representation
-                        paramCombo.setSelectedId (itemID, juce::dontSendNotification);
-                    }
-                    itemID++;
-                }
-                
-                // Add virtual "File" parameter for nodes that load files
-                if (node->getType() == "nam" || node->getType() == "sampler" || node->getType() == "ir")
-                {
-                    juce::String fullID = juce::String (nodeID) + "_filepath";
-                    juce::String display = node->getName() + " : File Target";
-                    paramCombo.addItem (display + "  [" + fullID + "]", itemID);
-                    if (hw && matchMappingParam (hw->parameterID, fullID))
-                    {
-                        hw->parameterID = fullID; // self-heal in-memory representation
-                        paramCombo.setSelectedId (itemID, juce::dontSendNotification);
-                    }
-                    itemID++;
-                }
-            }
-        }
-
-        if (hw && hw->parameterID.isEmpty())
-            paramCombo.setSelectedId (1, juce::dontSendNotification);
-    }
 
     void rebuildOverlayPageCombo (PlacedHardware* hw)
     {

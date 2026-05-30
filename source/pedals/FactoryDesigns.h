@@ -347,17 +347,67 @@ namespace FactoryDesigns
         
         addBypassAndLED(*d);
 
+        // ── DSP graph (the SAME thing a user gets by placing a knob and wiring
+        //    it in the FX tab — no hidden C++ factory). Input -> Gain -> Output,
+        //    with a Gain knob NODE whose output drives the Gain effect's level.
+        DSPGraph g;
+        int inID    = g.addNode (createNodeByType ("audio_input"));
+        int gainID  = g.addNode (createNodeByType ("gain"));
+        int knobID  = g.addNode (createNodeByType ("ctrl_knob"));
+        int outID   = g.addNode (createNodeByType ("audio_output"));
+
+        // Gain knob spans 0..+24 dB, defaulting to a gentle +6 dB boost.
+        if (auto* k = g.getNode (knobID))
+        {
+            k->setName ("Gain");
+            if (auto* p = k->getParam ("min"))   p->set (0.0f);
+            if (auto* p = k->getParam ("max"))   p->set (24.0f);
+            if (auto* p = k->getParam ("value")) p->set (0.25f);   // 0.25 * 24 = +6 dB
+        }
+
+        g.getNode (inID)->visualX   = 60.0f;  g.getNode (inID)->visualY   = 200.0f;
+        g.getNode (gainID)->visualX = 340.0f; g.getNode (gainID)->visualY = 200.0f;
+        g.getNode (knobID)->visualX = 340.0f; g.getNode (knobID)->visualY = 60.0f;
+        g.getNode (outID)->visualX  = 600.0f; g.getNode (outID)->visualY  = 200.0f;
+
+        g.connect (inID, 0, gainID, 0);     // audio in -> gain
+        g.connect (gainID, 0, outID, 0);    // gain -> out L
+        g.connect (gainID, 0, outID, 1);    // gain -> out R
+        g.connect (knobID, 0, gainID, 1);   // Gain knob -> gain's "gain" CV input
+
+        d->effectsGraph = g.toJSON();
+
+        // ── Faceplate Gain knob — the twin of the ctrl_knob node above. Bonded
+        //    by the auto_node_<id> convention so they behave as one object.
         PedalDesign::Control knob;
         knob.type = "knob";
-        knob.width = 45; knob.height = 45;
-        knob.x = d->chassisW / 2.0f - 22.5f;
-        knob.y = 40.0f;
+        knob.width = 50; knob.height = 50;
+        knob.x = d->chassisW / 2.0f - 25.0f;
+        knob.y = 50.0f;
         knob.label = "Gain";
-        knob.controlID = "knob_1";
+        knob.controlID = "auto_node_" + juce::String (knobID);
+        knob.defaultValue = 0.25f;
         d->controls.push_back(knob);
 
         d->mappings.push_back({"bypass_switch", "bypass"});
-        d->mappings.push_back({"knob_1", "2_gain"}); // 2 is GainNode
+        d->mappings.push_back({ knob.controlID, juce::String (knobID) + "_value" });
+
+        // ── Teaching notes — this pedal documents itself on the FX canvas.
+        {
+            StickyNote n1;
+            n1.text = "Clean Boost\nSignal path: Input -> Gain -> Output.";
+            n1.bounds = { 40, 300, 250, 70 };
+            d->fxNotes.push_back (n1);
+
+            StickyNote n2;
+            n2.text = "The 'Gain' knob is a Knob NODE. Its output wire feeds the "
+                      "Gain effect's gain input, so the faceplate knob sets the "
+                      "boost (0 to +24 dB). Delete the wire and the knob does "
+                      "nothing - that's how every control works here.";
+            n2.bounds = { 320, 300, 300, 130 };
+            d->fxNotes.push_back (n2);
+        }
+
         addStandardPorts (*d);
         return d;
     }

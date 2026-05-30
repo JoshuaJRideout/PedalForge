@@ -314,21 +314,10 @@ namespace GraphPedalFactory
 
     // ─── DRIVE ───────────────────────────────────────────────────────────────────
 
-    /** 1. Clean Boost: Input → Gain → Output */
-    inline std::unique_ptr<GraphPedalProcessor> createCleanBoost()
-    {
-        auto proc = std::make_unique<GraphPedalProcessor> ("Clean Boost");
-        auto& g = proc->getDSPGraph();
-        int inID   = g.addNode (std::make_unique<AudioInputNode>());
-        int gainID = g.addNode (std::make_unique<GainNode>());
-        int outID  = g.addNode (std::make_unique<AudioOutputNode>());
-        g.getNode(gainID)->getParam("gain")->set (6.0f);
-        g.connect (inID, 0, gainID, 0);
-        g.connect (gainID, 0, outID, 0);
-        g.connect (gainID, 0, outID, 1);
-        proc->rebuildParameters();
-        return proc;
-    }
+    // Clean Boost is now an HONEST build: its DSP graph is declared in the
+    // PedalDesign (FactoryDesigns::createCleanBoost) and the registry builds the
+    // processor straight from that graph — no hidden C++ factory here. This is
+    // the template the other basic pedals are being migrated to.
 
     /** 2. Overdrive: Input → Gain → SoftClip → ToneStack → Gain(vol) → Output */
     inline std::unique_ptr<GraphPedalProcessor> createOverdrive()

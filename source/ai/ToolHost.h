@@ -49,6 +49,19 @@ namespace pf::ai
                                    const juce::String& json,
                                    juce::String& errorOut) = 0;
 
+        // ── FX-graph sticky notes ── teaching/explanatory annotations that live
+        //    on a pedal's FX (node) graph. Used to make pedals self-documenting.
+        /** JSON array of the pedal's FX notes: [{index,text,x,y,w,h}, ...]. */
+        virtual juce::String readFxNotes (const juce::String& pedalUuid) = 0;
+        /** Append a note at (x,y). Returns a short confirmation incl. its index. */
+        virtual juce::String addFxNote (const juce::String& pedalUuid,
+                                        const juce::String& text, int x, int y) = 0;
+        /** Replace the text of the note at the given index. */
+        virtual juce::String editFxNote (const juce::String& pedalUuid,
+                                         int index, const juce::String& text) = 0;
+        /** Remove the note at the given index. */
+        virtual juce::String deleteFxNote (const juce::String& pedalUuid, int index) = 0;
+
         /** Surface a short message to the user via the toast system. */
         virtual void showToast (const juce::String& message) = 0;
 

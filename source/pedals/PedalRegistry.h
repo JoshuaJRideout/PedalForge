@@ -386,7 +386,13 @@ inline std::vector<PedalInfo> getFactoryPedals()
         // ─── DRIVE ─────────────────────────────────────────────────────────
         { "Clean Boost",  "Drive",      1, 2, 1,
           juce::Colour (0xFF4ADE80),    // green
-          [] { return GraphPedalFactory::createCleanBoost(); },
+          // Honest build: the processor IS the design's declared effectsGraph
+          // (no hidden C++ graph). See FactoryDesigns::createCleanBoost.
+          [] () -> std::unique_ptr<juce::AudioProcessor> {
+              auto d = loadDesignOrDefault ("Clean Boost", FactoryDesigns::createCleanBoost);
+              return std::make_unique<GraphPedalProcessor> (
+                  d->name, juce::JSON::toString (d->effectsGraph));
+          },
           [] { return loadDesignOrDefault("Clean Boost", FactoryDesigns::createCleanBoost); } },
 
         { "Overdrive",    "Drive",      1, 2, 3,

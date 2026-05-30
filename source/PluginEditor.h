@@ -60,6 +60,10 @@ public:
     bool writePedalDesign (const juce::String& uuid, const juce::String& json, juce::String& errorOut) override;
     juce::String readFxGraph (const juce::String& pedalUuid) override;
     bool writeFxGraph (const juce::String& pedalUuid, const juce::String& json, juce::String& errorOut) override;
+    juce::String readFxNotes (const juce::String& pedalUuid) override;
+    juce::String addFxNote (const juce::String& pedalUuid, const juce::String& text, int x, int y) override;
+    juce::String editFxNote (const juce::String& pedalUuid, int index, const juce::String& text) override;
+    juce::String deleteFxNote (const juce::String& pedalUuid, int index) override;
     void showToast (const juce::String& message) override;
     juce::String listFactoryPedals() override;
     juce::String addPedalToBoard (const juce::String& pedalId, juce::String& errorOut) override;

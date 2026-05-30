@@ -101,6 +101,34 @@ std::vector<ToolDef> buildToolDefs()
                         { "json", stringProp ("The complete new FX graph JSON") } },
                       { "pedal_uuid", "json" }) });
 
+    defs.push_back ({ "read_fx_notes",
+        "List the sticky notes on a pedal's FX (node) graph - the teaching/"
+        "explanatory annotations. Returns a JSON array of {index,text,x,y}.",
+        schemaObject ({ { "pedal_uuid", stringProp ("The pedal design's uuid") } }, { "pedal_uuid" }) });
+
+    defs.push_back ({ "add_fx_note",
+        "Add a sticky note to a pedal's FX graph at canvas position (x,y). Use "
+        "notes to explain how the graph works so the pedal teaches by example.",
+        schemaObject ({ { "pedal_uuid", stringProp ("The pedal design's uuid") },
+                        { "text", stringProp ("The note text") },
+                        { "x", numberProp ("Canvas X (optional, default 40)") },
+                        { "y", numberProp ("Canvas Y (optional, default 40)") } },
+                      { "pedal_uuid", "text" }) });
+
+    defs.push_back ({ "edit_fx_note",
+        "Replace the text of an existing FX-graph sticky note by its index "
+        "(from read_fx_notes).",
+        schemaObject ({ { "pedal_uuid", stringProp ("The pedal design's uuid") },
+                        { "index", numberProp ("Note index from read_fx_notes") },
+                        { "text", stringProp ("The new note text") } },
+                      { "pedal_uuid", "index", "text" }) });
+
+    defs.push_back ({ "delete_fx_note",
+        "Delete an FX-graph sticky note by its index (from read_fx_notes).",
+        schemaObject ({ { "pedal_uuid", stringProp ("The pedal design's uuid") },
+                        { "index", numberProp ("Note index from read_fx_notes") } },
+                      { "pedal_uuid", "index" }) });
+
     defs.push_back ({ "show_toast",
         "Show a short confirmation message to the user in the corner of the app. "
         "Use this to confirm what you did after making changes.",
@@ -407,6 +435,36 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         if (! host.writeFxGraph (uuid, json, err))
             return fail ("write_fx_graph failed: " + err);
         r.content = "ok - FX graph rebuilt (user can undo with Cmd-Z)";
+        return r;
+    }
+    if (call.name == "read_fx_notes")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
+        r.content = host.readFxNotes (uuid);
+        return r;
+    }
+    if (call.name == "add_fx_note")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        auto text = argStr (call, "text");
+        if (uuid.isEmpty() || text.isEmpty()) return fail ("Need 'pedal_uuid' and 'text'");
+        r.content = host.addFxNote (uuid, text, argInt (call, "x", 40), argInt (call, "y", 40));
+        return r;
+    }
+    if (call.name == "edit_fx_note")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        auto text = argStr (call, "text");
+        if (uuid.isEmpty() || text.isEmpty()) return fail ("Need 'pedal_uuid' and 'text'");
+        r.content = host.editFxNote (uuid, argInt (call, "index", -1), text);
+        return r;
+    }
+    if (call.name == "delete_fx_note")
+    {
+        auto uuid = argStr (call, "pedal_uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'pedal_uuid'");
+        r.content = host.deleteFxNote (uuid, argInt (call, "index", -1));
         return r;
     }
     if (call.name == "show_toast")
