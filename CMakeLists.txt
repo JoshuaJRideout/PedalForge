@@ -279,3 +279,41 @@ if(Python3_FOUND)
 else()
     message(STATUS "Python3 not found — skipping UTF-8 literal guard.")
 endif()
+
+# ─── Dev code signing (stable mic/TCC permission across rebuilds) ──
+# Ad-hoc signing changes the code hash every compile, so macOS forgets the
+# microphone grant and re-prompts each build. Signing with a STABLE identity
+# gives a designated requirement keyed on the bundle id + cert (not the hash),
+# so the grant persists. We auto-detect a code-signing identity (preferring an
+# "Apple Development" one); override with -DPEDALFORGE_CODESIGN_IDENTITY="…",
+# or set it to "" to force ad-hoc. NOTE: hardened runtime is intentionally NOT
+# enabled here — it would block the AU/VST host from loading unsigned plugins.
+# (Hardened runtime + notarization belong to release signing — task #68.)
+if(APPLE)
+    if(NOT DEFINED PEDALFORGE_CODESIGN_IDENTITY)
+        execute_process(COMMAND security find-identity -v -p codesigning
+                        OUTPUT_VARIABLE _pf_ids ERROR_QUIET)
+        string(REGEX MATCH "\"(Apple Development[^\"]+)\"" _pf_match "${_pf_ids}")
+        if(NOT _pf_match)
+            string(REGEX MATCH "\"([^\"]+)\"" _pf_match "${_pf_ids}")  # any identity
+        endif()
+        if(_pf_match)
+            set(PEDALFORGE_CODESIGN_IDENTITY "${CMAKE_MATCH_1}")
+        else()
+            set(PEDALFORGE_CODESIGN_IDENTITY "")
+        endif()
+    endif()
+
+    if(PEDALFORGE_CODESIGN_IDENTITY)
+        message(STATUS "PedalForge: dev-signing Standalone with \"${PEDALFORGE_CODESIGN_IDENTITY}\" (stable mic permission across rebuilds)")
+        add_custom_command(TARGET PedalForge_Standalone POST_BUILD
+            COMMAND codesign --force --deep
+                    --sign "${PEDALFORGE_CODESIGN_IDENTITY}"
+                    --identifier com.pedalforge.app
+                    "$<TARGET_BUNDLE_DIR:PedalForge_Standalone>"
+            COMMENT "Re-signing Standalone with stable identity (persistent mic permission)"
+            VERBATIM)
+    else()
+        message(STATUS "PedalForge: no code-signing identity found — Standalone stays ad-hoc (mic re-prompts each build).")
+    endif()
+endif()
