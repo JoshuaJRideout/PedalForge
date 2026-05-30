@@ -1402,6 +1402,22 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "2_freq"});      // node 2 = LowPassNode
         d->mappings.push_back({"knob_2", "2_q"});
 
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_input"), 1);
+            g.addNode (createNodeByType ("lowpass"), 2);
+            g.addNode (createNodeByType ("audio_output"), 3);
+            g.getNode (2)->getParam ("freq")->set (1000.0f);
+            g.getNode (2)->getParam ("q")->set (0.5f);
+            g.getNode (1)->visualX = 80;  g.getNode (1)->visualY = 200;
+            g.getNode (2)->visualX = 300; g.getNode (2)->visualY = 200;
+            g.getNode (3)->visualX = 520; g.getNode (3)->visualY = 200;
+            g.connect (1, 0, 2, 0);
+            g.connect (2, 0, 3, 0);
+            g.connect (2, 0, 3, 1);
+            d->effectsGraph = g.toJSON();
+        }
+
         StickyNote note;
         note.text = "Tutorial 2: Filter Sweep\n\nThis pedal routes the guitar signal through a Low Pass Filter.\n\n- The \"Cutoff\" knob modulates the filter's frequency (freq), which cuts off high-frequency harmonics and makes the sound darker.\n- The \"Reso\" knob modulates the resonance (q), which boosts frequencies near the cutoff point for a vocal, synthesizer-like sweep.";
         note.bounds = { 300, 100, 280, 195 };
@@ -1484,6 +1500,31 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_3", "3_sustain"});
         d->mappings.push_back({"knob_4", "3_release"});
 
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_output"), 1);
+            g.addNode (createNodeByType ("oscillator"), 2);
+            g.addNode (createNodeByType ("adsr"), 3);
+            g.addNode (createNodeByType ("vca"), 4);
+            g.addNode (createNodeByType ("midi_note"), 5);
+            g.getNode (3)->getParam ("attack")->set (0.01f);
+            g.getNode (3)->getParam ("decay")->set (0.1f);
+            g.getNode (3)->getParam ("sustain")->set (0.7f);
+            g.getNode (3)->getParam ("release")->set (0.3f);
+            g.getNode (5)->visualX = 80;  g.getNode (5)->visualY = 200;
+            g.getNode (2)->visualX = 260; g.getNode (2)->visualY = 100;
+            g.getNode (3)->visualX = 260; g.getNode (3)->visualY = 320;
+            g.getNode (4)->visualX = 440; g.getNode (4)->visualY = 200;
+            g.getNode (1)->visualX = 620; g.getNode (1)->visualY = 200;
+            g.connect (5, 0, 2, 1);   // pitch -> osc frequency mod
+            g.connect (5, 2, 3, 0);   // gate -> ADSR trigger
+            g.connect (2, 0, 4, 0);   // osc audio -> VCA in
+            g.connect (3, 0, 4, 1);   // envelope -> VCA control
+            g.connect (4, 0, 1, 0);
+            g.connect (4, 0, 1, 1);
+            d->effectsGraph = g.toJSON();
+        }
+
         StickyNote note;
         note.text = "Tutorial 5: Mini Synth\n\nThis is a fully playable MIDI synthesizer voice!\n\n- The MIDI In node tracks incoming keyboard notes and gates.\n- The pitch CV controls the Oscillator frequency.\n- The gate trigger fires the ADSR envelope generator.\n- The ADSR envelope controls a VCA (amplifier), shaping the volume dynamics of the oscillator over time.";
         note.bounds = { 450, 100, 300, 235 };
@@ -1553,6 +1594,36 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "4_q"});           // node 4 = LowPassNode
         d->mappings.push_back({"knob_3", "3_out_max"});     // node 3 = RangerNode
 
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_input"), 0);
+            g.addNode (createNodeByType ("audio_output"), 1);
+            g.addNode (createNodeByType ("env_follower"), 2);
+            g.addNode (createNodeByType ("ranger"), 3);
+            g.addNode (createNodeByType ("lowpass"), 4);
+            g.getNode (2)->getParam ("attack")->set (10.0f);
+            g.getNode (2)->getParam ("release")->set (80.0f);
+            g.getNode (2)->getParam ("sensitivity")->set (1.5f);
+            g.getNode (3)->getParam ("in_min")->set (0.0f);
+            g.getNode (3)->getParam ("in_max")->set (1.0f);
+            g.getNode (3)->getParam ("out_min")->set (100.0f);
+            g.getNode (3)->getParam ("out_max")->set (5000.0f);
+            g.getNode (3)->getParam ("curve")->set (0.5f);
+            g.getNode (4)->getParam ("q")->set (2.0f);
+            g.getNode (0)->visualX = 80;  g.getNode (0)->visualY = 200;
+            g.getNode (4)->visualX = 340; g.getNode (4)->visualY = 200;
+            g.getNode (2)->visualX = 220; g.getNode (2)->visualY = 360;
+            g.getNode (3)->visualX = 380; g.getNode (3)->visualY = 360;
+            g.getNode (1)->visualX = 560; g.getNode (1)->visualY = 200;
+            g.connect (0, 0, 4, 0);   // dry audio -> lowpass in
+            g.connect (0, 0, 2, 0);   // audio -> envelope follower
+            g.connect (2, 0, 3, 0);   // env -> ranger
+            g.connect (3, 0, 4, 1);   // ranger -> lowpass freq_cv
+            g.connect (4, 0, 1, 0);
+            g.connect (4, 0, 1, 1);
+            d->effectsGraph = g.toJSON();
+        }
+
         StickyNote note;
         note.text = "Tutorial 6: Envelope Filter\n\nAn Auto-Wah! The envelope follower tracks the amplitude/dynamics of your guitar playing.\n\n- A harder pluck generates a higher control voltage.\n- The Ranger node scales this 0..1 voltage up to a musical frequency sweep range (100Hz to 5000Hz).\n- This mapped voltage modulates the Low Pass Filter frequency dynamically, creating a responsive wah sound!";
         note.bounds = { 450, 100, 320, 235 };
@@ -1610,6 +1681,40 @@ namespace FactoryDesigns
         d->mappings.push_back({"bypass_switch", "bypass"});
         d->mappings.push_back({"knob_1", "3_bpm"}); // node 3 = ClockNode
         d->mappings.push_back({"knob_2", "6_q"});   // node 6 = LowPassNode
+
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_input"), 1);
+            g.addNode (createNodeByType ("audio_output"), 2);
+            g.addNode (createNodeByType ("clock"), 3);
+            g.addNode (createNodeByType ("sequencer"), 4);
+            g.addNode (createNodeByType ("ranger"), 5);
+            g.addNode (createNodeByType ("lowpass"), 6);
+            g.getNode (3)->getParam ("bpm")->set (120.0f);
+            g.getNode (4)->getParam ("steps")->set (4.0f);
+            g.getNode (4)->getParam ("s1")->set (0.1f);
+            g.getNode (4)->getParam ("s2")->set (0.6f);
+            g.getNode (4)->getParam ("s3")->set (0.3f);
+            g.getNode (4)->getParam ("s4")->set (0.9f);
+            g.getNode (5)->getParam ("in_min")->set (0.0f);
+            g.getNode (5)->getParam ("in_max")->set (1.0f);
+            g.getNode (5)->getParam ("out_min")->set (200.0f);
+            g.getNode (5)->getParam ("out_max")->set (6000.0f);
+            g.getNode (6)->getParam ("q")->set (3.0f);
+            g.getNode (1)->visualX = 80;  g.getNode (1)->visualY = 200;
+            g.getNode (6)->visualX = 320; g.getNode (6)->visualY = 200;
+            g.getNode (3)->visualX = 80;  g.getNode (3)->visualY = 380;
+            g.getNode (4)->visualX = 260; g.getNode (4)->visualY = 380;
+            g.getNode (5)->visualX = 440; g.getNode (5)->visualY = 380;
+            g.getNode (2)->visualX = 600; g.getNode (2)->visualY = 200;
+            g.connect (3, 0, 4, 0);   // clock -> sequencer
+            g.connect (4, 0, 5, 0);   // sequencer -> ranger
+            g.connect (5, 0, 6, 1);   // ranger -> lowpass freq_cv
+            g.connect (1, 0, 6, 0);   // audio -> lowpass in
+            g.connect (6, 0, 2, 0);
+            g.connect (6, 0, 2, 1);
+            d->effectsGraph = g.toJSON();
+        }
 
         StickyNote note;
         note.text = "Tutorial 7: Step Sequencer Filter\n\nAn automated rhythmic step filter!\n\n- The Clock Node generates steady pulses at a BPM rate.\n- Each pulse advances the 8-step Sequencer to the next step value.\n- These stepped control voltages are remapped by the Ranger and modulate the Low Pass Filter, creating rhythmic stepping filter patterns.";
@@ -1680,6 +1785,42 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_2", "6_drive"});        // node 6 = SoftClipNode
         d->mappings.push_back({"knob_3", "2_sensitivity"});  // node 2 = EnvelopeFollower
 
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_input"), 1);
+            g.addNode (createNodeByType ("env_follower"), 2);
+            g.addNode (createNodeByType ("comparator"), 3);
+            g.addNode (createNodeByType ("clock"), 4);
+            g.addNode (createNodeByType ("and_gate"), 5);
+            g.addNode (createNodeByType ("softclip"), 6);
+            g.addNode (createNodeByType ("mux"), 7);
+            g.addNode (createNodeByType ("audio_output"), 8);
+            g.getNode (3)->getParam ("threshold")->set (0.15f);
+            g.getNode (3)->getParam ("mode")->set (0.0f);
+            g.getNode (4)->getParam ("bpm")->set (135.0f);
+            g.getNode (6)->getParam ("drive")->set (40.0f);
+            g.getNode (2)->getParam ("release")->set (100.0f);
+            g.getNode (1)->visualX = 80;  g.getNode (1)->visualY = 200;
+            g.getNode (6)->visualX = 260; g.getNode (6)->visualY = 80;
+            g.getNode (7)->visualX = 440; g.getNode (7)->visualY = 200;
+            g.getNode (2)->visualX = 220; g.getNode (2)->visualY = 360;
+            g.getNode (3)->visualX = 380; g.getNode (3)->visualY = 360;
+            g.getNode (4)->visualX = 380; g.getNode (4)->visualY = 520;
+            g.getNode (5)->visualX = 540; g.getNode (5)->visualY = 440;
+            g.getNode (8)->visualX = 700; g.getNode (8)->visualY = 200;
+            g.connect (1, 0, 2, 0);   // audio -> env follower
+            g.connect (1, 0, 7, 0);   // dry -> mux A
+            g.connect (1, 0, 6, 0);   // dry -> fuzz
+            g.connect (6, 0, 7, 1);   // fuzz -> mux B
+            g.connect (2, 0, 3, 0);   // env -> comparator
+            g.connect (3, 0, 5, 0);   // comparator -> AND
+            g.connect (4, 0, 5, 1);   // clock -> AND
+            g.connect (5, 0, 7, 2);   // AND -> mux selector
+            g.connect (7, 0, 8, 0);
+            g.connect (7, 0, 8, 1);
+            d->effectsGraph = g.toJSON();
+        }
+
         StickyNote note;
         note.text = "Tutorial 8: Pattern Slicer\n\nAn advanced logic-controlled gated fuzz!\n\n- The Envelope Follower + Comparator detect when you are actively playing a note.\n- The Clock Node generates steady rhythmic gate pulses.\n- We combine these via an AND Gate: slicing is active ONLY when you are actively playing AND the clock pulse is high.\n- The AND Gate output drives a Multiplexer (Mux), switching between Dry and Fuzz paths.";
         note.bounds = { 550, 100, 340, 255 };
@@ -1748,6 +1889,34 @@ namespace FactoryDesigns
         d->mappings.push_back({"knob_1", "2_drive"}); // node 2 = Expression
         d->mappings.push_back({"knob_2", "2_rate"});  // node 2 = Expression
         d->mappings.push_back({"knob_3", "2_mix"});   // node 2 = Expression
+
+        {
+            DSPGraph g;
+            g.addNode (createNodeByType ("audio_input"), 1);
+            g.addNode (createNodeByType ("expression"), 2);
+            g.addNode (createNodeByType ("audio_output"), 3);
+            if (auto* expr = dynamic_cast<ExpressionNode*> (g.getNode (2)))
+            {
+                expr->setExpression (
+                    "@inputs in\n"
+                    "@outputs out\n"
+                    "@parameters drive rate mix\n"
+                    "folder = sin(in * drive)\n"
+                    "carrier = sin(t * rate * 6.28318)\n"
+                    "modulator = folder * carrier\n"
+                    "out = lerp(in, modulator, mix)");
+                expr->getParam ("drive")->set (3.0f);
+                expr->getParam ("rate")->set (5.0f);
+                expr->getParam ("mix")->set (0.5f);
+            }
+            g.getNode (1)->visualX = 100; g.getNode (1)->visualY = 200;
+            g.getNode (2)->visualX = 350; g.getNode (2)->visualY = 200;
+            g.getNode (3)->visualX = 600; g.getNode (3)->visualY = 200;
+            g.connect (1, 0, 2, 0);
+            g.connect (2, 0, 3, 0);
+            g.connect (2, 0, 3, 1);
+            d->effectsGraph = g.toJSON();
+        }
 
         StickyNote note;
         note.text = "Tutorial 9: Scriptable Wave Folder\n\nWelcome to scriptable modular synthesis!\n\n- The active DSP of this pedal is driven entirely by a LUA-compiled Expression script.\n- Tweak the knobs on the chassis to see the drive, rate, and mix parameters scale the variables inside the code editor in real-time.\n- Explore the code inside the Code/DSP editor tab and feel free to rewrite the math equations!";

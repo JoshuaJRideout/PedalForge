@@ -343,32 +343,32 @@ inline std::vector<PedalInfo> getFactoryPedals()
         //  Clean Boost / Tremolo / Delay basics, which now carry teaching notes.)
         { "Filter Sweep", "Tutorial",   1, 2, 2,
           juce::Colour (0xFF93C5FD),    // light blue
-          [] { return GraphPedalFactory::createTutorialFilterSweep(); },
+          [] { return processorFromDeclaredGraph ("Filter Sweep", FactoryDesigns::createTutorialFilterSweep); },
           [] { return loadDesignOrDefault("Filter Sweep", FactoryDesigns::createTutorialFilterSweep); } },
 
         { "Mini Synth",   "Tutorial",   1, 2, 4,
           juce::Colour (0xFFC084FC),    // purple
-          [] { return GraphPedalFactory::createTutorialMiniSynth(); },
+          [] { return processorFromDeclaredGraph ("Mini Synth", FactoryDesigns::createTutorialMiniSynth); },
           [] { return loadDesignOrDefault("Mini Synth", FactoryDesigns::createTutorialMiniSynth); } },
 
         { "Envelope Filter", "Tutorial", 1, 2, 3,
           juce::Colour (0xFFA7F3D0),    // pastel mint
-          [] { return GraphPedalFactory::createTutorialEnvelopeFilter(); },
+          [] { return processorFromDeclaredGraph ("Envelope Filter", FactoryDesigns::createTutorialEnvelopeFilter); },
           [] { return loadDesignOrDefault("Envelope Filter", FactoryDesigns::createTutorialEnvelopeFilter); } },
 
         { "Step Sequencer Filter", "Tutorial", 1, 2, 2,
           juce::Colour (0xFF93C5FD),    // pastel blue
-          [] { return GraphPedalFactory::createTutorialStepSequencer(); },
+          [] { return processorFromDeclaredGraph ("Step Sequencer Filter", FactoryDesigns::createTutorialStepSequencer); },
           [] { return loadDesignOrDefault("Step Sequencer Filter", FactoryDesigns::createTutorialStepSequencer); } },
 
         { "Pattern Slicer", "Tutorial", 1, 2, 3,
           juce::Colour (0xFFFDE047),    // pastel yellow
-          [] { return GraphPedalFactory::createTutorialPatternSlicer(); },
+          [] { return processorFromDeclaredGraph ("Pattern Slicer", FactoryDesigns::createTutorialPatternSlicer); },
           [] { return loadDesignOrDefault("Pattern Slicer", FactoryDesigns::createTutorialPatternSlicer); } },
 
         { "Wave Folder", "Tutorial", 1, 2, 3,
           juce::Colour (0xFFC084FC),    // pastel purple
-          [] { return GraphPedalFactory::createTutorialWaveFolder(); },
+          [] { return processorFromDeclaredGraph ("Wave Folder", FactoryDesigns::createTutorialWaveFolder); },
           [] { return loadDesignOrDefault("Wave Folder", FactoryDesigns::createTutorialWaveFolder); } },
 
         // ─── MIDI & CV ─────────────────────────────────────────────────────
