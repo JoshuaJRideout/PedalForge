@@ -1319,7 +1319,65 @@ public:
         setupEditor (sensitivityEditor);
 
         setupCombo (overlayPageCombo);
+
+        // ── Style engine (pedal-level): kit dropdown + colorway swatch ──
+        setupCombo (styleKitCombo);
+        styleKitCombo.clear (juce::dontSendNotification);
+        styleKitCombo.addItem ("Default", 1);
+        {
+            int id = 2;
+            for (auto* k : pf::StyleKitRegistry::kits())
+                if (k != nullptr) styleKitCombo.addItem (k->getId(), id++);
+        }
+
+        colorwaySwatchBtn.onClick = [this] { pickColorway(); };
+        addChildComponent (colorwaySwatchBtn);
+
+        colorwayClearBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+        colorwayClearBtn.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::textPrimary);
+        colorwayClearBtn.onClick = [this] {
+            if (! canvas) return;
+            canvas->colorwaySeed = 0;
+            colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
+            canvas->repaint();
+        };
+        addChildComponent (colorwayClearBtn);
     }
+
+    // Colour picker bound to the pedal's colorway seed (Tint mode).
+    void pickColorway()
+    {
+        if (! canvas) return;
+        auto* picker = new juce::ColourSelector (
+            juce::ColourSelector::showColourAtTop
+            | juce::ColourSelector::showSliders
+            | juce::ColourSelector::showColourspace);
+        picker->setCurrentColour (canvas->colorwaySeed != 0
+            ? juce::Colour ((juce::uint32) (juce::int64) canvas->colorwaySeed)
+            : juce::Colour (0xFF007DFF));
+        picker->setSize (240, 280);
+        picker->addChangeListener (new ColorwayListener (*this));
+        juce::CallOutBox::launchAsynchronously (std::unique_ptr<juce::Component> (picker),
+                                                colorwaySwatchBtn.getScreenBounds(), nullptr);
+    }
+
+    struct ColorwayListener : public juce::ChangeListener
+    {
+        PropertiesPanel& panel;
+        ColorwayListener (PropertiesPanel& p) : panel (p) {}
+        void changeListenerCallback (juce::ChangeBroadcaster* source) override
+        {
+            if (auto* picker = dynamic_cast<juce::ColourSelector*> (source))
+            {
+                if (! panel.canvas) return;
+                auto col = picker->getCurrentColour();
+                panel.canvas->colorwaySeed = (juce::int64) (juce::int32) col.getARGB();
+                panel.canvas->colorwayMode = 1;  // Tint
+                panel.colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId, col);
+                panel.canvas->repaint();
+            }
+        }
+    };
 
     // Default starting location for image pickers — the user's already-
     // imported Library/Images folder. Falls back to home if it doesn't
@@ -1742,6 +1800,13 @@ public:
             btnImageMain.setBounds (m, y, getWidth()-m*2, 24);
             y += 30;
             btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
+
+            // Style engine row: STYLE KIT dropdown, then COLORWAY swatch + Clear.
+            y += 30 + 18;  // gap + room for the "STYLE KIT" label drawn in paint()
+            styleKitCombo.setBounds (m, y, getWidth()-m*2, 24);
+            y = styleKitCombo.getBottom() + 18;  // room for "COLORWAY" label
+            colorwaySwatchBtn.setBounds (m, y, getWidth()-m*2 - 64, 24);
+            colorwayClearBtn.setBounds (colorwaySwatchBtn.getRight() + 8, y, 56, 24);
         }
         else if (sel.size() == 1)
         {
@@ -1846,6 +1911,16 @@ public:
     void comboBoxChanged (juce::ComboBox* box) override
     {
         if (canvas == nullptr) return;
+
+        // Pedal-level StyleKit picker (item 1 = Default -> "default").
+        if (box == &styleKitCombo)
+        {
+            canvas->styleKit = (styleKitCombo.getSelectedId() <= 1)
+                                 ? juce::String ("default") : styleKitCombo.getText();
+            canvas->repaint();
+            return;
+        }
+
         auto& sel = canvas->getSelectedIndices();
         if (sel.size() == 1)
         {
