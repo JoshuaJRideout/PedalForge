@@ -97,6 +97,10 @@ public:
     juce::String listWikiPages() override;
     juce::String readWikiPage (const juce::String& pageId) override;
     juce::String openWikiPage (const juce::String& pageId) override;
+    juce::String listStyleKits() override;
+    bool setPedalStyle (const juce::String& uuid, const juce::var& styleKit,
+                        const juce::var& colorway, const juce::var& colorwayMode,
+                        juce::String& errorOut) override;
 
 
 private:

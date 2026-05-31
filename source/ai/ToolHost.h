@@ -176,5 +176,14 @@ namespace pf::ai
         virtual juce::String listWikiPages() = 0;
         virtual juce::String readWikiPage (const juce::String& pageId) = 0;   // markdown text for the agent
         virtual juce::String openWikiPage (const juce::String& pageId) = 0;   // navigate the user's view
+
+        // STYLE ENGINE — enumerate registered StyleKits; set a pedal's kit + colorway.
+        // For setPedalStyle pass juce::var() (void) for any field to leave it unchanged.
+        virtual juce::String listStyleKits() = 0;
+        virtual bool setPedalStyle (const juce::String& uuid,
+                                    const juce::var& styleKit,
+                                    const juce::var& colorway,
+                                    const juce::var& colorwayMode,
+                                    juce::String& errorOut) = 0;
     };
 }

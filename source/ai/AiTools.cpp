@@ -356,6 +356,23 @@ std::vector<ToolDef> buildToolDefs()
         "help them.",
         schemaObject ({ { "page", stringProp ("Wiki page id from list_wiki_pages") } }, { "page" }) });
 
+    defs.push_back ({ "list_style_kits",
+        "List the registered control StyleKits (visual themes) a pedal's style "
+        "can use, as JSON [{id, signatureTypes}]. 'default' is always available.",
+        schemaObject ({}, {}) });
+    defs.push_back ({ "set_pedal_style",
+        "Set a pedal's visual style: which StyleKit renders its controls and an "
+        "optional colorway (one seed colour recolours the whole faceplate). "
+        "styleKit = a kit id from list_style_kits ('default' = built-in look). "
+        "colorway = a hex colour like '#FF007DFF' (ARGB) or '#007DFF' (RGB), or "
+        "'' to clear it. colorwayMode = 'tint' or 'semantic'. Omit any field to "
+        "leave it unchanged. Undoable (Cmd-Z).",
+        schemaObject ({ { "uuid", stringProp ("The pedal design's uuid") },
+                        { "styleKit", stringProp ("StyleKit id, or 'default'") },
+                        { "colorway", stringProp ("Hex colour seed, or '' to clear") },
+                        { "colorwayMode", stringProp ("'tint' or 'semantic'") } },
+                      { "uuid" }) });
+
     return defs;
 }
 
@@ -644,6 +661,25 @@ static ToolResult dispatchImpl (ToolHost& host, const ToolCall& call)
         else if (mode == "fx") r.content = host.runFxScript (uuid, src);
         else if (mode == "dsp") r.content = host.runDspScript (uuid, src);
         else return fail ("Unknown mode '" + mode + "' (use board|pedal|fx|dsp)");
+        return r;
+    }
+
+    if (call.name == "list_style_kits") { r.content = host.listStyleKits(); return r; }
+    if (call.name == "set_pedal_style")
+    {
+        auto uuid = argStr (call, "uuid");
+        if (uuid.isEmpty()) return fail ("Missing 'uuid'");
+        // Present key -> set it; absent key -> juce::var() (void) leaves unchanged.
+        // An empty-string colorway is meaningful ("clear"), so distinguish via hasProperty.
+        auto field = [&] (const char* k) -> juce::var {
+            return call.input.hasProperty (k) ? call.input.getProperty (k, juce::var())
+                                              : juce::var();
+        };
+        juce::String err;
+        if (! host.setPedalStyle (uuid, field ("styleKit"), field ("colorway"),
+                                  field ("colorwayMode"), err))
+            return fail ("set_pedal_style failed: " + err);
+        r.content = "ok - style updated (user can undo with Cmd-Z)";
         return r;
     }
 
