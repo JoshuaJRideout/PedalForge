@@ -289,7 +289,35 @@ Response ClaudeCodeProvider::send (const juce::String& systemPrompt,
 
     if ((bool) parsed.getProperty ("is_error", false))
     {
-        resp.error = "Claude Code error: " + parsed.getProperty ("result", raw.substring (0, 300)).toString();
+        const auto resultText = parsed.getProperty ("result", raw.substring (0, 300)).toString();
+        const int  apiStatus  = (int) parsed.getProperty ("api_error_status", 0);
+
+        // Subscription login expired / missing. The headless `claude -p` we
+        // spawn cannot refresh an expired OAuth token (it has no interactive
+        // browser flow and can't always write the refreshed token back to the
+        // keychain), so it keeps presenting the stale token and the server
+        // returns 401. Detect that specifically so the UI can offer re-login
+        // instead of dumping raw JSON at the user.
+        const auto lower = resultText.toLowerCase();
+        const bool authFail = apiStatus == 401
+                           || lower.contains ("authentication_error")
+                           || lower.contains ("invalid authentication credentials")
+                           || lower.contains ("not logged in")
+                           || lower.contains ("please run /login");
+
+        if (authFail)
+        {
+            resp.authExpired = true;
+            resp.error = "Your Claude subscription login has expired. Sign in again to "
+                         "keep using the assistant - it uses your local Claude Code login, "
+                         "no API key needed.";
+            // A dead-auth session can't be resumed; force the next turn to start
+            // a fresh session once the user has re-authenticated.
+            resetSession();
+            return resp;
+        }
+
+        resp.error = "Claude Code error: " + resultText;
         return resp;
     }
 

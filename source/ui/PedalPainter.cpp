@@ -1,5 +1,6 @@
 #include "PedalPainter.h"
 #include "HardwareDrawing.h"
+#include "StyleKit.h"
 
 namespace PedalPainter
 {
@@ -71,6 +72,21 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
 
 
 
+    // Resolve the pedal's StyleKit + colorway once for this paint pass.
+    // Phase 0: the default kit ignores the colorway, so this is inert until a
+    // themed kit is registered — wiring it now means themed kits + colorways
+    // apply with no further call-site changes.
+    const juce::String pedalKit = design->styleKit;
+    pf::Colorway colorway;
+    if (design->colorwaySeed != 0)
+    {
+        juce::Colour seed ((juce::uint32) (juce::int64) design->colorwaySeed);
+        if (design->colorwayMode == 1)
+            colorway = pf::Colorway::tintFromSeed (seed);
+        else
+            { colorway.mode = pf::Colorway::Mode::Semantic; colorway.accent = seed; }
+    }
+
     // Draw each control from the design
     for (const auto& ctrl : design->controls)
     {
@@ -96,41 +112,19 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         styles.fontStyle = ctrl.fontStyle;
         styles.rotationRangeDeg = ctrl.rotationRange;
 
-        if (ctrl.type == "knob")
-            HardwareDrawing::drawKnob (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "switch")
-            HardwareDrawing::drawSwitch (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "selector")
-            HardwareDrawing::drawSelector (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "footswitch")
-            HardwareDrawing::drawFootswitch (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "led")
-            HardwareDrawing::drawLED (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "fader")
-            HardwareDrawing::drawFader (g, ctrlBounds, val, &styles);
-        // Display / Gadget types — custom image = frame, overlay still works
-        else if (ctrl.type == "7seg")
-            HardwareDrawing::draw7Seg (g, ctrlBounds, val * 999.0f, 3, juce::Colour (0xFFFF3333), &styles);
-        else if (ctrl.type == "display")
-            HardwareDrawing::drawNumericDisplay (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "vu_meter")
-            HardwareDrawing::drawVUMeter (g, ctrlBounds, val, &styles);
-        else if (ctrl.type == "indicator")
-            HardwareDrawing::drawIndicator (g, ctrlBounds, val, 0.6f, 0.85f, &styles);
-        else if (ctrl.type == "oscilloscope")
+        // Core hardware + display controls route through the StyleKit engine.
+        // Phase 0: the default kit is pixel-identical to the prior dispatch.
+        // Text screens, loaders and labels keep their bespoke live rendering below.
+        if (ctrl.type == "knob" || ctrl.type == "switch" || ctrl.type == "selector"
+            || ctrl.type == "footswitch" || ctrl.type == "led" || ctrl.type == "fader"
+            || ctrl.type == "xypad" || ctrl.type == "joystick"
+            || ctrl.type == "7seg" || ctrl.type == "display" || ctrl.type == "vu_meter"
+            || ctrl.type == "indicator" || ctrl.type == "oscilloscope" || ctrl.type == "rgb_led")
         {
-            const float* waveData = nullptr;
-            int numSamples = 0;
-            auto dataIt = controlData.find (ctrl.controlID);
-            if (dataIt != controlData.end() && !dataIt->second.empty())
-            {
-                waveData = dataIt->second.data();
-                numSamples = (int)dataIt->second.size();
-            }
-            HardwareDrawing::drawOscilloscope (g, ctrlBounds, waveData, numSamples, &styles);
+            pf::ControlState st = pf::buildControlState (ctrl.controlID, val, &controlData, &controlTexts, &controlValues);
+            const juce::String effKit = ctrl.style.isNotEmpty() ? ctrl.style : pedalKit;
+            pf::StyleKitRegistry::draw (g, effKit, ctrl.type, ctrlBounds, st, colorway, &styles);
         }
-        else if (ctrl.type == "rgb_led")
-            HardwareDrawing::drawRGBLED (g, ctrlBounds, val, val * 0.5f, 1.0f - val, &styles);
         else if (ctrl.type == "easy_display")
         {
             // Easy Display: the node renders its menu (cursor + live values) into

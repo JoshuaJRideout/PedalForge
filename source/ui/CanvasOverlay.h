@@ -4,6 +4,7 @@
 #include "../engine/AudioGraphEngine.h"
 #include "../midi/MidiLearn.h"
 #include "HardwareDrawing.h"
+#include "StyleKit.h"
 #include "PedalPainter.h"
 #include "../dsp/PluginHostNode.h"
 #include "DynamicDisplayComponent.h"
@@ -322,18 +323,20 @@ public:
             styles.fontSize = ctrl.fontSize > 0 ? (ctrl.fontSize * sc) : 0.0f;
             styles.rotationRangeDeg = ctrl.rotationRange;
 
-            if (ctrl.type == "knob" || ctrl.type == "slider")
-                HardwareDrawing::drawKnob(g, ctrlBounds, val, &styles);
-            else if (ctrl.type == "fader")
-                HardwareDrawing::drawFader(g, ctrlBounds, val, &styles);
-            else if (ctrl.type == "switch" || ctrl.type == "footswitch" || ctrl.type == "led_toggle")
+            // Core hardware controls route through the StyleKit engine (Phase 0:
+            // default kit is pixel-identical). Button / loader / text / label
+            // cases below stay bespoke — they read live controlTexts.
+            if (ctrl.type == "knob" || ctrl.type == "slider" || ctrl.type == "fader"
+                || ctrl.type == "switch" || ctrl.type == "footswitch"
+                || ctrl.type == "led_toggle" || ctrl.type == "rgb_led"
+                || ctrl.type == "xypad" || ctrl.type == "joystick")
             {
-                if (ctrl.type == "led_toggle")
-                    HardwareDrawing::drawRGBLED(g, ctrlBounds, val > 0.5f ? 1.0f : 0.0f, val > 0.5f ? 1.0f : 0.0f, 0.0f, &styles);
-                else if (ctrl.type == "footswitch")
-                    HardwareDrawing::drawFootswitch(g, ctrlBounds, val > 0.5f, &styles);
-                else
-                    HardwareDrawing::drawSwitch(g, ctrlBounds, val > 0.5f, &styles);
+                const juce::String effKit = ctrl.style.isNotEmpty() ? ctrl.style : juce::String ("default");
+                pf::ControlState st = pf::buildControlState (ctrl.controlID, val,
+                                                             &targetInstance->controlData,
+                                                             &targetInstance->controlTexts,
+                                                             &targetInstance->controlValues);
+                pf::StyleKitRegistry::draw (g, effKit, ctrl.type, ctrlBounds, st, pf::Colorway{}, &styles);
             }
             else if (ctrl.type == "button" || ctrl.type == "file_loader" || ctrl.type == "library_loader" || ctrl.type == "overlay_launcher" || ctrl.type == "plugin_browser")
             {
@@ -346,8 +349,6 @@ public:
                 g.setColour(juce::Colours::white);
                 g.drawText(txt, ctrlBounds, juce::Justification::centred, true);
             }
-            else if (ctrl.type == "rgb_led")
-                HardwareDrawing::drawRGBLED(g, ctrlBounds, val, val * 0.5f, 1.0f - val, &styles);
             else if (ctrl.type == "text_screen" || ctrl.type == "console")
             {
                 juce::String txt = ctrl.label.isNotEmpty() ? ctrl.label : "Ready";

@@ -70,6 +70,7 @@ namespace pf::ai
     {
         bool ok = false;
         juce::String error;          // populated when ok == false
+        bool authExpired = false;    // failure was an expired/missing subscription login (401 / not logged in)
         juce::String text;           // assistant text content
         std::vector<ToolCall> toolCalls;
         juce::String stopReason;     // "end_turn", "tool_use", "max_tokens", …

@@ -28,6 +28,7 @@ namespace pf::ai
         std::function<void (const juce::String&)>   onAssistantText;   // assistant text (may stream)
         std::function<void (const juce::String&)>   onToolActivity;    // human-readable "calling X…"
         std::function<void (const juce::String&)>   onError;
+        std::function<void (const juce::String&)>   onAuthExpired;     // subscription login expired/missing — UI should offer re-login
         std::function<void()>                       onTurnFinished;
 
         //======================================================================

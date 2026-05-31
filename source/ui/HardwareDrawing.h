@@ -366,6 +366,89 @@ inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float val
     g.fillRoundedRectangle (capArea, capCorner);
 }
 
+/** XY Pad — 2D control surface. x,y in 0..1 (y measured bottom-up, so y=1 is
+    the top). Draws a recessed pad, crosshairs and a draggable puck. */
+inline void drawXYPad (juce::Graphics& g, juce::Rectangle<float> area,
+                       float x = 0.5f, float y = 0.5f, const CustomStyles* custom = nullptr)
+{
+    if (custom != nullptr && custom->imageMain.isNotEmpty())
+    {
+        juce::Image img = juce::ImageCache::getFromFile (juce::File (custom->imageMain));
+        if (!img.isNull()) drawImageScaled (g, img, area, custom->stretchImage);
+    }
+    else
+    {
+        // Recessed pad
+        float corner = juce::jmax (3.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.06f);
+        juce::ColourGradient bg (juce::Colour (0xFF14141C), area.getX(), area.getY(),
+                                 juce::Colour (0xFF24242E), area.getX(), area.getBottom(), false);
+        g.setGradientFill (bg);
+        g.fillRoundedRectangle (area, corner);
+        g.setColour (juce::Colour (0xFF3A3A4A));
+        g.drawRoundedRectangle (area, corner, 1.0f);
+    }
+
+    auto pad = area.reduced (juce::jmax (2.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.06f));
+    const float cx = juce::jlimit (0.0f, 1.0f, x);
+    const float cy = juce::jlimit (0.0f, 1.0f, y);
+    const float px = pad.getX() + cx * pad.getWidth();
+    const float py = pad.getBottom() - cy * pad.getHeight();   // y up
+
+    // Crosshair guides through the puck
+    g.setColour (juce::Colour (0x22FFFFFF));
+    g.drawVerticalLine ((int) px, pad.getY(), pad.getBottom());
+    g.drawHorizontalLine ((int) py, pad.getX(), pad.getRight());
+
+    // Puck
+    juce::Colour puck = custom ? custom->customColour : juce::Colour (0xFFF59E0B);
+    float r = juce::jmax (3.0f, juce::jmin (pad.getWidth(), pad.getHeight()) * 0.09f);
+    g.setGradientFill (juce::ColourGradient (puck.brighter (0.3f), px, py - r,
+                                             puck.darker (0.3f),  px, py + r, false));
+    g.fillEllipse (px - r, py - r, r * 2, r * 2);
+    g.setColour (juce::Colours::white.withAlpha (0.5f));
+    g.drawEllipse (px - r, py - r, r * 2, r * 2, 1.0f);
+}
+
+/** Joystick — self-centering 2-axis stick. x,y in 0..1 with 0.5,0.5 = centre.
+    Draws a round gate, centre detent ring, and the stick knob offset from
+    centre by the deflection. */
+inline void drawJoystick (juce::Graphics& g, juce::Rectangle<float> area,
+                          float x = 0.5f, float y = 0.5f, const CustomStyles* custom = nullptr)
+{
+    const float cx = area.getCentreX(), cy = area.getCentreY();
+    const float rad = juce::jmin (area.getWidth(), area.getHeight()) * 0.46f;
+
+    // Gate ring
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xFF26262E), cx, cy - rad,
+                                             juce::Colour (0xFF0E0E14), cx, cy + rad, false));
+    g.fillEllipse (cx - rad, cy - rad, rad * 2, rad * 2);
+    g.setColour (juce::Colour (0xFF3A3A4A));
+    g.drawEllipse (cx - rad, cy - rad, rad * 2, rad * 2, 1.0f);
+    // Centre detent
+    g.setColour (juce::Colour (0x22FFFFFF));
+    g.drawEllipse (cx - rad * 0.12f, cy - rad * 0.12f, rad * 0.24f, rad * 0.24f, 1.0f);
+
+    // Deflection from centre (y up). Clamp the knob within the gate.
+    const float dx = (juce::jlimit (0.0f, 1.0f, x) - 0.5f) * 2.0f;
+    const float dy = (juce::jlimit (0.0f, 1.0f, y) - 0.5f) * 2.0f;
+    const float travel = rad * 0.62f;
+    const float kx = cx + dx * travel;
+    const float ky = cy - dy * travel;
+
+    // Shaft
+    g.setColour (juce::Colour (0xFF15151C));
+    g.drawLine (cx, cy, kx, ky, juce::jmax (2.0f, rad * 0.12f));
+
+    // Stick knob
+    juce::Colour knob = custom ? custom->customColour : juce::Colour (0xFF6B7280);
+    float kr = rad * 0.32f;
+    g.setGradientFill (juce::ColourGradient (knob.brighter (0.35f), kx, ky - kr,
+                                             knob.darker (0.4f),    kx, ky + kr, false));
+    g.fillEllipse (kx - kr, ky - kr, kr * 2, kr * 2);
+    g.setColour (juce::Colour (0x55FFFFFF));
+    g.fillEllipse (kx - kr * 0.5f, ky - kr * 0.6f, kr, kr * 0.7f);
+}
+
 inline void drawChassis (juce::Graphics& g, juce::Rectangle<float> area,
                          juce::Colour baseColour = juce::Colour (0xFF8A8A94), const CustomStyles* custom = nullptr)
 {
@@ -769,6 +852,8 @@ inline void drawForType (juce::Graphics& g, const juce::String& type,
                          juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr)
 {
     if (type == "knob")             drawKnob (g, area, value, custom);
+    else if (type == "xypad")       drawXYPad (g, area, value, value, custom);
+    else if (type == "joystick")    drawJoystick (g, area, value, value, custom);
     else if (type == "switch")      drawSwitch (g, area, value, custom);
     else if (type == "selector")    drawSelector (g, area, value, custom);
     else if (type == "led")         drawLED (g, area, value, custom);

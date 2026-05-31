@@ -137,6 +137,18 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
     keyBtn.onClick = [this] { showStatus(); };
     addAndMakeVisible (keyBtn);
 
+    // Shown only after an auth-expired error; opens an interactive re-login.
+    signInBtn.setTooltip ("Sign in to your Claude subscription to keep using the assistant");
+    signInBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xFF2563EB));
+    signInBtn.onClick = [this]
+    {
+        launchClaudeLogin();
+        signInBtn.setVisible (false);
+        provider.resetSession();   // next turn starts a fresh session post-login
+        resized();
+    };
+    addChildComponent (signInBtn);
+
     // Agent callbacks (fire on the message thread).
     agent->onTurnStarted   = [this] { updateBusyState (true); appendActivity ("...thinking"); };
     agent->onAssistantText = [this] (const juce::String& t)
@@ -154,6 +166,15 @@ AiAssistantPanel::AiAssistantPanel (pf::ai::ToolHost& h) : host (h)
         appendActivity (juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa0 ")) + e);
         pf::toastError ("AI: " + e);
         if (remoteActive) remoteResponse << juce::String (juce::CharPointer_UTF8 ("  \xe2\x9a\xa0 ERROR: ")) << e << "\n";
+    };
+    agent->onAuthExpired   = [this] (const juce::String& msg)
+    {
+        setExpanded (true);
+        appendActivity (juce::String (juce::CharPointer_UTF8 ("\xe2\x9a\xa0 ")) + msg);
+        pf::toastError ("AI: subscription login expired - sign in again.");
+        signInBtn.setVisible (true);
+        resized();
+        if (remoteActive) remoteResponse << "  AUTH EXPIRED: " << msg << "\n";
     };
     agent->onTurnFinished  = [this]
     {
@@ -251,6 +272,7 @@ void AiAssistantPanel::sendCurrent()
     setExpanded (true);
     appendTranscript ("You", text);
     input.clear();
+    if (signInBtn.isVisible()) { signInBtn.setVisible (false); resized(); }  // clear stale re-login prompt on a fresh attempt
     agent->sendUserMessage (text);
 }
 
@@ -263,6 +285,41 @@ void AiAssistantPanel::showStatus()
     else
         pf::toastWarn ("Claude Code not found. Install from claude.com/code and run "
                        "`claude` once to log in.");
+}
+
+//==============================================================================
+void AiAssistantPanel::launchClaudeLogin()
+{
+    auto bin = pf::ai::ClaudeCodeProvider::findClaudeBinary();
+    if (bin.isEmpty())
+    {
+        pf::toastWarn ("Claude Code not found. Install from claude.com/code, then run "
+                       "`claude` once to log in.");
+        return;
+    }
+
+   #if JUCE_MAC
+    // Open Terminal and run the interactive login. The browser-based OAuth flow
+    // and keychain write must happen in a real interactive process — the
+    // headless `claude -p` the agent uses can't do it. Single-quote the path so
+    // a space-containing path is safe; the shell command carries no double
+    // quotes, so it embeds cleanly in the AppleScript string literal.
+    const auto shellCmd = bin.quoted ('\'') + " /login";
+    juce::String appleScript;
+    appleScript << "tell application \"Terminal\"\n"
+                << "activate\n"
+                << "do script \"" << shellCmd << "\"\n"
+                << "end tell";
+    juce::ChildProcess osa;
+    osa.start (juce::StringArray { "/usr/bin/osascript", "-e", appleScript });
+   #else
+    // Best effort elsewhere: spawn the login directly (no controlling TTY, but
+    // the CLI prints a URL the user can open).
+    juce::ChildProcess proc;
+    proc.start (juce::StringArray { bin, "/login" });
+   #endif
+
+    pf::toastInfo ("Complete the Claude sign-in in Terminal, then press Send to retry.");
 }
 
 //==============================================================================
@@ -308,6 +365,14 @@ void AiAssistantPanel::resized()
     sendBtn.setBounds   (inputRow.removeFromRight (32));
     inputRow.removeFromRight (4);
     input.setBounds     (inputRow);
+
+    // Re-login affordance sits just above the input row when an auth error
+    // exposed it; otherwise it takes no space.
+    if (signInBtn.isVisible())
+    {
+        auto signRow = b.removeFromBottom (30).reduced (6, 2);
+        signInBtn.setBounds (signRow.removeFromLeft (160));
+    }
 
     if (expanded)
         transcript.setBounds (b.reduced (6, 6).withTrimmedBottom (2));

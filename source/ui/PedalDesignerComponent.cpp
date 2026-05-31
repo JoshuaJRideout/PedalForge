@@ -1,5 +1,6 @@
 #include "PedalDesignerComponent.h"
 #include "HardwareDrawing.h"
+#include "StyleKit.h"
 #include "../dsp/DSPGraph.h"
 #include "../dsp/PedalDesign.h"
 #include "../util/AppPaths.h"
@@ -52,7 +53,8 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        HardwareDrawing::drawForType (g, type, getLocalBounds().toFloat());
+        pf::StyleKitRegistry::draw (g, "default", type, getLocalBounds().toFloat(),
+                                    pf::ControlState (0.5f), pf::Colorway{}, nullptr);
         g.setColour (PedalForgeLookAndFeel::textSecondary);
         g.setFont (juce::FontOptions (10.0f));
         g.drawText (name, 0, getHeight() - 14, getWidth(), 14, juce::Justification::centredBottom);
@@ -142,6 +144,8 @@ public:
         if (type == "label") return 6.0f;
         if (type == "vu_meter") return 18.0f;
         if (type == "oscilloscope") return 15.0f;
+        if (type == "xypad") return 25.0f;
+        if (type == "joystick") return 22.0f;
         if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 8.0f;
         return 12.0f; // knob, switch, footswitch
     }
@@ -155,6 +159,8 @@ public:
         if (type == "label") return 25.0f;
         if (type == "vu_meter") return 6.0f;
         if (type == "oscilloscope") return 25.0f;
+        if (type == "xypad") return 25.0f;
+        if (type == "joystick") return 22.0f;
         if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 22.0f;
         return sizeForType (type);
     }
@@ -443,7 +449,8 @@ public:
             if (hw.isLocked && !selectedIndices.count(i))
                 g.setOpacity (0.55f);
 
-            HardwareDrawing::drawForType (g, hw.type, { hw.x, hw.y, hw.width, hw.height }, hw.value, &styles);
+            pf::StyleKitRegistry::draw (g, "default", hw.type, { hw.x, hw.y, hw.width, hw.height },
+                                        pf::ControlState (hw.value), pf::Colorway{}, &styles);
             g.setOpacity (1.0f);
 
             // ── Selection visuals ──
@@ -550,7 +557,8 @@ public:
             float sx = snapToGrid (dragPreviewCanvasX);
             float sy = snapToGrid (dragPreviewCanvasY);
             g.setOpacity (0.45f);
-            HardwareDrawing::drawForType (g, dragPreviewType, { sx, sy, pw, ph });
+            pf::StyleKitRegistry::draw (g, "default", dragPreviewType, { sx, sy, pw, ph },
+                                        pf::ControlState (0.5f), pf::Colorway{}, nullptr);
             g.setOpacity (1.0f);
             // Preview crosshair
             g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.4f));

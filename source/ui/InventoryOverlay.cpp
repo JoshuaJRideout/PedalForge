@@ -3,6 +3,7 @@
 #include "../util/AppPaths.h"
 #include <algorithm>
 #include "HardwareDrawing.h"
+#include "StyleKit.h"
 #include "PedalPainter.h"
 #include "../dsp/PedalDesign.h"
 #include "../dsp/NodeCatalog.h"
@@ -154,7 +155,8 @@ void InventoryOverlay::ItemGrid::GridCell::paint (juce::Graphics& g)
     // Draw the item visual
     if (item.mainCategory == "Parts" && item.hardwareType.isNotEmpty())
     {
-        HardwareDrawing::drawForType (g, item.hardwareType, inner.reduced (4.0f));
+        pf::StyleKitRegistry::draw (g, "default", item.hardwareType, inner.reduced (4.0f),
+                                    pf::ControlState (0.5f), pf::Colorway{}, nullptr);
     }
     else if (item.mainCategory == "Pedals" && item.pedalDesign != nullptr)
     {
@@ -358,7 +360,8 @@ void InventoryOverlay::PreviewPanel::paint (juce::Graphics& g)
         auto iconArea = previewArea.reduced (20).toFloat();
         float side = juce::jmin (iconArea.getWidth(), iconArea.getHeight());
         auto centered = juce::Rectangle<float> (side, side).withCentre (iconArea.getCentre());
-        HardwareDrawing::drawForType (g, currentItem->hardwareType, centered);
+        pf::StyleKitRegistry::draw (g, "default", currentItem->hardwareType, centered,
+                                    pf::ControlState (0.5f), pf::Colorway{}, nullptr);
     }
     else if (currentItem->mainCategory == "Pedals" && currentItem->pedalDesign != nullptr)
     {
@@ -561,6 +564,8 @@ void InventoryOverlay::buildItemDatabase()
         { "switch",      "Switch",      "Controls",    "Toggle switch. Maps to a binary on/off parameter." },
         { "selector",    "Selector",    "Controls",    "Rotary multi-position selector. Pairs with a Selector Node; defaults to 4 positions." },
         { "fader",       "Fader",       "Controls",    "Linear slider control. Maps to a continuous parameter (0-1)." },
+        { "xypad",       "XY Pad",      "Controls",    "Two-axis touch surface. Pairs with an XY Pad Node; outputs X and Y (0-1 each)." },
+        { "joystick",    "Joystick",    "Controls",    "Self-centering two-axis stick. Pairs with an XY Pad Node; centre = 0.5,0.5." },
         { "footswitch",  "Stomp",       "Controls",    "3PDT footswitch for bypass/engage control." },
         { "led",         "LED",         "Lights",      "Single-color LED indicator." },
         { "rgb_led",     "RGB LED",     "Lights",      "Full-color RGB LED indicator." },

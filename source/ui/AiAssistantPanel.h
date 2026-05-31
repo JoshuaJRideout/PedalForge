@@ -43,6 +43,9 @@ public:
 private:
     void sendCurrent();
     void showStatus();
+    /** Launch an interactive `claude /login` so the user can refresh an
+        expired subscription token (the headless agent path can't do this). */
+    void launchClaudeLogin();
     void appendTranscript (const juce::String& who, const juce::String& text);
     void appendActivity (const juce::String& line);
     void rebuildSystemPrompt();
@@ -57,6 +60,7 @@ private:
     juce::TextButton sendBtn   { juce::CharPointer_UTF8 ("\xe2\x86\x91") };  // ↑
     juce::TextButton expandBtn { juce::CharPointer_UTF8 ("\xe2\x8c\x84") };  // ⌄
     juce::TextButton keyBtn    { juce::CharPointer_UTF8 ("\xe2\x93\x98") };  // ⓘ status/help
+    juce::TextButton signInBtn { "Sign in to Claude" };  // shown only when the subscription login expired
     juce::Label      hintLabel;
 
     bool expanded = false;

@@ -84,6 +84,7 @@ void AiAgent::run()
     auto fireText   = [this] (const juce::String& t) { auto cb = onAssistantText; if (cb) post ([cb, t] { cb (t); }); };
     auto fireTool   = [this] (const juce::String& t) { auto cb = onToolActivity; if (cb) post ([cb, t] { cb (t); }); };
     auto fireError  = [this] (const juce::String& e) { auto cb = onError;        if (cb) post ([cb, e] { cb (e); }); };
+    auto fireAuth   = [this] (const juce::String& e) { auto cb = onAuthExpired;  if (cb) post ([cb, e] { cb (e); }); };
     auto fireFinish = [this]                         { auto cb = onTurnFinished; if (cb) post ([cb]     { cb(); }); };
     auto fireStart  = [this]                         { auto cb = onTurnStarted;  if (cb) post ([cb]     { cb(); }); };
 
@@ -104,7 +105,10 @@ void AiAgent::run()
 
         if (! resp.ok)
         {
-            fireError (resp.error.isNotEmpty() ? resp.error : juce::String ("Unknown provider error"));
+            if (resp.authExpired)
+                fireAuth (resp.error.isNotEmpty() ? resp.error : juce::String ("Subscription login expired."));
+            else
+                fireError (resp.error.isNotEmpty() ? resp.error : juce::String ("Unknown provider error"));
             break;
         }
 

@@ -88,6 +88,21 @@ struct PedalDesign
         float fontSize = 0.0f;            // 0 = auto scale
         int numLines = 1;                 // for multi-line displays
         bool isLocked = false;            // if true, ignores canvas interaction
+
+        // Style engine (docs/control-catalog.md): which StyleKit renders this
+        // control. Empty = inherit the pedal-level styleKit. "default" = the
+        // built-in look. Lets a single control opt into a different kit.
+        juce::String style;
+
+        // Cross-cutting concepts (docs/control-catalog.md §5). Data only for now
+        // — wired to interaction/render in Phase 3.
+        //  guard: safety interlock requiring an arm gesture before actuation.
+        //    0 = none, 1 = flip cover, 2 = hold-to-confirm, 3 = keylock.
+        int guard = 0;
+        //  shiftBinding: if set, this control re-targets others by page/mode
+        //    ("one control, many params" — F1 ALT, MFD soft keys). Names the
+        //    shift group it drives or belongs to. Empty = no shift behaviour.
+        juce::String shiftBinding;
     };
 
     float chassisW = 200.0f;
@@ -95,6 +110,11 @@ struct PedalDesign
     juce::Colour chassisColour { 0xFF8A8A94 };  // Silver default
     juce::String chassisImage;                  // Custom background image
     std::vector<Control> controls;
+
+    // ── Style engine (docs/control-catalog.md) ── per-pedal kit + colorway.
+    juce::String styleKit = "default";   // which StyleKit renders this pedal
+    juce::int64  colorwaySeed = 0;       // 0 = none; else ARGB of the Tint/accent seed
+    int          colorwayMode = 0;       // 0 = Semantic, 1 = Tint
 
     //==========================================================================
     // Canvas Overlays — Secondary full-screen or large pop-up UI panels
@@ -180,6 +200,9 @@ struct PedalDesign
         root->setProperty ("chassisH",  chassisH);
         root->setProperty ("chassisColour", (juce::int64) chassisColour.getARGB());
         root->setProperty ("chassisImage", pf::paths::normalizePath (chassisImage));
+        if (styleKit.isNotEmpty() && styleKit != "default") root->setProperty ("styleKit", styleKit);
+        if (colorwaySeed != 0) root->setProperty ("colorwaySeed", colorwaySeed);
+        if (colorwayMode != 0) root->setProperty ("colorwayMode", colorwayMode);
 
         // Controls
         juce::Array<juce::var> ctrlArr;
@@ -218,6 +241,12 @@ struct PedalDesign
             co->setProperty ("isLocked", c.isLocked);
             if (c.overlayPage.isNotEmpty())
                 co->setProperty ("overlayPage", c.overlayPage);
+            if (c.style.isNotEmpty() && c.style != "default")
+                co->setProperty ("style", c.style);
+            if (c.guard != 0)
+                co->setProperty ("guard", c.guard);
+            if (c.shiftBinding.isNotEmpty())
+                co->setProperty ("shiftBinding", c.shiftBinding);
 
             ctrlArr.add (juce::var (co));
         }
@@ -344,6 +373,9 @@ struct PedalDesign
             if (root->hasProperty ("chassisColour"))
                 design.chassisColour = juce::Colour ((juce::uint32)(juce::int64) root->getProperty ("chassisColour"));
             design.chassisImage = pf::paths::expandPath (root->getProperty ("chassisImage").toString());
+            if (root->hasProperty ("styleKit")) design.styleKit = root->getProperty ("styleKit").toString();
+            design.colorwaySeed = (juce::int64) root->getProperty ("colorwaySeed");
+            design.colorwayMode = (int) root->getProperty ("colorwayMode");
 
             // Controls
             if (auto* arr = root->getProperty ("controls").getArray())
@@ -374,6 +406,9 @@ struct PedalDesign
                         if (co->hasProperty("positions"))     c.positions     = (int) co->getProperty ("positions");
                         if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
                         if (co->hasProperty("overlayPage"))   c.overlayPage   = co->getProperty ("overlayPage").toString();
+                        if (co->hasProperty("style"))         c.style         = co->getProperty ("style").toString();
+                        if (co->hasProperty("guard"))         c.guard         = (int) co->getProperty ("guard");
+                        if (co->hasProperty("shiftBinding"))  c.shiftBinding  = co->getProperty ("shiftBinding").toString();
                         design.controls.push_back (c);
                     }
                 }
