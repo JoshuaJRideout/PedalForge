@@ -137,6 +137,9 @@ public:
     // default look. Built into a pf::Colorway in paint().
     juce::int64 colorwaySeed = 0;
     int         colorwayMode = 0;   // 0 = Semantic, 1 = Tint
+    // Which StyleKit renders this pedal's controls in the designer (mirrors
+    // PedalDesign::styleKit). "default" = built-in look. Empty also = default.
+    juce::String styleKit { "default" };
 
     // Component sizes per type in mm
     static float sizeForType (const juce::String& type)
@@ -469,7 +472,7 @@ public:
             if (hw.isLocked && !selectedIndices.count(i))
                 g.setOpacity (0.55f);
 
-            pf::StyleKitRegistry::draw (g, "default", hw.type, { hw.x, hw.y, hw.width, hw.height },
+            pf::StyleKitRegistry::draw (g, styleKit, hw.type, { hw.x, hw.y, hw.width, hw.height },
                                         pf::ControlState (hw.value), canvasColorway, &styles);
             g.setOpacity (1.0f);
 
@@ -1522,9 +1525,28 @@ public:
             colourCombo.setVisible (false);
             rotationEditor.setVisible (false);
             sensitivityEditor.setVisible (false);
+
+            // Style engine: kit picker + colorway swatch are pedal-level.
+            styleKitCombo.setVisible (true);
+            {
+                const juce::String kit = canvas->styleKit.isNotEmpty() ? canvas->styleKit : juce::String ("default");
+                int selId = 1;  // Default
+                for (int i = 0; i < styleKitCombo.getNumItems(); ++i)
+                    if (styleKitCombo.getItemText (i) == kit) { selId = styleKitCombo.getItemId (i); break; }
+                styleKitCombo.setSelectedId (selId, juce::dontSendNotification);
+            }
+            colorwaySwatchBtn.setVisible (true);
+            colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId,
+                canvas->colorwaySeed != 0
+                    ? juce::Colour ((juce::uint32) (juce::int64) canvas->colorwaySeed)
+                    : PedalForgeLookAndFeel::bgLight);
+            colorwayClearBtn.setVisible (true);
         }
         else
         {
+            styleKitCombo.setVisible (false);
+            colorwaySwatchBtn.setVisible (false);
+            colorwayClearBtn.setVisible (false);
             // Multiple items selected
             overlayPageCombo.setVisible (false);
             labelEditor.setVisible (false);
@@ -1887,6 +1909,9 @@ private:
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor, categoryEditor, tagsEditor;
     juce::ComboBox fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
+    // Style engine (pedal-level): StyleKit picker + colorway seed swatch.
+    juce::ComboBox styleKitCombo;
+    juce::TextButton colorwaySwatchBtn, colorwayClearBtn { "Clear" };
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
     juce::TextButton btnImageTrack { "Set Track Image..." };
@@ -2615,6 +2640,7 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         canvas->chassisImage = design.chassisImage;
         canvas->colorwaySeed = design.colorwaySeed;
         canvas->colorwayMode = design.colorwayMode;
+        canvas->styleKit = design.styleKit.isNotEmpty() ? design.styleKit : juce::String ("default");
         canvas->pedalUuid = design.uuid;
         canvas->pedalName = design.name;
         canvas->pedalAuthor = design.author;
