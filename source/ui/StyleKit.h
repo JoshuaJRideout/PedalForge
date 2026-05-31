@@ -103,6 +103,14 @@ public:
         else if (type == "pixel_display")                 HardwareDrawing::drawPixelDisplay (g, area, state.buffer, 32, 16, false, custom);
         else if (type == "graphic")                       HardwareDrawing::drawGraphic (g, area, custom);
         else if (type == "label")                         HardwareDrawing::drawTextLabel (g, area, state.text.isEmpty() ? juce::String ("LABEL") : state.text[0], custom);
+        else if (type == "chassis")
+        {
+            // Element zero: the enclosure. Colorway (when set) drives the body
+            // colour; otherwise fall back to the design's stored chassis colour.
+            const juce::Colour base = (cw != nullptr) ? cw->accent
+                                    : (custom != nullptr ? custom->customColour : juce::Colour (0xFF8A8A94));
+            HardwareDrawing::drawChassis (g, area, base, custom);
+        }
         else if (type == "file_loader" || type == "file_browser" || type == "plugin_browser"
                  || type == "library_loader" || type == "overlay_launcher")
         {

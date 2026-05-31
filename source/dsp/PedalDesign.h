@@ -89,10 +89,16 @@ struct PedalDesign
         int numLines = 1;                 // for multi-line displays
         bool isLocked = false;            // if true, ignores canvas interaction
 
-        // Style engine (docs/control-catalog.md): which StyleKit renders this
-        // control. Empty = inherit the pedal-level styleKit. "default" = the
-        // built-in look. Lets a single control opt into a different kit.
+        // Style engine (docs/control-catalog.md): per-control look. `style` =
+        // which StyleKit renders this control (empty/"default" = built-in look,
+        // else a registered kit id e.g. "neon"). `colorwaySeed`/`colorwayMode`
+        // = this control's own colour theme (0 seed = the kit's own palette;
+        // mode 0 = Semantic, 1 = Tint). Style + colour are PER-CONTROL — they
+        // expand the palette of control looks a designer can build with, not a
+        // per-pedal reskin.
         juce::String style;
+        juce::int64  colorwaySeed = 0;
+        int          colorwayMode = 0;
 
         // Cross-cutting concepts (docs/control-catalog.md §5). Data only for now
         // — wired to interaction/render in Phase 3.
@@ -280,6 +286,11 @@ struct PedalDesign
                 co->setProperty ("overlayPage", c.overlayPage);
             if (c.style.isNotEmpty() && c.style != "default")
                 co->setProperty ("style", c.style);
+            if (c.colorwaySeed != 0)
+            {
+                co->setProperty ("colorwaySeed", c.colorwaySeed);
+                co->setProperty ("colorwayMode", c.colorwayMode);
+            }
             if (c.guard != 0)
                 co->setProperty ("guard", c.guard);
             if (c.shiftBinding.isNotEmpty())
@@ -449,6 +460,8 @@ struct PedalDesign
                         if (co->hasProperty("isLocked"))      c.isLocked      = (bool) co->getProperty ("isLocked");
                         if (co->hasProperty("overlayPage"))   c.overlayPage   = co->getProperty ("overlayPage").toString();
                         if (co->hasProperty("style"))         c.style         = co->getProperty ("style").toString();
+                        if (co->hasProperty("colorwaySeed"))  c.colorwaySeed  = (juce::int64) co->getProperty ("colorwaySeed");
+                        if (co->hasProperty("colorwayMode"))  c.colorwayMode  = (int) co->getProperty ("colorwayMode");
                         if (co->hasProperty("guard"))         c.guard         = (int) co->getProperty ("guard");
                         if (co->hasProperty("shiftBinding"))  c.shiftBinding  = co->getProperty ("shiftBinding").toString();
                         design.controls.push_back (c);

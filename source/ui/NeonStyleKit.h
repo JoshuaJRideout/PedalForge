@@ -26,12 +26,12 @@ public:
 
     juce::StringArray signatureTypes() const override
     {
-        return { "knob", "fader", "led", "switch", "footswitch", "selector" };
+        return { "chassis", "knob", "fader", "led", "switch", "footswitch", "selector" };
     }
 
     bool draws (const juce::String& type) const override
     {
-        return type == "knob" || type == "fader" || type == "led"
+        return type == "chassis" || type == "knob" || type == "fader" || type == "led"
             || type == "switch" || type == "footswitch" || type == "selector";
     }
 
@@ -55,7 +55,8 @@ public:
         const pf::Colorway* cw = colorway.active ? &colorway : nullptr;
         const float v = state.value;
 
-        if      (type == "knob")        drawKnob (g, area, v, cw);
+        if      (type == "chassis")     drawChassisFlat (g, area, cw, custom);
+        else if (type == "knob")        drawKnob (g, area, v, cw);
         else if (type == "fader")       drawFader (g, area, v, cw);
         else if (type == "led")         drawLed (g, area, v, cw, custom);
         else if (type == "switch")      drawToggle (g, area, v, cw);
@@ -77,6 +78,27 @@ private:
     {
         if (cw != nullptr && cw->active) return cw->resolve (e, r);
         return fallback;
+    }
+
+    //── chassis: flat FUI panel + glowing accent rim (vs default beveled box) ──
+    static void drawChassisFlat (juce::Graphics& g, juce::Rectangle<float> area,
+                                 const pf::Colorway* cw, const HardwareDrawing::CustomStyles* custom)
+    {
+        // A supplied chassis image always wins — defer to the default plumbing.
+        if (custom != nullptr && custom->imageChassis.isNotEmpty())
+        {
+            HardwareDrawing::drawChassis (g, area, juce::Colour (0xFF0E1419), custom);
+            return;
+        }
+        const float corner = juce::jmax (4.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.04f);
+        // Flat dark panel (subtly tinted toward the colorway's deepest surface).
+        g.setColour (col (cw, 0.0f, Role::Chrome, juce::Colour (0xFF0A0E12)));
+        g.fillRoundedRectangle (area, corner);
+        // Glowing accent rim — the kit's signature.
+        g.setColour (accentCol (cw, 0.9f).withAlpha (0.55f));
+        g.drawRoundedRectangle (area.reduced (1.0f), corner, 2.0f);
+        g.setColour (accentCol (cw, 0.9f).withAlpha (0.16f));
+        g.drawRoundedRectangle (area.reduced (3.5f), corner, 1.0f);
     }
 
     //── knob: flat disc + rim value-arc + endpoint dot ────────────────────────

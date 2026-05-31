@@ -46,46 +46,39 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
 
     auto chassisRect = juce::Rectangle<float> (offX, offY, drawW, drawH);
 
-    // Chassis body with colour
-    float cornerR = juce::jmax (4.0f, juce::jmin (drawW, drawH) * 0.06f);
-    auto baseColour = design->chassisColour;
-    auto bodyGrad = juce::ColourGradient (
-        baseColour.brighter (0.18f), chassisRect.getX(), chassisRect.getY(),
-        baseColour.darker (0.30f), chassisRect.getX(), chassisRect.getBottom(), false);
-    g.setGradientFill (bodyGrad);
-    g.setOpacity (alpha);
-    g.fillRoundedRectangle (chassisRect, cornerR);
-
-    // Custom chassis image
-    if (design->chassisImage.isNotEmpty())
+    // Chassis is "element zero": a styleable element rendered by the StyleKit,
+    // so each kit can draw its own enclosure. The chassis colorway drives the
+    // body colour; chassisColour is the fallback when no colorway is set. The
+    // chassis image (if any) is carried as imageChassis and wins inside the kit.
     {
-        juce::Image img = juce::ImageCache::getFromFile (juce::File (design->chassisImage));
-        if (!img.isNull())
+        HardwareDrawing::CustomStyles chassisStyles;
+        chassisStyles.imageChassis = design->chassisImage;
+        chassisStyles.customColour = design->chassisColour;
+        chassisStyles.stretchImage = true;
+
+        pf::Colorway chassisCw;
+        if (design->colorwaySeed != 0)
         {
-            g.drawImage (img, chassisRect);
+            juce::Colour seed ((juce::uint32) (juce::int64) design->colorwaySeed);
+            if (design->colorwayMode == 1)
+                chassisCw = pf::Colorway::tintFromSeed (seed);
+            else
+                { chassisCw.mode = pf::Colorway::Mode::Semantic; chassisCw.accent = seed; chassisCw.active = true; }
         }
+
+        const bool fade = alpha < 0.999f;
+        if (fade) g.beginTransparencyLayer (alpha);
+        pf::StyleKitRegistry::draw (g, design->styleKit, "chassis", chassisRect,
+                                    pf::ControlState(), chassisCw, &chassisStyles);
+        if (fade) g.endTransparencyLayer();
     }
 
-    // Edge
-    g.setColour (baseColour.brighter (0.25f).withAlpha (0.2f * alpha));
-    g.drawRoundedRectangle (chassisRect, cornerR, 0.75f);
 
 
-
-    // Resolve the pedal's StyleKit + colorway once for this paint pass.
-    // Phase 0: the default kit ignores the colorway, so this is inert until a
-    // themed kit is registered — wiring it now means themed kits + colorways
-    // apply with no further call-site changes.
+    // Style + colorway are PER-CONTROL (resolved inside the loop, below). The
+    // pedal-level styleKit only survives as the fallback kit for a control that
+    // declares no style of its own.
     const juce::String pedalKit = design->styleKit;
-    pf::Colorway colorway;
-    if (design->colorwaySeed != 0)
-    {
-        juce::Colour seed ((juce::uint32) (juce::int64) design->colorwaySeed);
-        if (design->colorwayMode == 1)
-            colorway = pf::Colorway::tintFromSeed (seed);
-        else
-            { colorway.mode = pf::Colorway::Mode::Semantic; colorway.accent = seed; colorway.active = true; }
-    }
 
     // Draw each control from the design
     for (const auto& ctrl : design->controls)
@@ -123,6 +116,17 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         {
             pf::ControlState st = pf::buildControlState (ctrl.controlID, val, &controlData, &controlTexts, &controlValues);
             const juce::String effKit = ctrl.style.isNotEmpty() ? ctrl.style : pedalKit;
+
+            // Per-control colorway: 0 seed -> the kit's own palette.
+            pf::Colorway colorway;
+            if (ctrl.colorwaySeed != 0)
+            {
+                juce::Colour seed ((juce::uint32) (juce::int64) ctrl.colorwaySeed);
+                if (ctrl.colorwayMode == 1)
+                    colorway = pf::Colorway::tintFromSeed (seed);
+                else
+                    { colorway.mode = pf::Colorway::Mode::Semantic; colorway.accent = seed; colorway.active = true; }
+            }
             pf::StyleKitRegistry::draw (g, effKit, ctrl.type, ctrlBounds, st, colorway, &styles);
         }
         else if (ctrl.type == "easy_display")
