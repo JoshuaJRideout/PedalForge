@@ -1,5 +1,6 @@
 #include "NodeGraphEditor.h"
 #include "LookAndFeel.h"
+#include "NodeColours.h"
 #include "../dsp/DSPNodeLibrary.h"
 #include "../dsp/NodeCatalog.h"
 
@@ -16,13 +17,25 @@ NodeGraphEditor::NodeGraphEditor() : canvas (*this), propertiesPanel (*this)
     nodeVisuals[outID] = { 500, 200, nodeW, 0, false };
 
     addAndMakeVisible (canvas);
-    addAndMakeVisible (propertiesPanel);
+
+    // Docked "Add" inventory (FX nodes) on the left — drag nodes onto the canvas.
+    inventoryPanel.setContext (pf::inv::Context::FX);
+    addAndMakeVisible (inventoryPanel);
+
+    // Right-side tabbed inspector: Properties (selected node) + Layers (node list).
+    nodeListPanel.onNodeClicked = [this] (int id) { selectNode (id); };
+    rightTabs = std::make_unique<juce::TabbedComponent> (juce::TabbedButtonBar::TabsAtTop);
+    rightTabs->setTabBarDepth (28);
+    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, &propertiesPanel, false);
+    rightTabs->addTab ("Layers",     PedalForgeLookAndFeel::bgDark, &nodeListPanel,   false);
+    rightTabs->setOutline (0);
+    addAndMakeVisible (*rightTabs);
 
     canvas.onNodeSelected = [this] (int id) { selectNode (id); };
     propertiesPanel.onDeleteNode = [this] (int id) { deleteNode (id); };
     propertiesPanel.onParamChanged = [this] {
         if (selectedNodeID >= 0) nodeVisuals[selectedNodeID].height = computeNodeHeight (selectedNodeID);
-        if (onGraphChanged) onGraphChanged();
+        graphMutated();
         canvas.repaint();
     };
 
@@ -73,6 +86,8 @@ void NodeGraphEditor::loadDesign (const juce::var& effectsGraphJSON)
 
         nodeVisuals[pair.first] = { x, y, nodeW, computeNodeHeight(pair.first), false };
     }
+
+    refreshNodeList();
 }
 
 void NodeGraphEditor::loadNotes (const std::vector<StickyNote>& notes)
@@ -89,6 +104,7 @@ void NodeGraphEditor::visibilityChanged()
     {
         btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
         notesOverlay.setVisible (!fxNotes.empty());
+        refreshNodeList();
     }
 }
 
@@ -104,7 +120,7 @@ void NodeGraphEditor::clearGraph()
     nodeVisuals[inID]  = { 80, 200, nodeW, 0, false };
     nodeVisuals[outID] = { 500, 200, nodeW, 0, false };
 
-    if (onGraphChanged) onGraphChanged();
+    graphMutated();
     canvas.repaint();
 }
 
@@ -126,7 +142,8 @@ void NodeGraphEditor::resized()
     toolbar.reduce (8, 4);
     btnNotes.setBounds (toolbar.removeFromLeft (60).withSizeKeepingCentre (60, 24));
 
-    propertiesPanel.setBounds (area.removeFromRight (propertiesWidth));
+    if (rightTabs) rightTabs->setBounds (area.removeFromRight (propertiesWidth));
+    inventoryPanel.setBounds (area.removeFromLeft (210));
     canvas.setBounds (area);
     notesOverlay.setBounds (area);
 }
@@ -142,11 +159,93 @@ void NodeGraphEditor::selectNode (int nodeID)
     {
         nodeVisuals[nodeID].selected = true;
         propertiesPanel.showNode (nodeID, graph.getNode (nodeID));
+        if (rightTabs) rightTabs->setCurrentTabIndex (0); // jump to Properties
     }
     else
         propertiesPanel.clearSelection();
 
     canvas.repaint();
+}
+
+void NodeGraphEditor::graphMutated()
+{
+    refreshNodeList();
+    if (onGraphChanged) onGraphChanged();
+}
+
+void NodeGraphEditor::refreshNodeList()
+{
+    nodeListPanel.refresh (graph);
+}
+
+//==============================================================================
+// NodeListPanel — the "Layers" outliner: one clickable row per graph node.
+//==============================================================================
+struct NodeGraphEditor::NodeListPanel::Row : public juce::Component
+{
+    Row (int id, juce::String nm, juce::String ty)
+        : nodeID (id), name (std::move (nm)), type (std::move (ty)) {}
+
+    int nodeID;
+    juce::String name, type;
+    std::function<void (int)> onClick;
+    bool hovered = false;
+
+    void paint (juce::Graphics& g) override
+    {
+        if (hovered)
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.12f));
+            g.fillRect (getLocalBounds());
+        }
+        auto b = getLocalBounds().reduced (8, 2);
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (12.5f).withStyle ("Bold"));
+        g.drawText (name, b.removeFromTop (b.getHeight() / 2), juce::Justification::bottomLeft, true);
+        g.setColour (PedalForgeLookAndFeel::textMuted);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (type, b, juce::Justification::topLeft, true);
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawHorizontalLine (getHeight() - 1, 0.0f, (float) getWidth());
+    }
+
+    void mouseEnter (const juce::MouseEvent&) override { hovered = true;  repaint(); }
+    void mouseExit  (const juce::MouseEvent&) override { hovered = false; repaint(); }
+    void mouseUp (const juce::MouseEvent& e) override { if (e.mouseWasClicked() && onClick) onClick (nodeID); }
+};
+
+NodeGraphEditor::NodeListPanel::NodeListPanel()
+{
+    viewport.setViewedComponent (&content, false);
+    viewport.setScrollBarsShown (true, false);
+    viewport.setScrollBarThickness (8);
+    addAndMakeVisible (viewport);
+}
+
+void NodeGraphEditor::NodeListPanel::resized()
+{
+    viewport.setBounds (getLocalBounds());
+    const int w = viewport.getMaximumVisibleWidth();
+    int y = 0;
+    for (auto* r : rows) { r->setBounds (0, y, w, 36); y += 36; }
+    content.setSize (w, y);
+}
+
+void NodeGraphEditor::NodeListPanel::refresh (DSPGraph& g)
+{
+    rows.clear();
+    content.removeAllChildren();
+    for (const auto& pair : g.getNodes())
+    {
+        auto* n = pair.second.get();
+        if (n == nullptr) continue;
+        auto* row = new Row (pair.first, n->getName(), n->getType());
+        row->onClick = [this] (int id) { if (onNodeClicked) onNodeClicked (id); };
+        rows.add (row);
+        content.addAndMakeVisible (row);
+    }
+    resized();
+    repaint();
 }
 
 void NodeGraphEditor::addNodeAt (const juce::String& type, float cx, float cy)
@@ -156,7 +255,7 @@ void NodeGraphEditor::addNodeAt (const juce::String& type, float cx, float cy)
     int id = graph.addNode (std::move (node));
     nodeVisuals[id] = { snapToGrid(cx), snapToGrid(cy), nodeW, computeNodeHeight (id), false };
     selectNode (id);
-    if (onGraphChanged) onGraphChanged();
+    graphMutated();
 }
 
 void NodeGraphEditor::deleteNode (int nodeID)
@@ -168,7 +267,7 @@ void NodeGraphEditor::deleteNode (int nodeID)
     graph.removeNode (nodeID);
     nodeVisuals.erase (nodeID);
     selectNode (-1);
-    if (onGraphChanged) onGraphChanged();
+    graphMutated();
 }
 
 float NodeGraphEditor::computeNodeHeight (int nodeID) const
@@ -245,65 +344,7 @@ juce::Point<float> NodeGraphEditor::getPortPosition (int nodeID, bool isOutput, 
 
 juce::Colour NodeGraphEditor::getNodeColour (const juce::String& type) const
 {
-    if (type == "audio_input" || type == "audio_output") return juce::Colour (0xFF4ADE80);  // green
-    if (type == "gain" || type == "mix" || type == "split") return juce::Colour (0xFF94A3B8);  // slate
-    if (type == "lowpass" || type == "highpass" || type == "allpass" || type == "tonestack") return juce::Colour (0xFF38BDF8);  // sky blue
-    if (type == "softclip" || type == "hardclip") return juce::Colour (0xFFF97316);  // orange
-    if (type == "lfo") return juce::Colour (0xFFA78BFA);  // purple
-    if (type == "delay" || type == "mod_delay") return juce::Colour (0xFF22D3EE);  // cyan
-    if (type == "compressor" || type == "noisegate") return juce::Colour (0xFFFBBF24);  // yellow
-    if (type == "reverb") return juce::Colour (0xFF818CF8);  // indigo
-    if (type == "ir") return juce::Colour (0xFF6366F1);      // darker indigo
-    if (type == "ram" || type == "sampler") return juce::Colour (0xFF14B8A6);  // teal
-    if (type == "faust_custom") return juce::Colour (0xFFEC4899);  // pink
-    
-    // Synthesizer nodes
-    if (type == "oscillator" || type == "noise" || type == "adsr" || type == "ar_env" ||
-        type == "svf" || type == "ladder_filter" || type == "vca" || type == "glide" || type == "voice_alloc")
-        return juce::Colour (0xFFD946EF);  // fuchsia
-    // Logic — teal
-    if (type == "and_gate" || type == "or_gate" || type == "not_gate" || type == "xor_gate"
-        || type == "nand_gate" || type == "nor_gate" || type == "xnor_gate"
-        || type == "buffer" || type == "pulse" || type == "gate_buffer"
-        || type == "sr_latch" || type == "d_latch" || type == "d_ff" || type == "t_ff" || type == "jk_ff"
-        || type == "comparator" || type == "latch" || type == "mux" || type == "demux" || type == "priority" || type == "constant")
-        return juce::Colour (0xFF2DD4BF);
-    // Math — rose/coral
-    if (type == "add" || type == "subtract" || type == "multiply" || type == "divide" || type == "modulo" ||
-        type == "ranger" || type == "smooth" || type == "clamp" || type == "abs" || type == "negate" ||
-        type == "round" || type == "floor" || type == "ceiling" || type == "sqrt" || type == "power" ||
-        type == "min" || type == "max" || type == "sign" || type == "reciprocal" ||
-        type == "increment" || type == "decrement" || type == "average")
-        return juce::Colour (0xFFFB7185);
-    // Timing / Sensors — amber
-    if (type == "clock" || type == "counter" || type == "sequencer"
-        || type == "env_follower" || type == "sample_hold")
-        return juce::Colour (0xFFF59E0B);
-    // Scripting — hot pink / magenta
-    if (type == "expression")
-        return juce::Colour (0xFFE879F9);
-    // MIDI — electric blue
-    if (type == "midi_note" || type == "midi_cc" || type == "midi_pitchbend" || type == "midi_clock"
-        || type == "midi_program" || type == "midi_pressure" || type == "midi_poly_pressure"
-        || type == "midi_cc14" || type == "midi_song_pos" || type == "midi_transport"
-        || type == "midi_note_gen" || type == "midi_cc_gen"
-        || type == "midi_program_gen" || type == "midi_pressure_gen" || type == "midi_poly_pressure_gen"
-        || type == "midi_pitchbend_gen" || type == "midi_transport_gen")
-        return juce::Colour (0xFF3B82F6);
-    // Control Surface — warm peach (these export to the pedal face)
-    if (type == "ctrl_knob" || type == "ctrl_fader" || type == "ctrl_button"
-        || type == "ctrl_toggle" || type == "ctrl_selector" || type == "ctrl_xy")
-        return juce::Colour (0xFFE8A855);
-    // Displays & Gadgets — soft cyan
-    if (type == "disp_led" || type == "disp_rgb_led" || type == "disp_display"
-        || type == "disp_vu" || type == "disp_tuner" || type == "disp_7seg"
-        || type == "disp_text" || type == "disp_console" || type == "disp_scope"
-        || type == "disp_pixel" || type == "disp_indicator" || type == "disp_sound")
-        return juce::Colour (0xFF22D3EE);
-    // I/O Peripherals — indigo (matches I/O category)
-    if (type == "io_expression" || type == "io_footswitch" || type == "io_cv_in" || type == "io_cv_out")
-        return juce::Colour (0xFF818CF8);
-    return juce::Colour (0xFF6B7280);
+    return pf::nodeColourForType (type);   // shared map (see NodeColours.h)
 }
 
 //==============================================================================
@@ -612,7 +653,7 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
                 editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
                 hoveredConnectionIndex = -1;
                 setMouseCursor (juce::MouseCursor::NormalCursor);
-                if (editor.onGraphChanged) editor.onGraphChanged();
+                editor.graphMutated();
                 repaint();
             }
         }
@@ -622,7 +663,7 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
             editor.graph.disconnect (c.sourceNodeID, c.sourcePort, c.destNodeID, c.destPort);
             hoveredConnectionIndex = -1;
             setMouseCursor (juce::MouseCursor::NormalCursor);
-            if (editor.onGraphChanged) editor.onGraphChanged();
+            editor.graphMutated();
             repaint();
         }
         return;
@@ -652,7 +693,7 @@ void NodeGraphEditor::GraphCanvas::mouseDown (const juce::MouseEvent& e)
                                                   NodeGraphEditor::snapToGrid(editor.nodeVisuals[hit].y + 20.0f), 
                                                   editor.nodeW, editor.computeNodeHeight(newID), false };
                     hit = newID;
-                    if (editor.onGraphChanged) editor.onGraphChanged();
+                    editor.graphMutated();
                 }
             }
         }
@@ -701,12 +742,12 @@ void NodeGraphEditor::GraphCanvas::mouseUp (const juce::MouseEvent& e)
             if (wireStart.isOutput && !ph.isOutput)
             {
                 if (editor.graph.connect (wireStart.nodeID, wireStart.portIndex, ph.nodeID, ph.portIndex))
-                    if (editor.onGraphChanged) editor.onGraphChanged();
+                    editor.graphMutated();
             }
             else if (!wireStart.isOutput && ph.isOutput)
             {
                 if (editor.graph.connect (ph.nodeID, ph.portIndex, wireStart.nodeID, wireStart.portIndex))
-                    if (editor.onGraphChanged) editor.onGraphChanged();
+                    editor.graphMutated();
             }
         }
         draggingWire = false;
@@ -718,7 +759,7 @@ void NodeGraphEditor::GraphCanvas::mouseUp (const juce::MouseEvent& e)
         auto& vis = editor.nodeVisuals[draggingNodeID];
         vis.x = NodeGraphEditor::snapToGrid (vis.x);
         vis.y = NodeGraphEditor::snapToGrid (vis.y);
-        if (editor.onGraphChanged) editor.onGraphChanged();
+        editor.graphMutated();
         repaint();
     }
     draggingNodeID = -1;
@@ -812,7 +853,7 @@ bool NodeGraphEditor::GraphCanvas::keyPressed (const juce::KeyPress& key)
                     editor.nodeVisuals[newID] = { NodeGraphEditor::snapToGrid(cx), NodeGraphEditor::snapToGrid(cy), 
                                                   editor.nodeW, editor.computeNodeHeight(newID), false };
                     editor.selectNode (newID);
-                    if (editor.onGraphChanged) editor.onGraphChanged();
+                    editor.graphMutated();
                     repaint();
                 }
             }

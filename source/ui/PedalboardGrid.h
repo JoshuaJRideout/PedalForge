@@ -5,6 +5,7 @@
 #include "PedalComponent.h"
 #include "PedalDetailPanel.h"
 #include "NotesOverlay.h"
+#include "InventoryPanel.h"
 
 //==============================================================================
 /**
@@ -78,9 +79,6 @@ public:
     /** Callback fired when a pedal is selected/deselected. */
     std::function<void(PedalInstance*)> onPedalSelected;
 
-    /** Callback fired when the Tab menu button is clicked. */
-    std::function<void()> onOpenInventory;
-
     /** Callback fired when a pedal's library_loader control is clicked. */
     std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> onOpenLibrary;
 
@@ -113,7 +111,10 @@ private:
     juce::uint32 lastFocusedNodeUID = 0;  // for engine→UI focus sync
 
     PedalDetailPanel detailPanel;
-    juce::TextButton btnInventory { "+ Add Pedal (Tab)" };
+    // Docked "Add" inventory (left strip) — Board pedals. Replaces the Q-menu.
+    InventoryPanel inventoryPanel;
+    // Right-side tabbed inspector: Properties (detailPanel) + Layers (activePedalsList).
+    std::unique_ptr<juce::TabbedComponent> rightTabs;
 
     // Multi-board / Page controls
     juce::TextButton btnAddBoard    { "+ Add Board" };

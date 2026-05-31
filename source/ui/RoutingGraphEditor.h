@@ -6,6 +6,7 @@
 #include "../dsp/GraphPedalProcessor.h"
 #include "../dsp/PedalDesign.h"
 #include "NotesOverlay.h"
+#include "InventoryPanel.h"
 
 //==============================================================================
 /**
@@ -147,6 +148,23 @@ private:
     };
 
     //==========================================================================
+    // "Layers" tab: an outliner listing the routing nodes; click to select.
+    //==========================================================================
+    class RouteNodeList : public juce::Component
+    {
+    public:
+        RouteNodeList();
+        void resized() override;
+        void refresh (const std::vector<RoutingNode>& nodes);
+        std::function<void (int idx)> onNodeClicked;
+    private:
+        struct Row;
+        juce::Viewport viewport;
+        juce::Component content;
+        juce::OwnedArray<juce::Component> rows;
+    };
+
+    //==========================================================================
     // Data
     //==========================================================================
     AudioGraphEngine& engine;
@@ -159,6 +177,11 @@ private:
 
     RoutingCanvas canvas;
     PropertiesPanel propertiesPanel;
+    // Docked "Add" inventory (left, pedals) — replaces the Q-menu.
+    InventoryPanel inventoryPanel;
+    // Right-side tabbed inspector: Properties (selected node) + Layers (node list).
+    RouteNodeList routeNodeList;
+    std::unique_ptr<juce::TabbedComponent> rightTabs;
 
     static constexpr float nodeW = 160.0f;
     static constexpr float headerH = 28.0f;

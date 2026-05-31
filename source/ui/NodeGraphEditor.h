@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../dsp/DSPGraph.h"
 #include "NotesOverlay.h"
+#include "InventoryPanel.h"
 
 //==============================================================================
 /**
@@ -186,6 +187,23 @@ private:
     };
 
     //==========================================================================
+    /** Right-panel "Layers" tab: an outliner listing the graph's nodes; click a
+        row to select/focus that node. */
+    class NodeListPanel : public juce::Component
+    {
+    public:
+        NodeListPanel();
+        void resized() override;
+        void refresh (DSPGraph& g);            // rebuild rows from the graph
+        std::function<void (int nodeID)> onNodeClicked;
+    private:
+        struct Row;
+        juce::Viewport viewport;
+        juce::Component content;
+        juce::OwnedArray<juce::Component> rows;
+    };
+
+    //==========================================================================
     DSPGraph graph;
     std::map<int, NodeVisual> nodeVisuals;
     int selectedNodeID = -1;
@@ -198,6 +216,11 @@ private:
 
     GraphCanvas canvas;
     NodePropertiesPanel propertiesPanel;
+    // Docked "Add" inventory (left, FX nodes) — replaces the Q-menu.
+    InventoryPanel inventoryPanel;
+    // Right-side tabbed inspector: Properties (selected node) + Layers (node list).
+    NodeListPanel nodeListPanel;
+    std::unique_ptr<juce::TabbedComponent> rightTabs;
 
     static constexpr float nodeW = 160.0f;
     static constexpr float headerH = 26.0f;
@@ -216,6 +239,11 @@ private:
     void selectNode (int nodeID);
     void addNodeAt (const juce::String& type, float cx, float cy);
     void deleteNode (int nodeID);
+
+    // Centralised "the graph changed" notify: refresh the node-list outliner,
+    // then fire the host callback. All mutation sites route through here.
+    void graphMutated();
+    void refreshNodeList();
 
     // ── Notes ──
     std::vector<StickyNote> fxNotes;

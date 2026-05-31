@@ -10,7 +10,7 @@
  *
  * Consumers (must NOT maintain their own parallel list):
  *   - source/ui/NodeGraphEditor.cpp — right-click "Add Node" popup menu
- *   - source/ui/InventoryOverlay.cpp — Tab key Q-menu node browser
+ *   - source/ui/InventoryModel.h (pf::inv) — the docked InventoryPanel's node list
  *   - source/ui/AutocompletePanelComponent.cpp — FX Graph Builder script DB
  *
  * Adding a new node type:
@@ -19,7 +19,7 @@
  *
  * Menu path: "Group/Subgroup[/Sub-subgroup]". Slash-separated; each segment
  * becomes a level of nested submenu in the right-click menu. The first segment
- * is also used as the InventoryOverlay's main category (currently "Effects" or
+ * is also used as the inventory's main category (currently "Effects" or
  * "Nodes").
  */
 struct NodeCatalogEntry
@@ -30,7 +30,7 @@ struct NodeCatalogEntry
     juce::String description;   // Tooltip + autocomplete docs
 
     bool inAddNodeMenu = true;  // Show in NodeGraphEditor right-click menu
-    bool inInventory   = true;  // Show in InventoryOverlay Q-menu
+    bool inInventory   = true;  // Show in the docked inventory (pf::inv)
 };
 
 class NodeCatalog

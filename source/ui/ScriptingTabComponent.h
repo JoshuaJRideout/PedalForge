@@ -1550,8 +1550,8 @@ private:
         };
 
         // Generic addControl("type", "id", x, y, "label" [, w, h]) — handles any
-        // of the 23 canonical types in InventoryOverlay parts[] so the script
-        // round-trip isn't limited to the 6 friendly aliases below.
+        // of the canonical hardware types in InventoryModel.h (pf::inv) so the
+        // script round-trip isn't limited to the 6 friendly aliases below.
         auto addControlGeneric = [&] (const juce::StringArray& parts, int lineNum)
         {
             if (parts.size() < 5) { setLineErr (lineNum, "addControl needs at least (\"type\", id, x, y, label)"); return; }

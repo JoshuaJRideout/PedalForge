@@ -78,6 +78,10 @@ target_sources(PedalForge PRIVATE
     # UI
     source/ui/AutocompletePanelComponent.h
     source/ui/AutocompletePanelComponent.cpp
+    source/ui/InventoryModel.h
+    source/ui/InventoryPanel.h
+    source/ui/InventoryPanel.cpp
+    source/ui/NodeColours.h
     source/ui/LookAndFeel.h
     source/ui/LookAndFeel.cpp
     source/ui/PedalboardGrid.h
@@ -134,8 +138,6 @@ target_sources(PedalForge PRIVATE
     source/ui/PedalDetailPanel.cpp
     source/ui/PedalPalette.h
     source/ui/PedalPalette.cpp
-    source/ui/InventoryOverlay.h
-    source/ui/InventoryOverlay.cpp
     source/ui/PedalPainter.h
     source/ui/PedalPainter.cpp
     source/ui/PedalDesignerComponent.h

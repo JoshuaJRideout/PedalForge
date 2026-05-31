@@ -1,10 +1,13 @@
 #include "PlayTabComponent.h"
 #include "LookAndFeel.h"
 #include "ToastOverlay.h"
+#include "InventoryModel.h"   // pf::inv — pedal list for the shelf
+#include "PedalPainter.h"     // mini pedal-face render for shelf cards
 #include "../util/AppPaths.h"
 #include "../pedals/PedalRegistry.h"
 #include "../dsp/GraphPedalProcessor.h"
 #include "../dsp/PedalDesign.h"
+#include <algorithm>
 
 //==============================================================================
 class PlayTabComponent::PlaySlotWrapper : public juce::Component, public juce::DragAndDropTarget
@@ -32,7 +35,12 @@ public:
     }
 
     PedalComponent* getPedalComponent() const { return pedalComponent.get(); }
-    
+
+    // Set by the parent on (re)build: which engine pedal this card shows and
+    // whether it's the selected one (for the highlight).
+    AudioGraphEngine::NodeID pedalId {};
+    bool selected = false;
+
     void resized() override
     {
         if (pedalComponent != nullptr)
@@ -50,6 +58,15 @@ public:
             {
                 g.setColour (PedalForgeLookAndFeel::accent.withAlpha(0.3f));
                 g.fillRoundedRectangle (getLocalBounds().toFloat(), 10.0f);
+            }
+            if (selected)
+            {
+                // Selection highlight — a glowing accent ring around the pedal.
+                auto r = getLocalBounds().toFloat().reduced (2.0f);
+                g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.18f));
+                g.fillRoundedRectangle (r, 10.0f);
+                g.setColour (PedalForgeLookAndFeel::accent);
+                g.drawRoundedRectangle (r, 10.0f, 2.5f);
             }
             return;
         }
@@ -75,39 +92,20 @@ public:
 
     void mouseDown (const juce::MouseEvent& e) override
     {
-        const bool isPopup = e.mods.isRightButtonDown() || e.mods.isCtrlDown();
-
-        if (isPopup)
+        if (e.mods.isRightButtonDown() || e.mods.isCtrlDown())
         {
             juce::PopupMenu menu;
-            if (pedalComponent != nullptr)
-            {
-                // Slot has a pedal — offer Remove (keep slot) and Delete Slot (remove both).
-                menu.addItem (1, "Remove Pedal (keep slot)");
-                menu.addItem (2, "Delete Slot");
-            }
-            else
-            {
-                // Empty slot — just Delete Slot.
-                menu.addItem (2, "Delete Slot");
-            }
-
+            menu.addItem (1, "Remove");
             juce::Component::SafePointer<PlayTabComponent> sp (&parent);
             int idx = index;
             menu.showMenuAsync (juce::PopupMenu::Options(),
-                                [sp, idx] (int result)
-                                {
-                                    if (sp == nullptr) return;
-                                    if      (result == 1) sp->clearSlot  (idx);
-                                    else if (result == 2) sp->removeSlot (idx);
-                                });
+                                [sp, idx] (int result) { if (sp != nullptr && result == 1) sp->removeSlot (idx); });
             return;
         }
 
-        // Left-click on an empty slot opens the inventory; left-click on a
-        // populated slot lets the underlying PedalComponent handle it.
-        if (pedalComponent == nullptr)
-            parent.handleSlotClicked (index);
+        // Left-click selects this pedal (highlight; Delete/Backspace removes it).
+        // The underlying PedalComponent still handles knob drags etc.
+        parent.selectPedal (pedalId);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
@@ -133,10 +131,12 @@ public:
         }
     }
 
-    bool isInterestedInDragSource (const SourceDetails& details) override
+    bool isInterestedInDragSource (const SourceDetails&) override
     {
-        auto desc = details.description.toString();
-        return desc.startsWith ("pedal:") || desc.startsWith ("playslot:");
+        // The card never accepts drops itself — all reorder/insert/remove drops
+        // bubble up to the play area, which shows the insert indicator + remove
+        // zone and computes the landing position.
+        return false;
     }
     
     void itemDragEnter (const SourceDetails&) override { isDragHovering = true; repaint(); }
@@ -178,26 +178,115 @@ private:
 };
 
 //==============================================================================
-PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& inventory, MidiLearnManager& midiLearn)
-    : playEngine (engine), inventoryOverlay (inventory), playMidiLearn (midiLearn)
+// The shelf — an always-visible horizontal row of pedal cards. Drag one down
+// into the play area to add it to the chain. Cards render the real pedal face.
+//==============================================================================
+class PlayTabComponent::PedalShelf : public juce::Component
 {
+public:
+    PedalShelf()
+    {
+        addAndMakeVisible (viewport);
+        viewport.setViewedComponent (&content, false);
+        viewport.setScrollBarsShown (false, true);   // horizontal only
+        refresh();
+    }
+
+    void refresh()
+    {
+        cards.clear();
+        content.removeAllChildren();
+        for (auto& it : pf::inv::buildItems())
+            if (it.mainCategory == "Pedals")
+            {
+                auto* c = new Card (it);
+                cards.add (c);
+                content.addAndMakeVisible (c);
+            }
+        resized();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (PedalForgeLookAndFeel::bgDark.darker (0.25f));
+        g.fillRect (getLocalBounds());
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawHorizontalLine (getHeight() - 1, 0.0f, (float) getWidth());
+    }
+
+    void resized() override
+    {
+        viewport.setBounds (getLocalBounds());
+        const int h = viewport.getMaximumVisibleHeight();
+        const int cardH = juce::jmax (40, h - 8);
+        const int cardW = juce::jmax (52, (int) (cardH * 0.62f));   // pedal-ish portrait
+        int x = 8;
+        for (auto* c : cards) { c->setBounds (x, 4, cardW, cardH); x += cardW + 8; }
+        content.setSize (x, h);
+    }
+
+private:
+    struct Card : public juce::Component
+    {
+        explicit Card (const pf::inv::Item& it) : item (it) {}
+        pf::inv::Item item;
+        bool dragStarted = false;
+
+        void paint (juce::Graphics& g) override
+        {
+            auto b = getLocalBounds().toFloat().reduced (3.0f);
+            auto face = b.removeFromTop (juce::jmax (10.0f, b.getHeight() - 14.0f));
+            static const std::map<juce::String, float> ev;
+            static const std::map<juce::String, juce::String> et;
+            static const std::map<juce::String, std::vector<float>> ed;
+            if (item.pedalDesign != nullptr)
+                PedalPainter::paintDesign (g, face, item.pedalDesign.get(), ev, et, ed);
+            else
+            {
+                g.setColour (item.pedalInfo.colour.withAlpha (0.9f));
+                g.fillRoundedRectangle (face, 4.0f);
+            }
+            g.setColour (PedalForgeLookAndFeel::textSecondary);
+            g.setFont (juce::FontOptions (9.5f));
+            g.drawText (item.displayName, b.toNearestInt(), juce::Justification::centred, true);
+        }
+
+        void mouseDown (const juce::MouseEvent&) override { dragStarted = false; }
+
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            if (! dragStarted && e.getDistanceFromDragStart() > 5)
+            {
+                dragStarted = true;
+                if (auto* dc = juce::DragAndDropContainer::findParentDragContainerFor (this))
+                {
+                    juce::Image img (juce::Image::ARGB, getWidth(), getHeight(), true);
+                    { juce::Graphics g2 (img); paintEntireComponent (g2, false); }
+                    dc->startDragging ("pedal:" + item.pedalInfo.name, this, img, true);
+                }
+            }
+        }
+    };
+
+    juce::Viewport viewport;
+    juce::Component content;
+    juce::OwnedArray<Card> cards;
+};
+
+//==============================================================================
+PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, MidiLearnManager& midiLearn)
+    : playEngine (engine), playMidiLearn (midiLearn)
+{
+    setWantsKeyboardFocus (true);   // so Delete/Backspace reaches keyPressed
+
     addAndMakeVisible (viewport);
     viewport.setViewedComponent (&container, false);
     viewport.setScrollBarsShown (false, true);
-    
-    auto addSlot = [this](const juce::String& cat, const juce::String& lbl) {
-        auto s = std::make_unique<Slot>();
-        s->recommendedCategory = cat;
-        s->label = lbl;
-        slots.push_back (std::move (s));
-    };
-    
-    addSlot ("Dynamics", "Comp / Gate");
-    addSlot ("Drive", "Drive / Fuzz");
-    addSlot ("Amp", "Amp / Preamp");
-    addSlot ("Modulation", "Modulation");
-    addSlot ("Delay", "Delay");
-    addSlot ("Reverb", "Reverb");
+
+    // Top shelf — an always-visible row of pedals; drag one down into the
+    // play area to add it (visible discovery, no hidden hotkey).
+    shelf = std::make_unique<PedalShelf>();
+    addAndMakeVisible (*shelf);
 
     addAndMakeVisible (presetMenu);
     presetMenu.setTextWhenNothingSelected ("Select a Preset...");
@@ -207,15 +296,6 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
     addAndMakeVisible (btnSavePreset);
     btnSavePreset.setTooltip ("Save the current pedal chain as a reusable preset");
     btnSavePreset.onClick = [this] { saveCurrentChainAsPreset(); };
-
-    addAndMakeVisible (addSlotButton);
-    addSlotButton.onClick = [this] {
-        auto s = std::make_unique<Slot>();
-        s->recommendedCategory = "Any";
-        s->label = "Pedal";
-        slots.push_back (std::move (s));
-        rebuildSlots();
-    };
 
     startTimerHz (10);
     rebuildSlots();
@@ -243,7 +323,7 @@ PlayTabComponent::PlayTabComponent (AudioGraphEngine& engine, InventoryOverlay& 
                 loadPreset ("Classic Rock");
                 presetMenu.setText ("Classic Rock", juce::dontSendNotification);
                 pf::toastInfo ("Welcome to PedalForge - loaded the Classic Rock demo. "
-                               "Click any slot, or press Tab to swap pedals.");
+                               "Drag pedals from the shelf, drag to rearrange, Delete to remove.");
             });
         }
     }
@@ -281,17 +361,34 @@ void PlayTabComponent::paint (juce::Graphics& g)
     g.setColour (PedalForgeLookAndFeel::gridLine);
     g.drawHorizontalLine (35, 0.0f, (float) getWidth());
 
-    // Empty-chain hint — when nothing's been added yet, the field of dashed
-    // empty cards is a bit cryptic for a new user. Drop a quiet caption above.
-    bool anyPedal = false;
-    for (const auto& s : slots) if (s->pedalId.uid != 0) { anyPedal = true; break; }
-    if (! anyPedal)
+    // Empty-chain hint — centred in the play area below the shelf.
+    if (slots.empty())
     {
         g.setColour (PedalForgeLookAndFeel::textSecondary);
-        g.setFont (juce::FontOptions (13.0f));
-        auto hintArea = getLocalBounds().removeFromTop (60).withTrimmedTop (38);
-        g.drawText ("Pick a preset above, click a slot to add a pedal, or press Tab to browse.",
-                    hintArea, juce::Justification::centred);
+        g.setFont (juce::FontOptions (14.0f));
+        auto area = getLocalBounds().withTrimmedTop (36 + 112);   // below toolbar + shelf
+        g.drawText ("Drag a pedal down from the shelf to start, or pick a preset above.",
+                    area, juce::Justification::centred);
+    }
+
+    // Live drag feedback: a vertical insert indicator, or a red "remove" zone.
+    if (dragActive)
+    {
+        if (dropWillRemove)
+        {
+            auto z = getLocalBounds().withTop (chainRowBottom);
+            g.setColour (juce::Colours::red.withAlpha (0.18f));
+            g.fillRect (z);
+            g.setColour (juce::Colours::red.brighter (0.2f));
+            g.setFont (juce::FontOptions (14.0f).withStyle ("Bold"));
+            g.drawText ("Release to remove", z, juce::Justification::centred);
+        }
+        else
+        {
+            g.setColour (PedalForgeLookAndFeel::accent);
+            g.fillRect (dropIndicatorX - 1, chainRowTop, 3,
+                        juce::jmax (10, chainRowBottom - chainRowTop));
+        }
     }
 }
 
@@ -305,57 +402,43 @@ void PlayTabComponent::resized()
     presetMenu.setBounds (topBar.removeFromLeft (200).withSizeKeepingCentre (200, 24));
     topBar.removeFromLeft (4);
     btnSavePreset.setBounds (topBar.removeFromLeft (80).withSizeKeepingCentre (80, 24));
-    addSlotButton.setBounds (topBar.removeFromRight (120).withSizeKeepingCentre (120, 24));
+
+    // Shelf — the always-visible pedal strip under the toolbar.
+    if (shelf) shelf->setBounds (bounds.removeFromTop (112));
 
     viewport.setBounds (bounds);
     notesOverlay.setBounds (bounds);
-    
-    // Layout slots horizontally
-    int slotHeight = 350;
-    int padding = 20;
-    int emptySlotWidth = 160;
-    
+
+    // Lay out the chain horizontally — one card per pedal, sized by aspect ratio.
+    const int slotHeight = juce::jlimit (160, 360, bounds.getHeight() - 50);
+    const int padding = 20;
+    const int fallbackW = 160;
+
+    auto cardWidth = [&] (int i) -> int {
+        if (auto* inst = playEngine.getPedalInstance (slots[(size_t) i]->pedalId))
+            if (inst->design != nullptr && inst->design->chassisH > 0.0f)
+                return (int) (slotHeight * (inst->design->chassisW / inst->design->chassisH));
+        return fallbackW;
+    };
+
     int totalWidth = padding;
-    for (int i = 0; i < slots.size(); ++i)
-    {
-        int w = emptySlotWidth;
-        if (slots[i]->pedalId.uid != 0)
-        {
-            if (auto* inst = playEngine.getPedalInstance (slots[i]->pedalId))
-            {
-                if (inst->design != nullptr)
-                {
-                    float ratio = inst->design->chassisW / inst->design->chassisH;
-                    w = (int)(slotHeight * ratio);
-                }
-            }
-        }
-        totalWidth += w + padding;
-    }
-    
-    container.setBounds (0, 0, totalWidth, bounds.getHeight());
-    
+    for (int i = 0; i < (int) slots.size(); ++i) totalWidth += cardWidth (i) + padding;
+
+    container.setBounds (0, 0, juce::jmax (totalWidth, viewport.getWidth()), bounds.getHeight());
+
     int x = padding;
     int y = (bounds.getHeight() - slotHeight) / 2;
-    
-    for (int i = 0; i < slots.size(); ++i)
-    {
-        int w = emptySlotWidth;
-        if (slots[i]->pedalId.uid != 0)
-        {
-            if (auto* inst = playEngine.getPedalInstance (slots[i]->pedalId))
-            {
-                if (inst->design != nullptr)
-                {
-                    float ratio = inst->design->chassisW / inst->design->chassisH;
-                    w = (int)(slotHeight * ratio);
-                }
-            }
-        }
 
-        if (slots[i]->wrapper)
-            slots[i]->wrapper->setBounds (x, y - 30, w, slotHeight + 30);
-            
+    // The vertical band the cards occupy (in this component's coords) — used to
+    // detect "dragged below the row → remove" and to size the drop indicator.
+    chainRowTop    = viewport.getY() + juce::jmax (0, y - 30);
+    chainRowBottom = viewport.getY() + y + slotHeight;
+
+    for (int i = 0; i < (int) slots.size(); ++i)
+    {
+        int w = cardWidth (i);
+        if (slots[(size_t) i]->wrapper)
+            slots[(size_t) i]->wrapper->setBounds (x, y - 30, w, slotHeight + 30);
         x += w + padding;
     }
 }
@@ -550,42 +633,179 @@ void PlayTabComponent::timerCallback()
 void PlayTabComponent::rebuildSlots()
 {
     container.removeAllChildren();
-    
-    for (int i = 0; i < slots.size(); ++i)
+    slots.clear();
+
+    // The chain is exactly the play pedals, in signal order (sorted by boardX).
+    // No empty placeholders — one card per real pedal.
+    std::vector<std::pair<float, AudioGraphEngine::NodeID>> chain;
+    for (const auto& inst : playEngine.getPedalInstances())
+        if (inst.boardId == "play_board")
+            chain.push_back ({ inst.boardX, inst.nodeID });
+    std::sort (chain.begin(), chain.end(),
+               [] (const auto& a, const auto& b) { return a.first < b.first; });
+
+    for (int i = 0; i < (int) chain.size(); ++i)
     {
-        auto& s = slots[i];
-        s->pedalId.uid = 0;
-        s->wrapper.reset();
-        
-        s->wrapper = std::make_unique<PlaySlotWrapper> (*this, i, s->recommendedCategory, s->label);
-        
-        // Find if there's a pedal at boardX == i * 100.0f
-        for (auto& inst : playEngine.getPedalInstances())
+        auto* inst = playEngine.getPedalInstance (chain[(size_t) i].second);
+        if (inst == nullptr) continue;
+
+        inst->boardX = (float) i * 100.0f;   // renormalise order (clean integer positions)
+
+        auto s = std::make_unique<Slot>();
+        s->pedalId = inst->nodeID;
+        s->wrapper = std::make_unique<PlaySlotWrapper> (*this, i, juce::String(), juce::String());
+
+        auto comp = std::make_unique<PedalComponent> (*inst, playEngine, playMidiLearn);
+        if (onOpenLibrary) comp->onOpenLibrary = onOpenLibrary;
+        if (onOpenOverlay)
         {
-            if (inst.onBoard && std::abs(inst.boardX - (i * 100.0f)) < 1.0f)
-            {
-                s->pedalId = inst.nodeID;
-                auto comp = std::make_unique<PedalComponent> (const_cast<PedalInstance&>(inst), playEngine, playMidiLearn);
-                if (onOpenLibrary)
-                    comp->onOpenLibrary = onOpenLibrary;
-                if (onOpenOverlay)
-                {
-                    comp->onOpenOverlay = [this, compPtr = comp.get()](const juce::String& pageName) {
-                        if (onOpenOverlay)
-                            onOpenOverlay(&compPtr->getInstance(), pageName);
-                    };
-                }
-                s->wrapper->setPedal (std::move (comp), inst.name);
-                break;
-            }
+            comp->onOpenOverlay = [this, compPtr = comp.get()] (const juce::String& pageName) {
+                if (onOpenOverlay) onOpenOverlay (&compPtr->getInstance(), pageName);
+            };
         }
-        
+        s->wrapper->setPedal (std::move (comp), inst->name);
+        s->wrapper->pedalId  = inst->nodeID;
+        s->wrapper->selected = (inst->nodeID == selectedPedalId);
+
         container.addAndMakeVisible (s->wrapper.get());
+        slots.push_back (std::move (s));
     }
-    
+
+    // Drop a stale selection if its pedal was removed.
+    if (selectedPedalId.uid != 0 && playEngine.getPedalInstance (selectedPedalId) == nullptr)
+        selectedPedalId = {};
+
     rebuildRouting();
     resized();
     notesOverlay.repaint();
+}
+
+void PlayTabComponent::selectPedal (AudioGraphEngine::NodeID id)
+{
+    selectedPedalId = id;
+    for (auto& s : slots)
+        if (s->wrapper) { s->wrapper->selected = (s->pedalId == id); s->wrapper->repaint(); }
+    grabKeyboardFocus();   // so Delete/Backspace targets this selection
+}
+
+float PlayTabComponent::nextChainX() const
+{
+    float maxX = -100.0f;
+    for (const auto& inst : playEngine.getPedalInstances())
+        if (inst.boardId == "play_board")
+            maxX = juce::jmax (maxX, inst.boardX);
+    return maxX + 100.0f;   // append at the end of the chain
+}
+
+bool PlayTabComponent::isInterestedInDragSource (const SourceDetails& details)
+{
+    auto d = details.description.toString();
+    return d.startsWith ("pedal:") || d.startsWith ("playslot:");
+}
+
+void PlayTabComponent::computeDrop (juce::Point<int> p, const juce::String& descriptor)
+{
+    // Which pedal (if any) is being dragged — excluded from the gap maths.
+    AudioGraphEngine::NodeID dragged {};
+    {
+        juce::StringArray tok; tok.addTokens (descriptor, ":", "");
+        if (tok.size() >= 2 && tok[0] == "playslot")
+        {
+            int n = tok[1].getIntValue();
+            if (n >= 0 && n < (int) slots.size()) dragged = slots[(size_t) n]->pedalId;
+        }
+    }
+
+    // Drag a chain pedal below the row to remove it ("toss it off the floor").
+    dropWillRemove = (dragged.uid != 0) && (p.y > chainRowBottom);
+
+    // Map the pointer into the (scrolled) container, then count how many OTHER
+    // cards sit to its left → the insert index.
+    const int containerX = p.x - viewport.getX() + viewport.getViewPositionX();
+    int idx = 0;
+    for (auto& s : slots)
+    {
+        if (s->pedalId == dragged || s->wrapper == nullptr) continue;
+        if (s->wrapper->getX() + s->wrapper->getWidth() / 2 < containerX) idx++;
+    }
+    dropInsertIndex = idx;
+    dropIndicatorX  = juce::jlimit (viewport.getX(), viewport.getRight(), p.x);
+    dragActive = true;
+}
+
+void PlayTabComponent::itemDragMove (const SourceDetails& details)
+{
+    computeDrop (details.localPosition, details.description.toString());
+    repaint();
+}
+
+void PlayTabComponent::itemDragExit (const SourceDetails&)
+{
+    dragActive = false;
+    repaint();
+}
+
+float PlayTabComponent::boardXForInsert (int gapIndex, AudioGraphEngine::NodeID excluding) const
+{
+    std::vector<float> xs;
+    for (const auto& inst : playEngine.getPedalInstances())
+        if (inst.boardId == "play_board" && inst.nodeID != excluding)
+            xs.push_back (inst.boardX);
+    std::sort (xs.begin(), xs.end());
+
+    if (xs.empty())                  return 0.0f;
+    if (gapIndex <= 0)               return xs.front() - 100.0f;
+    if (gapIndex >= (int) xs.size()) return xs.back() + 100.0f;
+    return (xs[(size_t) gapIndex - 1] + xs[(size_t) gapIndex]) * 0.5f;   // midpoint; renormalised on rebuild
+}
+
+void PlayTabComponent::itemDropped (const SourceDetails& details)
+{
+    computeDrop (details.localPosition, details.description.toString());
+    dragActive = false;
+
+    juce::StringArray tok; tok.addTokens (details.description.toString(), ":", "");
+    if (tok.size() < 2) { repaint(); return; }
+
+    if (tok[0] == "pedal")
+    {
+        addPedalByName (tok[1], boardXForInsert (dropInsertIndex, {}));   // insert at the gap
+    }
+    else if (tok[0] == "playslot")
+    {
+        int n = tok[1].getIntValue();
+        if (n >= 0 && n < (int) slots.size())
+        {
+            auto id = slots[(size_t) n]->pedalId;
+            if (dropWillRemove)
+            {
+                playEngine.removePedal (id);
+                if (selectedPedalId == id) selectedPedalId = {};
+                rebuildSlots();
+            }
+            else if (auto* inst = playEngine.getPedalInstance (id))
+            {
+                inst->boardX = boardXForInsert (dropInsertIndex, id);
+                rebuildSlots();   // re-sorts + renormalises boardX
+            }
+        }
+    }
+    repaint();
+}
+
+bool PlayTabComponent::keyPressed (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey)
+    {
+        if (selectedPedalId.uid != 0)
+        {
+            playEngine.removePedal (selectedPedalId);
+            selectedPedalId = {};
+            rebuildSlots();
+            return true;
+        }
+    }
+    return false;
 }
 
 void PlayTabComponent::setOnOpenLibrary(std::function<void (const juce::String& category, std::function<void(const juce::File&)> onFileSelected)> cb)
@@ -678,48 +898,21 @@ void PlayTabComponent::rebuildRouting()
     }
 }
 
-void PlayTabComponent::handleSlotClicked (int slotIndex)
+void PlayTabComponent::addPedalByName (const juce::String& pedalName, float boardX)
 {
-    activeSlotIndex = slotIndex;
-    inventoryOverlay.onPedalClicked = [this](const juce::String& pedalName)
-    {
-        if (activeSlotIndex >= 0)
-        {
-            handlePedalDropped (activeSlotIndex, pedalName);
-            inventoryOverlay.hide();
-            inventoryOverlay.onPedalClicked = nullptr;
-            activeSlotIndex = -1;
-        }
-    };
-    
-    inventoryOverlay.toggle();
-    if (inventoryOverlay.isOpen())
-        inventoryOverlay.grabKeyboardFocus();
-}
-
-void PlayTabComponent::handlePedalDropped (int slotIndex, const juce::String& pedalName)
-{
-    // Look up pedal in registry
-    bool loaded = false;
+    // Factory pedal?
     for (auto& info : getFactoryPedals())
     {
         if (info.name == pedalName)
         {
-            // If there's an existing pedal in this slot, remove it
-            if (slots[slotIndex]->pedalId.uid != 0)
-            {
-                playEngine.removePedal (slots[slotIndex]->pedalId);
-            }
-
             auto processor = info.factory();
             auto nodeId = playEngine.addPedal (std::move (processor),
-                                               "play_board", 0, // play_board is arbitrary
-                                               slotIndex * 100.0f, 0.0f,
+                                               "play_board", 0,
+                                               boardX, 0.0f,
                                                info.gridW * 100.0f, info.gridH * 100.0f);
-                                               
             if (auto* inst = playEngine.getPedalInstance (nodeId))
             {
-                inst->colour = info.colour;
+                inst->colour   = info.colour;
                 inst->category = info.category;
                 inst->numKnobs = info.numKnobs;
 
@@ -728,65 +921,54 @@ void PlayTabComponent::handlePedalDropped (int slotIndex, const juce::String& pe
                     if (auto* proc = dynamic_cast<GraphPedalProcessor*> (node->getProcessor()))
                     {
                         if (info.designFactory)
-                        {
                             inst->design = info.designFactory();
-                        }
                         else
                         {
                             inst->design = std::make_shared<PedalDesign>();
-                            inst->design->name = info.name;
-                            inst->design->category = info.category;
-                            inst->design->chassisW = info.gridW * 100.0f;
-                            inst->design->chassisH = info.gridH * 100.0f;
+                            inst->design->name          = info.name;
+                            inst->design->category      = info.category;
+                            inst->design->chassisW      = info.gridW * 100.0f;
+                            inst->design->chassisH      = info.gridH * 100.0f;
                             inst->design->chassisColour = info.colour;
                         }
-
                         inst->design->effectsGraph = juce::JSON::parse (proc->saveGraph());
                     }
                 }
             }
-            
             rebuildSlots();
-            loaded = true;
-            break;
+            return;
         }
     }
-    
-    if (!loaded)
+
+    // Custom user pedal?
+    if (auto design = loadCustomPedalDesign (pedalName))
     {
-        if (auto design = loadCustomPedalDesign (pedalName))
+        juce::String jsonGraph;
+        if (! design->effectsGraph.isVoid())
+            jsonGraph = juce::JSON::toString (design->effectsGraph);
+
+        auto processor = std::make_unique<GraphPedalProcessor> (design->name, jsonGraph);
+        auto nodeId = playEngine.addPedal (std::move (processor),
+                                           "play_board", 0,
+                                           boardX, 0.0f,
+                                           design->chassisW, design->chassisH);
+        if (auto* inst = playEngine.getPedalInstance (nodeId))
         {
-            if (slots[slotIndex]->pedalId.uid != 0)
-            {
-                playEngine.removePedal (slots[slotIndex]->pedalId);
-            }
-            
-            juce::String jsonGraph;
-            if (!design->effectsGraph.isVoid())
-                jsonGraph = juce::JSON::toString(design->effectsGraph);
-                
-            auto processor = std::make_unique<GraphPedalProcessor>(design->name, jsonGraph);
-            
-            
-            auto nodeId = playEngine.addPedal (std::move (processor),
-                                            "play_board", 0,
-                                            slotIndex * 100.0f, 0.0f,
-                                            design->chassisW, design->chassisH);
-            
-            if (auto* inst = playEngine.getPedalInstance (nodeId))
-            {
-                inst->colour = design->chassisColour;
-                inst->category = design->category;
-                inst->design = design;
-                
-                int numKnobs = 0;
-                for (const auto& c : design->controls)
-                    if (c.type == "knob") numKnobs++;
-                inst->numKnobs = numKnobs;
-            }
-            rebuildSlots();
+            inst->colour   = design->chassisColour;
+            inst->category = design->category;
+            inst->design   = design;
+            int numKnobs = 0;
+            for (const auto& c : design->controls) if (c.type == "knob") numKnobs++;
+            inst->numKnobs = numKnobs;
         }
+        rebuildSlots();
     }
+}
+
+void PlayTabComponent::handlePedalDropped (int slotIndex, const juce::String& pedalName)
+{
+    // Legacy entry point (presets / agent): place at signal position slotIndex.
+    addPedalByName (pedalName, slotIndex * 100.0f);
 }
 
 void PlayTabComponent::handleSlotSwapped (int sourceSlot, int targetSlot)
@@ -1003,23 +1185,9 @@ juce::String PlayTabComponent::describeChain()
 
 bool PlayTabComponent::addPedalToChain (const juce::String& pedalName)
 {
-    // Reuse the first empty slot; otherwise append a new one (mirrors + Add Slot).
-    int idx = -1;
-    for (int i = 0; i < (int) slots.size(); ++i)
-        if (slots[(size_t) i]->pedalId.uid == 0) { idx = i; break; }
-
-    if (idx < 0)
-    {
-        auto s = std::make_unique<Slot>();
-        s->recommendedCategory = "Any";
-        s->label = "Pedal";
-        slots.push_back (std::move (s));
-        rebuildSlots();
-        idx = (int) slots.size() - 1;
-    }
-
-    handlePedalDropped (idx, pedalName);   // loads factory or custom pedal into slot
-    return idx < (int) slots.size() && slots[(size_t) idx]->pedalId.uid != 0;
+    const int before = (int) slots.size();
+    addPedalByName (pedalName, nextChainX());   // append to the end of the chain
+    return (int) slots.size() > before;
 }
 
 void PlayTabComponent::clearChain()
@@ -1031,16 +1199,6 @@ void PlayTabComponent::clearChain()
     rebuildSlots();
 }
 
-void PlayTabComponent::clearSlot (int slotIndex)
-{
-    if (slotIndex < 0 || slotIndex >= (int) slots.size()) return;
-    if (slots[(size_t) slotIndex]->pedalId.uid != 0)
-    {
-        playEngine.removePedal (slots[(size_t) slotIndex]->pedalId);
-        slots[(size_t) slotIndex]->pedalId.uid = 0;
-    }
-    rebuildSlots();
-}
 
 void PlayTabComponent::saveCurrentChainAsPreset()
 {
@@ -1120,26 +1278,19 @@ bool PlayTabComponent::loadUserPreset (const juce::File& file)
         if (inst.boardId == "play_board")
             playEngine.removePedal (inst.nodeID);
 
-    // Rebuild slots vector from the preset
-    slots.clear();
-    for (const auto& sv : *arr)
-    {
-        auto s = std::make_unique<Slot>();
-        s->recommendedCategory = sv.getProperty ("category", "Any").toString();
-        s->label                = sv.getProperty ("label",    "Pedal").toString();
-        slots.push_back (std::move (s));
-    }
-
-    rebuildSlots();
-
-    // Now drop each named pedal into its slot. Doing this after rebuildSlots
-    // so the slot wrappers exist for the drop targets.
+    // Add each named pedal in order. Empty entries (legacy presets had gaps for
+    // fixed slots) are simply skipped — the chain is just the pedals now.
+    float x = 0.0f;
     for (int i = 0; i < arr->size(); ++i)
     {
         auto pedalName = arr->getUnchecked (i).getProperty ("pedal", "").toString();
         if (pedalName.isNotEmpty())
-            handlePedalDropped (i, pedalName);
+        {
+            addPedalByName (pedalName, x);
+            x += 100.0f;
+        }
     }
 
+    rebuildSlots();
     return true;
 }

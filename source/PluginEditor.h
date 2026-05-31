@@ -4,7 +4,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "ui/LookAndFeel.h"
 #include "ui/PedalboardGrid.h"
-#include "ui/InventoryOverlay.h"
 #include "ui/PedalDesignerComponent.h"
 #include "ui/NodeGraphEditor.h"
 #include "ui/RoutingGraphEditor.h"
@@ -136,9 +135,6 @@ private:
     ScriptingTabComponent scriptingTab;
     WikiTabComponent wikiTab;
 
-    // Q-menu style inventory overlay
-    InventoryOverlay inventory;
-    
     // File picker overlay
     LibraryOverlay libraryOverlay;
 

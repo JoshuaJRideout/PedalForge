@@ -9,7 +9,6 @@
 PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr)
     : engine (eng), midiLearn (midiMgr)
 {
-    addAndMakeVisible (detailPanel);
     detailPanel.addListener (&detailListener);
     detailPanel.onOpenLibrary = [this] (const juce::String& category, std::function<void(const juce::File&)> cb)
     {
@@ -20,14 +19,29 @@ PedalboardGrid::PedalboardGrid (AudioGraphEngine& eng, MidiLearnManager& midiMgr
         if (onOpenOverlay) onOpenOverlay (inst, controlID);
     };
 
-    addAndMakeVisible (btnInventory);
-    btnInventory.onClick = [this] { if (onOpenInventory) onOpenInventory(); };
-
-    addAndMakeVisible (activePedalsList);
     activePedalsList.onPedalClicked = [this] (PedalInstance* inst)
     {
         selectPedalByInstance (inst);
     };
+
+    // Docked "Add" inventory on the left — drag a pedal onto the board, or
+    // click to auto-place it. Replaces the Q-menu on this tab.
+    inventoryPanel.setContext (pf::inv::Context::Board);
+    inventoryPanel.onItemClicked = [this] (const pf::inv::Item& it)
+    {
+        addPedalAtGrid (it.id, -1.0f, -1.0f);   // -1,-1 = auto-place in a free slot
+    };
+    addAndMakeVisible (inventoryPanel);
+
+    // Right-side tabbed inspector: Properties (the selected pedal) + Layers
+    // (the active-pedals outliner). Mirrors the Pedal designer's right panel.
+    rightTabs = std::make_unique<juce::TabbedComponent> (juce::TabbedButtonBar::TabsAtTop);
+    rightTabs->setTabBarDepth (28);
+    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, &detailPanel,      false);
+    rightTabs->addTab ("Layers",     PedalForgeLookAndFeel::bgDark, &activePedalsList, false);
+    rightTabs->setOutline (0);
+    rightTabs->setCurrentTabIndex (1);  // default to the pedal list until one is selected
+    addAndMakeVisible (*rightTabs);
 
     boardCanvas = std::make_unique<BoardCanvas> (engine, this);
     addAndMakeVisible (boardCanvas.get());
@@ -362,8 +376,7 @@ void PedalboardGrid::resized()
     // Add grid combo layout like PedalDesigner
     toolbar.removeFromLeft (32); // Space for GRID label
     gridCombo.setBounds (toolbar.removeFromLeft (75).reduced (4, 6));
-    
-    btnInventory.setBounds (toolbar.removeFromLeft (140).reduced (8, 6));
+
     btnNotes.setBounds (toolbar.removeFromLeft (60).reduced (4, 6));
 
     btnToggleRight.setBounds (toolbar.removeFromRight (60).reduced (4, 6));
@@ -371,33 +384,35 @@ void PedalboardGrid::resized()
     btnAddBoard.setBounds    (toolbar.removeFromRight (100).reduced (4, 6));
     btnExportBoard.setBounds (toolbar.removeFromRight (90).reduced (4, 6));
 
-    // Active pedals sidebar on the left
+    // "Add" inventory dock on the left.
     if (showLeftPanel)
     {
-        activePedalsList.setBounds (area.removeFromLeft (170));
-        activePedalsList.setVisible (true);
+        inventoryPanel.setBounds (area.removeFromLeft (210));
+        inventoryPanel.setVisible (true);
     }
     else
     {
-        activePedalsList.setVisible (false);
+        inventoryPanel.setVisible (false);
     }
 
-    if (detailPanel.hasSelection() && showRightPanel)
+    // Tabbed inspector on the right (Properties + Layers). Always present when
+    // the right panel is shown — the Layers tab is useful with no selection.
+    if (showRightPanel)
     {
         if (rightPanelMaximized)
         {
-            detailPanel.setBounds (area);
+            rightTabs->setBounds (area);
             area.setWidth (0); // consumes all remaining area
         }
         else
         {
-            detailPanel.setBounds (area.removeFromRight (detailPanelWidth));
+            rightTabs->setBounds (area.removeFromRight (detailPanelWidth));
         }
-        detailPanel.setVisible (true);
+        rightTabs->setVisible (true);
     }
     else
     {
-        detailPanel.setVisible (false);
+        rightTabs->setVisible (false);
     }
 
     // Centre the grid in the remaining space
@@ -442,6 +457,7 @@ void PedalboardGrid::selectPedal (PedalComponent* comp)
         selectedComponent->toFront (false);
         detailPanel.showPedal (selectedComponent->getInstance(), engine, &midiLearn);
         showRightPanel = true; // Auto-open right panel when a pedal is selected
+        if (rightTabs) rightTabs->setCurrentTabIndex (0); // jump to Properties
         lastFocusedNodeUID = selectedComponent->getInstance().nodeID.uid;
     }
     else

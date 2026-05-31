@@ -11,7 +11,20 @@ RoutingGraphEditor::RoutingGraphEditor (AudioGraphEngine& eng)
     : engine (eng), canvas (*this)
 {
     addAndMakeVisible (canvas);
-    addAndMakeVisible (propertiesPanel);
+
+    // Docked "Add" inventory (pedals) on the left — drag a pedal onto the canvas.
+    inventoryPanel.setContext (pf::inv::Context::Route);
+    addAndMakeVisible (inventoryPanel);
+
+    // Right-side tabbed inspector: Properties (selected node) + Layers (node list).
+    routeNodeList.onNodeClicked = [this] (int idx) { selectNode (idx); };
+    rightTabs = std::make_unique<juce::TabbedComponent> (juce::TabbedButtonBar::TabsAtTop);
+    rightTabs->setTabBarDepth (28);
+    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, &propertiesPanel, false);
+    rightTabs->addTab ("Layers",     PedalForgeLookAndFeel::bgDark, &routeNodeList,   false);
+    rightTabs->setOutline (0);
+    rightTabs->setCurrentTabIndex (1);  // default to the node list until one is selected
+    addAndMakeVisible (*rightTabs);
 
     canvas.onNodeSelected = [this] (int idx) { selectNode (idx); };
 
@@ -56,7 +69,8 @@ void RoutingGraphEditor::resized()
     toolbar.reduce (8, 4);
     btnNotes.setBounds (toolbar.removeFromLeft (60).withSizeKeepingCentre (60, 24));
 
-    propertiesPanel.setBounds (area.removeFromRight (propertiesWidth));
+    if (rightTabs) rightTabs->setBounds (area.removeFromRight (propertiesWidth));
+    inventoryPanel.setBounds (area.removeFromLeft (210));
     canvas.setBounds (area);
     notesOverlay.setBounds (area);
 }
@@ -300,6 +314,7 @@ void RoutingGraphEditor::syncFromEngine()
             connections.push_back ({ srcIdx, srcPort, dstIdx, dstPort });
     }
 
+    routeNodeList.refresh (nodes);
     canvas.repaint();
 }
 
@@ -421,6 +436,7 @@ void RoutingGraphEditor::visibilityChanged()
     {
         btnNotes.setToggleState (NotesOverlay::globallyVisible, juce::dontSendNotification);
         notesOverlay.setVisible (!engine.routeNotes.empty());
+        routeNodeList.refresh (nodes);
     }
 }
 
@@ -445,7 +461,8 @@ void RoutingGraphEditor::selectNode (int idx)
     {
         nodes[(size_t) idx].selected = true;
         propertiesPanel.showNode (&nodes[(size_t) idx]);
-        
+        if (rightTabs) rightTabs->setCurrentTabIndex (0); // jump to Properties
+
         if (onPedalSelected)
         {
             if (!nodes[(size_t) idx].isIONode)
@@ -1231,4 +1248,74 @@ void RoutingGraphEditor::addPedalToRoute (const juce::String& pedalName, float c
             return;
         }
     }
+}
+
+//==============================================================================
+// RouteNodeList — the "Layers" outliner: one clickable row per routing node.
+//==============================================================================
+struct RoutingGraphEditor::RouteNodeList::Row : public juce::Component
+{
+    Row (int i, juce::String nm, juce::String ty)
+        : idx (i), name (std::move (nm)), type (std::move (ty)) {}
+
+    int idx;
+    juce::String name, type;
+    std::function<void (int)> onClick;
+    bool hovered = false;
+
+    void paint (juce::Graphics& g) override
+    {
+        if (hovered)
+        {
+            g.setColour (PedalForgeLookAndFeel::accent.withAlpha (0.12f));
+            g.fillRect (getLocalBounds());
+        }
+        auto b = getLocalBounds().reduced (8, 2);
+        g.setColour (PedalForgeLookAndFeel::textPrimary);
+        g.setFont (juce::FontOptions (12.5f).withStyle ("Bold"));
+        g.drawText (name, b.removeFromTop (b.getHeight() / 2), juce::Justification::bottomLeft, true);
+        g.setColour (PedalForgeLookAndFeel::textMuted);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (type, b, juce::Justification::topLeft, true);
+        g.setColour (PedalForgeLookAndFeel::gridLine);
+        g.drawHorizontalLine (getHeight() - 1, 0.0f, (float) getWidth());
+    }
+
+    void mouseEnter (const juce::MouseEvent&) override { hovered = true;  repaint(); }
+    void mouseExit  (const juce::MouseEvent&) override { hovered = false; repaint(); }
+    void mouseUp (const juce::MouseEvent& e) override { if (e.mouseWasClicked() && onClick) onClick (idx); }
+};
+
+RoutingGraphEditor::RouteNodeList::RouteNodeList()
+{
+    viewport.setViewedComponent (&content, false);
+    viewport.setScrollBarsShown (true, false);
+    viewport.setScrollBarThickness (8);
+    addAndMakeVisible (viewport);
+}
+
+void RoutingGraphEditor::RouteNodeList::resized()
+{
+    viewport.setBounds (getLocalBounds());
+    const int w = viewport.getMaximumVisibleWidth();
+    int y = 0;
+    for (auto* r : rows) { r->setBounds (0, y, w, 36); y += 36; }
+    content.setSize (w, y);
+}
+
+void RoutingGraphEditor::RouteNodeList::refresh (const std::vector<RoutingNode>& nodeList)
+{
+    rows.clear();
+    content.removeAllChildren();
+    for (int i = 0; i < (int) nodeList.size(); ++i)
+    {
+        const auto& n = nodeList[(size_t) i];
+        const juce::String type = n.isHwMidi ? "MIDI Device" : (n.isIONode ? "I/O" : "Pedal");
+        auto* row = new Row (i, n.name, type);
+        row->onClick = [this] (int idx) { if (onNodeClicked) onNodeClicked (idx); };
+        rows.add (row);
+        content.addAndMakeVisible (row);
+    }
+    resized();
+    repaint();
 }

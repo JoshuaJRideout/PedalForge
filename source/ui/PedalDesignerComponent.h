@@ -4,6 +4,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "LookAndFeel.h"
 #include "NotesOverlay.h"
+#include "InventoryPanel.h"
 
 class DSPGraph;
 struct PedalDesign;
@@ -43,7 +44,14 @@ private:
     class PagesPanel;
 
     std::unique_ptr<ChassisCanvas> canvas;
+    // Docked "Add" inventory (left strip) — the parts toybox; replaces the
+    // Q-menu on this tab. Phase 3 of the editor-shell unification.
+    InventoryPanel inventoryPanel;
     std::unique_ptr<PropertiesPanel> properties;
+    // The Properties panel can be taller than the window (especially the
+    // chassis view with the style controls), so it lives inside a scrolling
+    // viewport rather than directly as the tab content.
+    std::unique_ptr<juce::Viewport> propertiesViewport;
     std::unique_ptr<LayersPanel> layersPanel;
     std::unique_ptr<PagesPanel> pagesPanel;
     std::unique_ptr<juce::TabbedComponent> rightTabs;

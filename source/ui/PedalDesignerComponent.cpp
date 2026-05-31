@@ -1,6 +1,7 @@
 #include "PedalDesignerComponent.h"
 #include "HardwareDrawing.h"
 #include "StyleKit.h"
+#include "NeonStyleKit.h"   // registerBuiltinStyleKits()
 #include "../dsp/DSPGraph.h"
 #include "../dsp/PedalDesign.h"
 #include "../util/AppPaths.h"
@@ -32,6 +33,14 @@ struct PlacedHardware
     
     bool isLocked = false;        // prevents dragging and selection on canvas
     juce::String overlayPage;     // target page for overlay_launcher
+
+    // Per-control StyleKit (PedalDesign::Control::style). Empty/"default" =
+    // built-in look; otherwise the id of a registered kit (e.g. "neon").
+    juce::String style;
+    // Per-control colorway (PedalDesign::Control). 0 seed = none (the kit's own
+    // palette). Mode: 0 = Semantic, 1 = Tint.
+    juce::int64 colorwaySeed = 0;
+    int          colorwayMode = 0;
 };
 
 //==============================================================================
@@ -142,35 +151,38 @@ public:
     juce::String styleKit { "default" };
 
     // Component sizes per type in mm
+    // Default drop sizes, in chassis millimetres. Sized so a freshly-dropped
+    // control reads at a substantial, hardware-realistic scale on a typical
+    // ~120mm enclosure (the user can still resize afterward).
     static float sizeForType (const juce::String& type)
     {
-        if (type == "fader") return 12.0f;
-        if (type == "led" || type == "rgb_led" || type == "indicator") return 5.0f;
-        if (type == "7seg") return 10.0f;
-        if (type == "display") return 8.0f;
-        if (type == "text_screen" || type == "console") return 15.0f;
-        if (type == "pixel_display") return 12.0f;
-        if (type == "label") return 6.0f;
-        if (type == "vu_meter") return 18.0f;
-        if (type == "oscilloscope") return 15.0f;
-        if (type == "xypad") return 25.0f;
-        if (type == "joystick") return 22.0f;
-        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 8.0f;
-        return 12.0f; // knob, switch, footswitch
+        if (type == "fader") return 16.0f;
+        if (type == "led" || type == "rgb_led" || type == "indicator") return 8.0f;
+        if (type == "7seg") return 14.0f;
+        if (type == "display") return 12.0f;
+        if (type == "text_screen" || type == "console") return 18.0f;
+        if (type == "pixel_display") return 16.0f;
+        if (type == "label") return 8.0f;
+        if (type == "vu_meter") return 22.0f;
+        if (type == "oscilloscope") return 18.0f;
+        if (type == "xypad") return 30.0f;
+        if (type == "joystick") return 26.0f;
+        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 11.0f;
+        return 18.0f; // knob, switch, footswitch
     }
     static float widthForType (const juce::String& type)
     {
-        if (type == "fader") return 30.0f;
-        if (type == "7seg") return 22.0f;
-        if (type == "display") return 22.0f;
-        if (type == "text_screen" || type == "console") return 25.0f;
-        if (type == "pixel_display") return 25.0f;
-        if (type == "label") return 25.0f;
-        if (type == "vu_meter") return 6.0f;
-        if (type == "oscilloscope") return 25.0f;
-        if (type == "xypad") return 25.0f;
-        if (type == "joystick") return 22.0f;
-        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 22.0f;
+        if (type == "fader") return 34.0f;
+        if (type == "7seg") return 28.0f;
+        if (type == "display") return 28.0f;
+        if (type == "text_screen" || type == "console") return 32.0f;
+        if (type == "pixel_display") return 32.0f;
+        if (type == "label") return 30.0f;
+        if (type == "vu_meter") return 9.0f;
+        if (type == "oscilloscope") return 32.0f;
+        if (type == "xypad") return 30.0f;
+        if (type == "joystick") return 26.0f;
+        if (type == "file_loader" || type == "plugin_browser" || type == "overlay_launcher") return 28.0f;
         return sizeForType (type);
     }
 
@@ -271,8 +283,10 @@ public:
         design.chassisW = chassisW;
         design.chassisH = chassisH;
         design.chassisColour = chassisColour;
-    design.colorwaySeed = colorwaySeed;
-    design.colorwayMode = colorwayMode;
+        // Chassis (element zero) style + colorway.
+        design.styleKit = styleKit;
+        design.colorwaySeed = colorwaySeed;
+        design.colorwayMode = colorwayMode;
         design.chassisImage = chassisImage;
 
         // Helper: convert PlacedHardware → PedalDesign::Control + Mapping
@@ -301,6 +315,9 @@ public:
                 ctrl.rotationRange = hw.rotationRange;
                 ctrl.sensitivity = hw.sensitivity;
                 ctrl.overlayPage = hw.overlayPage;
+                ctrl.style = hw.style;
+                ctrl.colorwaySeed = hw.colorwaySeed;
+                ctrl.colorwayMode = hw.colorwayMode;
                 controls.push_back (ctrl);
 
                 if (hw.parameterID.isNotEmpty())
@@ -411,9 +428,26 @@ public:
         }
         else
         {
+            // Chassis is element zero — render it through the StyleKit so each
+            // kit draws its own enclosure, with the chassis colorway driving the
+            // colour (chassisColour is the no-colorway fallback).
             HardwareDrawing::CustomStyles chassisStyles;
             chassisStyles.imageChassis = chassisImage;
-            HardwareDrawing::drawChassis (g, { 0, 0, drawW, drawH }, chassisColour, &chassisStyles);
+            chassisStyles.customColour = chassisColour;
+            chassisStyles.stretchImage = true;
+
+            pf::Colorway chassisCw;
+            if (colorwaySeed != 0)
+            {
+                juce::Colour seed ((juce::uint32) (juce::int64) colorwaySeed);
+                if (colorwayMode == 1)
+                    chassisCw = pf::Colorway::tintFromSeed (seed);
+                else
+                    { chassisCw.mode = pf::Colorway::Mode::Semantic; chassisCw.accent = seed; chassisCw.active = true; }
+            }
+
+            pf::StyleKitRegistry::draw (g, styleKit, "chassis", { 0, 0, drawW, drawH },
+                                        pf::ControlState(), chassisCw, &chassisStyles);
         }
 
         // ── Grid overlay — major/minor lines ──
@@ -444,18 +478,6 @@ public:
             g.drawLine (0, midY, drawW, midY, 0.5f);
         }
 
-        // Build the design's colorway once so the canvas previews the same tint
-        // the live faceplate (PedalPainter) renders. Inactive when no seed set.
-        pf::Colorway canvasColorway;
-        if (colorwaySeed != 0)
-        {
-            juce::Colour seed ((juce::uint32) (juce::int64) colorwaySeed);
-            if (colorwayMode == 1)
-                canvasColorway = pf::Colorway::tintFromSeed (seed);
-            else
-                { canvasColorway.mode = pf::Colorway::Mode::Semantic; canvasColorway.accent = seed; canvasColorway.active = true; }
-        }
-
         // ── Draw placed hardware ──
         for (int i = 0; i < (int) placedHardware.size(); ++i)
         {
@@ -468,12 +490,26 @@ public:
             styles.customColour = hw.customColour;
             styles.stretchImage = hw.stretchImage;
 
+            // Per-control colorway (mirrors the live faceplate / PedalPainter).
+            // Inactive when this control has no seed -> the kit's own palette.
+            pf::Colorway cw;
+            if (hw.colorwaySeed != 0)
+            {
+                juce::Colour seed ((juce::uint32) (juce::int64) hw.colorwaySeed);
+                if (hw.colorwayMode == 1)
+                    cw = pf::Colorway::tintFromSeed (seed);
+                else
+                    { cw.mode = pf::Colorway::Mode::Semantic; cw.accent = seed; cw.active = true; }
+            }
+
             // Dim locked items slightly
             if (hw.isLocked && !selectedIndices.count(i))
                 g.setOpacity (0.55f);
 
-            pf::StyleKitRegistry::draw (g, styleKit, hw.type, { hw.x, hw.y, hw.width, hw.height },
-                                        pf::ControlState (hw.value), canvasColorway, &styles);
+            // Per-control kit (empty/"default" = built-in look).
+            const juce::String effKit = hw.style.isNotEmpty() ? hw.style : juce::String ("default");
+            pf::StyleKitRegistry::draw (g, effKit, hw.type, { hw.x, hw.y, hw.width, hw.height },
+                                        pf::ControlState (hw.value), cw, &styles);
             g.setOpacity (1.0f);
 
             // ── Selection visuals ──
@@ -1320,40 +1356,65 @@ public:
 
         setupCombo (overlayPageCombo);
 
-        // ── Style engine (pedal-level): kit dropdown + colorway swatch ──
-        setupCombo (styleKitCombo);
-        styleKitCombo.clear (juce::dontSendNotification);
-        styleKitCombo.addItem ("Default", 1);
+        // ── Style engine ── Style + colorway are PER-CONTROL settings: they
+        //    expand the palette of control looks a designer can build with, and
+        //    are NOT a per-pedal "reskin". registerBuiltinStyleKits() normally
+        //    runs from the editor ctor body — but that's AFTER this panel is
+        //    constructed, so the kit list would be empty here. Call it now
+        //    (idempotent) so the picker lists neon etc.
+        pf::registerBuiltinStyleKits();
+
+        // Per-control kit picker: item 1 = Default (built-in look), 2+ = kits.
+        setupCombo (controlStyleCombo);
+        controlStyleCombo.clear (juce::dontSendNotification);
+        controlStyleCombo.addItem ("Default", 1);
         {
             int id = 2;
             for (auto* k : pf::StyleKitRegistry::kits())
-                if (k != nullptr) styleKitCombo.addItem (k->getId(), id++);
+                if (k != nullptr) controlStyleCombo.addItem (k->getId(), id++);
         }
 
+        // Per-control colorway: a colour swatch (Tint mode) + Clear.
         colorwaySwatchBtn.onClick = [this] { pickColorway(); };
         addChildComponent (colorwaySwatchBtn);
 
         colorwayClearBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
         colorwayClearBtn.setColour (juce::TextButton::textColourOffId, PedalForgeLookAndFeel::textPrimary);
         colorwayClearBtn.onClick = [this] {
-            if (! canvas) return;
-            canvas->colorwaySeed = 0;
+            auto t = currentStyleTarget();
+            if (t.seed == nullptr) return;
+            *t.seed = 0;
             colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId, PedalForgeLookAndFeel::bgLight);
-            canvas->repaint();
+            if (canvas) canvas->notifyHardwareChanged();
         };
         addChildComponent (colorwayClearBtn);
     }
 
-    // Colour picker bound to the pedal's colorway seed (Tint mode).
+    // The element whose style + colorway the inspector controls edit: the single
+    // selected control, or — when nothing is selected — the chassis (element
+    // zero). Null fields when there's no single target (e.g. a multi-selection).
+    struct StyleTarget { juce::String* style = nullptr; juce::int64* seed = nullptr; int* mode = nullptr; };
+    StyleTarget currentStyleTarget()
+    {
+        if (canvas == nullptr) return {};
+        if (auto* hw = canvas->getSelectedHardware())
+            return { &hw->style, &hw->colorwaySeed, &hw->colorwayMode };
+        if (canvas->getSelectedIndices().empty())
+            return { &canvas->styleKit, &canvas->colorwaySeed, &canvas->colorwayMode };
+        return {};
+    }
+
+    // Colour picker bound to the current style target's colorway seed (Tint mode).
     void pickColorway()
     {
-        if (! canvas) return;
+        auto t = currentStyleTarget();
+        if (t.seed == nullptr) return;
         auto* picker = new juce::ColourSelector (
             juce::ColourSelector::showColourAtTop
             | juce::ColourSelector::showSliders
             | juce::ColourSelector::showColourspace);
-        picker->setCurrentColour (canvas->colorwaySeed != 0
-            ? juce::Colour ((juce::uint32) (juce::int64) canvas->colorwaySeed)
+        picker->setCurrentColour (*t.seed != 0
+            ? juce::Colour ((juce::uint32) (juce::int64) *t.seed)
             : juce::Colour (0xFF007DFF));
         picker->setSize (240, 280);
         picker->addChangeListener (new ColorwayListener (*this));
@@ -1369,12 +1430,13 @@ public:
         {
             if (auto* picker = dynamic_cast<juce::ColourSelector*> (source))
             {
-                if (! panel.canvas) return;
+                auto t = panel.currentStyleTarget();
+                if (t.seed == nullptr) return;
                 auto col = picker->getCurrentColour();
-                panel.canvas->colorwaySeed = (juce::int64) (juce::int32) col.getARGB();
-                panel.canvas->colorwayMode = 1;  // Tint
+                *t.seed = (juce::int64) (juce::int32) col.getARGB();
+                *t.mode = 1;  // Tint
                 panel.colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId, col);
-                panel.canvas->repaint();
+                if (panel.canvas) panel.canvas->notifyHardwareChanged();
             }
         }
     };
@@ -1545,6 +1607,26 @@ public:
                     rotationEditor.setText (juce::String (hwPtr->rotationRange, 0), juce::dontSendNotification);
                     sensitivityEditor.setText (juce::String (hwPtr->sensitivity, 0), juce::dontSendNotification);
                 }
+
+                // Per-control STYLE KIT picker: item 1 = Default, 2+ = kits.
+                controlStyleCombo.setVisible (true);
+                {
+                    const juce::String s = hwPtr->style;
+                    int selId = 1;  // Default (empty / "default")
+                    if (s.isNotEmpty() && s != "default")
+                        for (int i = 0; i < controlStyleCombo.getNumItems(); ++i)
+                            if (controlStyleCombo.getItemText (i) == s)
+                                { selId = controlStyleCombo.getItemId (i); break; }
+                    controlStyleCombo.setSelectedId (selId, juce::dontSendNotification);
+                }
+
+                // Per-control COLORWAY: swatch (its colour) + Clear.
+                colorwaySwatchBtn.setVisible (true);
+                colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId,
+                    hwPtr->colorwaySeed != 0
+                        ? juce::Colour ((juce::uint32) (juce::int64) hwPtr->colorwaySeed)
+                        : PedalForgeLookAndFeel::bgLight);
+                colorwayClearBtn.setVisible (true);
             }
         }
         else if (sel.empty())
@@ -1584,14 +1666,17 @@ public:
             rotationEditor.setVisible (false);
             sensitivityEditor.setVisible (false);
 
-            // Style engine: kit picker + colorway swatch are pedal-level.
-            styleKitCombo.setVisible (true);
+            // The chassis is element zero: it gets the SAME style + colorway
+            // controls as a control, editing the chassis's own style/colorway.
+            controlStyleCombo.setVisible (true);
             {
-                const juce::String kit = canvas->styleKit.isNotEmpty() ? canvas->styleKit : juce::String ("default");
-                int selId = 1;  // Default
-                for (int i = 0; i < styleKitCombo.getNumItems(); ++i)
-                    if (styleKitCombo.getItemText (i) == kit) { selId = styleKitCombo.getItemId (i); break; }
-                styleKitCombo.setSelectedId (selId, juce::dontSendNotification);
+                const juce::String s = canvas->styleKit;
+                int selId = 1;  // Default (empty / "default")
+                if (s.isNotEmpty() && s != "default")
+                    for (int i = 0; i < controlStyleCombo.getNumItems(); ++i)
+                        if (controlStyleCombo.getItemText (i) == s)
+                            { selId = controlStyleCombo.getItemId (i); break; }
+                controlStyleCombo.setSelectedId (selId, juce::dontSendNotification);
             }
             colorwaySwatchBtn.setVisible (true);
             colorwaySwatchBtn.setColour (juce::TextButton::buttonColourId,
@@ -1602,9 +1687,9 @@ public:
         }
         else
         {
-            styleKitCombo.setVisible (false);
             colorwaySwatchBtn.setVisible (false);
             colorwayClearBtn.setVisible (false);
+            controlStyleCombo.setVisible (false);
             // Multiple items selected
             overlayPageCombo.setVisible (false);
             labelEditor.setVisible (false);
@@ -1713,6 +1798,13 @@ public:
                     g.drawText (juce::CharPointer_UTF8 ("Arc \xc2\xb0"), m, rotationEditor.getY(), 32, 24, juce::Justification::centredLeft); // \xc2\xb0 = U+00B0 DEGREE; bare UTF-8 literal would mojibake as "Â°"
                     g.drawText ("Sens", m + 90, sensitivityEditor.getY(), 32, 24, juce::Justification::centredLeft);
                 }
+
+                // Per-control style + colour labels (controls positioned in resized()).
+                g.setColour (PedalForgeLookAndFeel::textMuted); g.setFont (juce::FontOptions (11.0f));
+                g.drawText ("CONTROL STYLE", m, controlStyleCombo.getY() - 16, getWidth()-m*2, 16, juce::Justification::centredLeft);
+                g.drawText ("COLORWAY", m, colorwaySwatchBtn.getY() - 16, getWidth()-m*2, 16, juce::Justification::centredLeft);
+                g.setColour (PedalForgeLookAndFeel::textSecondary.withAlpha (0.5f)); g.setFont (juce::FontOptions (9.0f));
+                g.drawText ("(this control's colour)", m + 76, colorwaySwatchBtn.getY() - 16, getWidth()-m*2-76, 16, juce::Justification::centredLeft);
             }
         }
         else if (sel.empty())
@@ -1758,6 +1850,13 @@ public:
                 g.setFont (juce::FontOptions (10.0f));
                 g.drawText ("Image: " + juce::File(canvas->chassisImage).getFileName(), m, btnImageMain.getBottom() + 2, getWidth()-m*2, 14, juce::Justification::centredLeft);
             }
+
+            // Chassis style + colour labels (the chassis is element zero).
+            g.setColour (PedalForgeLookAndFeel::textMuted); g.setFont (juce::FontOptions (11.0f));
+            g.drawText ("CHASSIS STYLE", m, controlStyleCombo.getY() - 16, getWidth()-m*2, 16, juce::Justification::centredLeft);
+            g.drawText ("COLORWAY", m, colorwaySwatchBtn.getY() - 16, getWidth()-m*2, 16, juce::Justification::centredLeft);
+            g.setColour (PedalForgeLookAndFeel::textSecondary.withAlpha (0.5f)); g.setFont (juce::FontOptions (9.0f));
+            g.drawText ("(chassis colour)", m + 76, colorwaySwatchBtn.getY() - 16, getWidth()-m*2-76, 16, juce::Justification::centredLeft);
         }
         else
         {
@@ -1778,18 +1877,23 @@ public:
 
         if (canvas == nullptr) return;
         auto& sel = canvas->getSelectedIndices();
+
+        // Everything flows top-down; we track the bottom of the last control so
+        // the panel can size itself for the scrolling viewport (see below).
+        int contentBottom = 170;
+
         if (sel.empty())
         {
             // Chassis mode sizes
             y = 192;
             nameEditor.setBounds (m, y, getWidth()-m*2, 28);
-            
+
             y = nameEditor.getBottom() + 28;
             authorEditor.setBounds (m, y, getWidth()-m*2, 28);
-            
+
             y = authorEditor.getBottom() + 28;
             descEditor.setBounds (m, y, getWidth()-m*2, 80);
-            
+
             y = descEditor.getBottom() + 28;
             categoryEditor.setBounds (m, y, getWidth()-m*2, 28);
 
@@ -1801,12 +1905,14 @@ public:
             y += 30;
             btnClearImage.setBounds (m, y, getWidth()-m*2, 24);
 
-            // Style engine row: STYLE KIT dropdown, then COLORWAY swatch + Clear.
-            y += 30 + 18;  // gap + room for the "STYLE KIT" label drawn in paint()
-            styleKitCombo.setBounds (m, y, getWidth()-m*2, 24);
-            y = styleKitCombo.getBottom() + 18;  // room for "COLORWAY" label
+            // Chassis style + colorway (element zero) flow below the image btns.
+            y = btnClearImage.getBottom() + 20;  // room for the "CHASSIS STYLE" label
+            controlStyleCombo.setBounds (m, y, getWidth()-m*2, 24);
+            y = controlStyleCombo.getBottom() + 18;  // room for "COLORWAY" label
             colorwaySwatchBtn.setBounds (m, y, getWidth()-m*2 - 64, 24);
             colorwayClearBtn.setBounds (colorwaySwatchBtn.getRight() + 8, y, 56, 24);
+
+            contentBottom = colorwaySwatchBtn.getBottom();
         }
         else if (sel.size() == 1)
         {
@@ -1816,7 +1922,7 @@ public:
             // Component mode sizes
             y = 234;
             labelEditor.setBounds (m, y, getWidth()-m*2, 28);
-            
+
             y = labelEditor.getBottom() + 28;
             bool isOverlayLauncher = hw && hw->type == "overlay_launcher";
             if (isOverlayLauncher)
@@ -1832,7 +1938,7 @@ public:
             {
                 fontFamilyCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
                 fontStyleCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
-                colourCombo.setBounds (m, y, getWidth()-m*2, 28);
+                colourCombo.setBounds (m, y, getWidth()-m*2, 28); y += 36;
             }
             else
             {
@@ -1855,16 +1961,39 @@ public:
                     y += 4;
                     rotationEditor.setBounds (m + 34, y, 48, 24);
                     sensitivityEditor.setBounds (m + 124, y, 48, 24);
+                    y += 28;
                 }
             }
 
-            deleteButton.setBounds (m, getHeight()-50, getWidth()-m*2, 32);
+            // Per-control STYLE KIT + COLORWAY + Delete flow below the controls
+            // above (the panel scrolls), so they never overlap or fall off.
+            y += 20;  // gap + room for the "CONTROL STYLE" label drawn in paint()
+            controlStyleCombo.setBounds (m, y, getWidth()-m*2, 24);
+
+            y = controlStyleCombo.getBottom() + 18;  // room for "COLORWAY" label
+            colorwaySwatchBtn.setBounds (m, y, getWidth()-m*2 - 64, 24);
+            colorwayClearBtn.setBounds (colorwaySwatchBtn.getRight() + 8, y, 56, 24);
+
+            y = colorwaySwatchBtn.getBottom() + 16;
+            deleteButton.setBounds (m, y, getWidth()-m*2, 32);
+
+            contentBottom = deleteButton.getBottom();
         }
         else
         {
             // Multi select sizes
-            deleteButton.setBounds (m, getHeight()-50, getWidth()-m*2, 32);
+            y = 92;
+            deleteButton.setBounds (m, y, getWidth()-m*2, 32);
+            contentBottom = deleteButton.getBottom();
         }
+
+        // Grow the panel so the viewport can scroll to reach every control, but
+        // never make it shorter than the visible area (so the background fills).
+        int wantH = contentBottom + 24;
+        if (auto* vp = dynamic_cast<juce::Viewport*> (getParentComponent()))
+            wantH = juce::jmax (wantH, vp->getMaximumVisibleHeight());
+        if (getHeight() != wantH)
+            setSize (getWidth(), wantH);
     }
 
     void textEditorTextChanged (juce::TextEditor& editor) override
@@ -1912,12 +2041,17 @@ public:
     {
         if (canvas == nullptr) return;
 
-        // Pedal-level StyleKit picker (item 1 = Default -> "default").
-        if (box == &styleKitCombo)
+        // Per-element STYLE KIT picker works for the chassis (nothing selected)
+        // and for a single selected control alike. item 1 = Default (empty),
+        // 2+ = a kit id.
+        if (box == &controlStyleCombo)
         {
-            canvas->styleKit = (styleKitCombo.getSelectedId() <= 1)
-                                 ? juce::String ("default") : styleKitCombo.getText();
-            canvas->repaint();
+            if (auto* style = currentStyleTarget().style)
+            {
+                const int s = controlStyleCombo.getSelectedId();
+                *style = (s <= 1) ? juce::String() : controlStyleCombo.getText();
+                canvas->notifyHardwareChanged();
+            }
             return;
         }
 
@@ -1984,8 +2118,8 @@ private:
     juce::TextEditor wEditor, hEditor;
     juce::TextEditor nameEditor, authorEditor, descEditor, categoryEditor, tagsEditor;
     juce::ComboBox fontStyleCombo, fontFamilyCombo, colourCombo, overlayPageCombo;
-    // Style engine (pedal-level): StyleKit picker + colorway seed swatch.
-    juce::ComboBox styleKitCombo;
+    // Style engine (per-control): StyleKit picker + colorway colour swatch.
+    juce::ComboBox controlStyleCombo;
     juce::TextButton colorwaySwatchBtn, colorwayClearBtn { "Clear" };
     juce::TextButton deleteButton { "Delete Component" };
     juce::TextButton btnImageMain { "Set Image..." };
@@ -2482,16 +2616,46 @@ public:
     };
 };
 
+//==============================================================================
+/** A Viewport that keeps its viewed component exactly as wide as the visible
+    area (so the panel re-flows when the window resizes) and lets the panel
+    own its own height (the panel grows to fit its content so we scroll). */
+class DesignerFitViewport : public juce::Viewport
+{
+public:
+    void resized() override
+    {
+        juce::Viewport::resized();
+        if (auto* c = getViewedComponent())
+        {
+            c->setSize (getMaximumVisibleWidth(), c->getHeight());
+            c->resized();  // re-fit height to the (possibly new) viewport height
+        }
+    }
+};
+
  PedalDesignerComponent::PedalDesignerComponent()
 {
     canvas = std::make_unique<ChassisCanvas>();    addAndMakeVisible (*canvas);
-    properties = std::make_unique<PropertiesPanel>(); 
+
+    // Docked Add inventory (parts) on the left — drag parts onto the chassis.
+    inventoryPanel.setContext (pf::inv::Context::Forge);
+    addAndMakeVisible (inventoryPanel);
+
+    properties = std::make_unique<PropertiesPanel>();
     layersPanel = std::make_unique<LayersPanel>(); 
     pagesPanel = std::make_unique<PagesPanel>();
 
+    // Properties panel scrolls vertically when its content is taller than the
+    // window (e.g. the chassis view with style controls).
+    propertiesViewport = std::make_unique<DesignerFitViewport>();
+    propertiesViewport->setViewedComponent (properties.get(), false);  // not owned
+    propertiesViewport->setScrollBarsShown (true, false);              // vertical only
+    propertiesViewport->setScrollBarThickness (10);
+
     rightTabs = std::make_unique<juce::TabbedComponent>(juce::TabbedButtonBar::TabsAtTop);
     rightTabs->setTabBarDepth(30);
-    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, properties.get(), false);
+    rightTabs->addTab ("Properties", PedalForgeLookAndFeel::bgDark, propertiesViewport.get(), false);
     rightTabs->addTab ("Layers", PedalForgeLookAndFeel::bgDark, layersPanel.get(), false);
     rightTabs->addTab ("Pages", PedalForgeLookAndFeel::bgDark, pagesPanel.get(), false);
     rightTabs->setOutline(0);
@@ -2519,11 +2683,8 @@ public:
     };
     properties->onDeleteClicked = [this] { canvas->deleteSelected(); };
 
-    // ── Toolbar: Colour swatch ──
-    colourSwatchBtn.setColour (juce::TextButton::buttonColourId, canvas->chassisColour);
-    colourSwatchBtn.setButtonText ("");
-    colourSwatchBtn.onClick = [this] { showColourPicker(); };
-    addAndMakeVisible (colourSwatchBtn);
+    // Chassis colour now lives in the inspector (the chassis is element zero,
+    // styled like any control) — no toolbar colour swatch.
 
     // ── Toolbar: Grid combo ──
     gridCombo.setColour (juce::ComboBox::backgroundColourId, PedalForgeLookAndFeel::bgLight);
@@ -2613,7 +2774,6 @@ void PedalDesignerComponent::paint (juce::Graphics& g)
     // Toolbar labels
     g.setColour (PedalForgeLookAndFeel::textMuted);
     g.setFont (juce::FontOptions (10.0f));
-    g.drawText ("COLOUR", colourSwatchBtn.getX() - 42, colourSwatchBtn.getY(), 40, 24, juce::Justification::centredRight);
     g.drawText ("GRID", gridCombo.getX() - 32, gridCombo.getY(), 30, 24, juce::Justification::centredRight);
 
     // Separators
@@ -2621,7 +2781,6 @@ void PedalDesignerComponent::paint (juce::Graphics& g)
         g.setColour (PedalForgeLookAndFeel::gridLine);
         g.drawVerticalLine (x, 8, 28);
     };
-    drawSep (colourSwatchBtn.getRight() + 8);
     drawSep (gridCombo.getRight() + 8);
     drawSep (btnFitView.getRight() + 8);
 }
@@ -2633,11 +2792,7 @@ void PedalDesignerComponent::resized()
     int m = 8;
     int bw = 28, bh = 24;
 
-    // Colour swatch
     toolbar.removeFromLeft (m);
-    auto colourLabel = toolbar.removeFromLeft (46);
-    colourSwatchBtn.setBounds (toolbar.removeFromLeft (bw).withSizeKeepingCentre (24, 24));
-    toolbar.removeFromLeft (16); // separator gap
 
     // Grid combo
     toolbar.removeFromLeft (32); // label
@@ -2662,6 +2817,7 @@ void PedalDesignerComponent::resized()
     btnNotes.setBounds (toolbar.removeFromLeft (50).withSizeKeepingCentre (50, bh));
 
     rightTabs->setBounds (area.removeFromRight (260));
+    inventoryPanel.setBounds (area.removeFromLeft (210));
     canvas->setBounds (area);
     notesOverlay.setBounds (canvas->getBounds());
 }
@@ -2762,6 +2918,9 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
                 hw.rotationRange = ctrl.rotationRange;
                 hw.sensitivity = ctrl.sensitivity;
                 hw.overlayPage = ctrl.overlayPage;
+                hw.style = ctrl.style;
+                hw.colorwaySeed = ctrl.colorwaySeed;
+                hw.colorwayMode = ctrl.colorwayMode;
 
                 for (const auto& m : design.mappings)
                     if (m.controlID == ctrl.controlID)

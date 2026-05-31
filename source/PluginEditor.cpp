@@ -58,7 +58,7 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     addAndMakeVisible (btnTestSound);
 
     // Components
-    playTab = new PlayTabComponent (proc.getPlayGraphEngine(), inventory, proc.playMidiLearn);
+    playTab = new PlayTabComponent (proc.getPlayGraphEngine(), proc.playMidiLearn);
     addChildComponent (playTab);
 
     addAndMakeVisible (grid);
@@ -112,9 +112,8 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     routingEditor = new RoutingGraphEditor (proc.getGraphEngine());
     addChildComponent (routingEditor);
 
-    // Inventory overlay (Q-menu style, initially hidden)
-    addChildComponent (inventory);
-    addKeyListener (&inventory);
+    // The old Q-menu InventoryOverlay is gone — every tab now uses the docked
+    // InventoryPanel (and the Play tab its shelf).
     addKeyListener (this);
     
     // Library overlay
@@ -185,14 +184,8 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
     displayManager->registerMode (std::make_unique<MidiMonitorMode>());
     displayManager->setActiveMode (turingID, "midi_monitor");
 
-    grid.onOpenInventory = [this]
-    {
-        inventory.onPedalClicked = [this] (const juce::String& itemID) {
-            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
-            inventory.hide();
-        };
-        inventory.toggle();
-    };
+    // (Board's old "+ Add Pedal" Q-menu button is gone — the Board tab now has
+    // the docked Add inventory on the left.)
 
     // File picker overlay handler
     libraryOverlay.onAssetSelected = [this] (const juce::File& file)
@@ -277,7 +270,6 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
                     if (json.isEmpty()) return;
                     sp->processorRef.getGraphEngine().deserialise (json);
                     sp->grid.rebuildFromEngine();
-                    sp->inventory.refresh();
                     sp->refreshAfterUndoRedo();
                 }));
             return;
@@ -427,7 +419,6 @@ void PedalForgeEditor::filesDropped (const juce::StringArray& files, int /*x*/, 
 
     if (! importedPedals.isEmpty())
     {
-        inventory.refresh();
         juce::String msg = "Imported " + juce::String (importedPedals.size())
                          + " pedal" + (importedPedals.size() == 1 ? "" : "s") + ":\n"
                          + importedPedals.joinIntoString ("\n");
@@ -470,7 +461,6 @@ void PedalForgeEditor::filesDropped (const juce::StringArray& files, int /*x*/, 
 
                 sp->processorRef.getGraphEngine().deserialise (json);
                 sp->grid.rebuildFromEngine();
-                sp->inventory.refresh();
                 sp->refreshAfterUndoRedo();
             }));
     }
@@ -478,7 +468,6 @@ void PedalForgeEditor::filesDropped (const juce::StringArray& files, int /*x*/, 
 
 PedalForgeEditor::~PedalForgeEditor()
 {
-    removeKeyListener (&inventory);
     removeKeyListener (this);
     delete routingEditor;
     delete playTab;
@@ -552,7 +541,6 @@ void PedalForgeEditor::resized()
     scriptingTab.setBounds (contentBounds);
     wikiTab.setBounds (contentBounds);
     
-    inventory.setBounds (getLocalBounds());
     libraryOverlay.setBounds (getLocalBounds());
     canvasOverlay.setBounds (getLocalBounds());
     toastOverlay.setBounds (getLocalBounds());
@@ -688,45 +676,6 @@ void PedalForgeEditor::buttonClicked (juce::Button* button)
 
     // Re-wire graph pointer
     pedalDesigner.setEffectsGraph (&nodeGraphEditor.getGraph());
-
-    // ── Set Q-menu context for the active tab ───────────────────────
-    if (isPlay)
-    {
-        inventory.setContext (InventoryOverlay::Context::Board);
-        // PlayTabComponent handles its own onPedalClicked when a slot is clicked
-    }
-    else if (isBoard)
-    {
-        inventory.setContext (InventoryOverlay::Context::Board);
-        inventory.onPedalClicked = [this] (const juce::String& itemID) {
-            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
-            inventory.hide();
-        };
-    }
-    else if (isRoute)
-    {
-        inventory.setContext (InventoryOverlay::Context::Route);
-        inventory.onPedalClicked = [this] (const juce::String& itemID) {
-            // Add pedal to graph at arbitrary position
-            grid.addPedalAtGrid (itemID, -1.0f, -1.0f);
-            inventory.hide();
-            if (routingEditor) routingEditor->syncFromEngine();
-        };
-    }
-    else if (isPedal)
-    {
-        inventory.setContext (InventoryOverlay::Context::Forge);
-        inventory.onPedalClicked = nullptr;
-    }
-    else if (isFX)
-    {
-        inventory.setContext (InventoryOverlay::Context::FX);
-        inventory.onPedalClicked = nullptr;
-    }
-
-    // Close the inventory when switching tabs
-    if (inventory.isOpen())
-        inventory.hide();
 
     repaint();
 }
