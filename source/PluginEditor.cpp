@@ -6,6 +6,7 @@
 #include "ui/PlayTabComponent.h"
 #include "peripherals/displays/modes/MidiMonitorMode.h"
 #include "ai/AudioProbe.h"
+#include "ui/NeonStyleKit.h"
 #include "util/AppPaths.h"
 #include <set>
 
@@ -21,6 +22,10 @@ PedalForgeEditor::PedalForgeEditor (PedalForgeProcessor& proc)
       midiSettingsPanel (proc.getGraphEngine())
 {
     setLookAndFeel (&lookAndFeel);
+
+    // Register built-in non-default StyleKits (neon, …) so per-pedal/per-control
+    // `style` selections resolve to a real kit instead of falling back to default.
+    pf::registerBuiltinStyleKits();
 
     // Title
     titleLabel.setText ("PedalForge", juce::dontSendNotification);
@@ -1173,27 +1178,44 @@ juce::String PedalForgeEditor::addPedalToBoard (const juce::String& pedalId, juc
 
 juce::String PedalForgeEditor::createBlankPedal (const juce::String& name, juce::String& errorOut)
 {
-    // A fresh custom pedal = a minimal tutorial pedal (passthrough graph +
-    // empty-ish design) that the agent then reshapes via pedal/fx scripts.
+    // A fresh custom pedal = an existing factory used purely as a structural
+    // seed (so we get a real PedalInstance + processor wired into the graph),
+    // then its face controls + mappings are stripped so the caller — typically
+    // the AI agent — sees a true blank slate to reshape via write_pedal_design
+    // or run_pedal_script. The seed's effectsGraph stays so the pedal stays
+    // audible until the caller rewrites it.
+    //
+    // Seed history: was "factory:hello_gain" until that tutorial pedal was
+    // removed in 89be27a, after which every create_pedal call silently no-op'd
+    // because the factory lookup couldn't find the id. Clean Boost is the
+    // intentional always-present basics pedal — safe to depend on.
+    constexpr const char* kSeedFactoryId = "factory:clean_boost";
+
     juce::StringArray before;
     for (const auto& inst : processorRef.getGraphEngine().getPedalInstances())
         if (inst.design != nullptr) before.add (inst.design->uuid);
 
-    grid.addPedalAtGrid ("factory:hello_gain", -1.0f, -1.0f);
+    grid.addPedalAtGrid (kSeedFactoryId, -1.0f, -1.0f);
 
     for (auto& inst : processorRef.getGraphEngine().getPedalInstances())
     {
         if (inst.design == nullptr) continue;
         if (before.contains (inst.design->uuid)) continue;
-        // Found the new pedal — rename it if requested. (We mutate through a
-        // const-ref's shared_ptr, which is allowed; see findByUuid note.)
-        if (name.isNotEmpty())
+        // Found the new pedal — rename + strip seed content so it's truly
+        // blank. (We mutate through a const-ref's shared_ptr, which is allowed;
+        // see findByUuid note.)
+        auto* mut = processorRef.getGraphEngine().getPedalInstance (inst.nodeID);
+        if (mut != nullptr)
         {
-            auto* mut = processorRef.getGraphEngine().getPedalInstance (inst.nodeID);
-            if (mut != nullptr)
+            if (name.isNotEmpty())
             {
                 mut->name = name;
                 if (mut->design != nullptr) mut->design->name = name;
+            }
+            if (mut->design != nullptr)
+            {
+                mut->design->controls.clear();
+                mut->design->mappings.clear();
             }
         }
         grid.refreshSelectedPedal();
@@ -1204,7 +1226,12 @@ juce::String PedalForgeEditor::createBlankPedal (const juce::String& name, juce:
         return juce::JSON::toString (juce::var (o));
     }
 
-    errorOut = "Could not create a new pedal.";
+    // Tell the caller what's actually wrong rather than a generic failure —
+    // the agent was burning rounds on blind retries last time this happened.
+    errorOut = "create_pedal failed: seed factory '" + juce::String (kSeedFactoryId)
+             + "' is not in the registry (or no board is active to add it to). "
+               "Workaround: call add_pedal_to_board with any factory id from "
+               "list_factory_pedals, then write_pedal_design to overwrite it.";
     return {};
 }
 

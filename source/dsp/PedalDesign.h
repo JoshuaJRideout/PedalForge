@@ -105,6 +105,43 @@ struct PedalDesign
         juce::String shiftBinding;
     };
 
+    // Canonical default sizes (mm) per control type. Single source of truth for
+    // the JSON loader, the script parser, and the script generator's
+    // "default-dim suppression" — keep PedalDesignerComponent's sizeForType /
+    // widthForType in sync if you change these (the designer drag-from-palette
+    // flow has its own copy for back-compat with older drag positions).
+    static float defaultControlWidth (const juce::String& t)
+    {
+        if (t == "fader")          return 30.0f;
+        if (t == "7seg" || t == "display") return 22.0f;
+        if (t == "text_screen" || t == "console" || t == "label"
+            || t == "pixel_display" || t == "oscilloscope") return 25.0f;
+        if (t == "vu_meter")       return 6.0f;
+        if (t == "xypad")          return 25.0f;
+        if (t == "joystick")       return 22.0f;
+        if (t == "file_loader" || t == "plugin_browser" || t == "overlay_launcher" || t == "library_loader")
+                                   return 22.0f;
+        if (t == "led" || t == "rgb_led" || t == "indicator") return 5.0f;
+        return 12.0f;              // knob, switch, footswitch, selector, unknown
+    }
+    static float defaultControlHeight (const juce::String& t)
+    {
+        if (t == "fader")          return 120.0f;
+        if (t == "7seg")           return 10.0f;
+        if (t == "display")        return 8.0f;
+        if (t == "text_screen" || t == "console") return 15.0f;
+        if (t == "pixel_display")  return 12.0f;
+        if (t == "label")          return 6.0f;
+        if (t == "vu_meter")       return 18.0f;
+        if (t == "oscilloscope")   return 15.0f;
+        if (t == "xypad")          return 25.0f;
+        if (t == "joystick")       return 22.0f;
+        if (t == "file_loader" || t == "plugin_browser" || t == "overlay_launcher" || t == "library_loader")
+                                   return 8.0f;
+        if (t == "led" || t == "rgb_led" || t == "indicator") return 5.0f;
+        return 12.0f;              // knob, switch, footswitch, selector, unknown
+    }
+
     float chassisW = 200.0f;
     float chassisH = 340.0f;
     juce::Colour chassisColour { 0xFF8A8A94 };  // Silver default
@@ -390,6 +427,11 @@ struct PedalDesign
                         c.y            = (float)(double) co->getProperty ("y");
                         c.width        = (float)(double) co->getProperty ("width");
                         c.height       = (float)(double) co->getProperty ("height");
+                        // Type-aware default sizes for callers (AI tools, hand-edited JSON,
+                        // older saves) that omit width/height — otherwise controls would
+                        // persist at 0x0 and render as invisible dots.
+                        if (c.width  <= 0.0f) c.width  = defaultControlWidth  (c.type);
+                        if (c.height <= 0.0f) c.height = defaultControlHeight (c.type);
                         c.label        = co->getProperty ("label").toString();
                         c.controlID    = co->getProperty ("controlID").toString();
                         c.defaultValue = (float)(double) co->getProperty ("defaultValue");

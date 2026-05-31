@@ -132,6 +132,12 @@ public:
     int chassisColourIndex = 0;
     juce::Colour chassisColour { 0xFF8A8A94 };
 
+    // Style engine: the design's colorway, so the designer canvas previews the
+    // same tint the live faceplate (PedalPainter) renders. 0 seed = inactive =
+    // default look. Built into a pf::Colorway in paint().
+    juce::int64 colorwaySeed = 0;
+    int         colorwayMode = 0;   // 0 = Semantic, 1 = Tint
+
     // Component sizes per type in mm
     static float sizeForType (const juce::String& type)
     {
@@ -262,6 +268,8 @@ public:
         design.chassisW = chassisW;
         design.chassisH = chassisH;
         design.chassisColour = chassisColour;
+    design.colorwaySeed = colorwaySeed;
+    design.colorwayMode = colorwayMode;
         design.chassisImage = chassisImage;
 
         // Helper: convert PlacedHardware → PedalDesign::Control + Mapping
@@ -433,6 +441,18 @@ public:
             g.drawLine (0, midY, drawW, midY, 0.5f);
         }
 
+        // Build the design's colorway once so the canvas previews the same tint
+        // the live faceplate (PedalPainter) renders. Inactive when no seed set.
+        pf::Colorway canvasColorway;
+        if (colorwaySeed != 0)
+        {
+            juce::Colour seed ((juce::uint32) (juce::int64) colorwaySeed);
+            if (colorwayMode == 1)
+                canvasColorway = pf::Colorway::tintFromSeed (seed);
+            else
+                { canvasColorway.mode = pf::Colorway::Mode::Semantic; canvasColorway.accent = seed; canvasColorway.active = true; }
+        }
+
         // ── Draw placed hardware ──
         for (int i = 0; i < (int) placedHardware.size(); ++i)
         {
@@ -450,7 +470,7 @@ public:
                 g.setOpacity (0.55f);
 
             pf::StyleKitRegistry::draw (g, "default", hw.type, { hw.x, hw.y, hw.width, hw.height },
-                                        pf::ControlState (hw.value), pf::Colorway{}, &styles);
+                                        pf::ControlState (hw.value), canvasColorway, &styles);
             g.setOpacity (1.0f);
 
             // ── Selection visuals ──
@@ -2593,6 +2613,8 @@ void PedalDesignerComponent::loadDesign (const PedalDesign& design)
         canvas->chassisH = design.chassisH;
         canvas->chassisColour = design.chassisColour;
         canvas->chassisImage = design.chassisImage;
+        canvas->colorwaySeed = design.colorwaySeed;
+        canvas->colorwayMode = design.colorwayMode;
         canvas->pedalUuid = design.uuid;
         canvas->pedalName = design.name;
         canvas->pedalAuthor = design.author;

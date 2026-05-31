@@ -84,7 +84,7 @@ void paintDesign (juce::Graphics& g, juce::Rectangle<float> bounds,
         if (design->colorwayMode == 1)
             colorway = pf::Colorway::tintFromSeed (seed);
         else
-            { colorway.mode = pf::Colorway::Mode::Semantic; colorway.accent = seed; }
+            { colorway.mode = pf::Colorway::Mode::Semantic; colorway.accent = seed; colorway.active = true; }
     }
 
     // Draw each control from the design

@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "StyleColor.h"   // pf::Colorway — optional per-control recolour
 
 namespace HardwareDrawing
 {
@@ -21,6 +22,20 @@ struct CustomStyles
     float rotationRangeDeg = 270.0f;  // visual arc for knobs, in degrees
     int positions = 4;                // position count for rotary selector
 };
+
+/** Resolve a colour for a painted element: the colorway's (emphasis, role)
+    colour when one is active, else the supplied hardcoded fallback. Colorway is
+    an EXPLICIT draw parameter (not smuggled through CustomStyles) so there's a
+    single wiring point — the StyleKit dispatch — and nothing for call sites to
+    forget. A nullptr/inactive colorway keeps non-colorway pedals pixel-identical
+    because every tinted call passes the EXACT legacy hex as `fallback`. */
+inline juce::Colour cwColour (const pf::Colorway* cw, float emphasis,
+                              pf::Role role, juce::Colour fallback) noexcept
+{
+    if (cw != nullptr && cw->active)
+        return cw->resolve (emphasis, role);
+    return fallback;
+}
 
 /** Pick the image path for a given control value: imageStates[state] if
     populated for the right state index, else imageMain.
@@ -55,7 +70,7 @@ inline void drawImageScaled (juce::Graphics& g, const juce::Image& img, juce::Re
     g.drawImage (img, area, placement, false);
 }
 
-inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr)
+inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     // Compute the total arc in radians from the configured degrees
     float arcRad = (custom ? custom->rotationRangeDeg : 270.0f) * (juce::MathConstants<float>::pi / 180.0f);
@@ -79,19 +94,19 @@ inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float valu
     auto cx = area.getCentreX(), cy = area.getCentreY();
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.45f;
 
-    // Outer ring
-    g.setColour (juce::Colour (0xFF3A3A4A));
+    // Outer ring (Chrome, raised edge) and body (Chrome, recessed surface).
+    g.setColour (cwColour (colorway, 1.0f, pf::Role::Chrome, juce::Colour (0xFF3A3A4A)));
     g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
-    // Body
-    g.setColour (juce::Colour (0xFF1E1E2E));
+    g.setColour (cwColour (colorway, 0.5f, pf::Role::Chrome, juce::Colour (0xFF1E1E2E)));
     g.fillEllipse (cx - r * 0.85f, cy - r * 0.85f, r * 1.7f, r * 1.7f);
-    // Indicator line
+    // Indicator line (Accent — emphasis tracks the knob value so a hotter
+    // setting reads as a brighter pointer under Tint colorways).
     float angle = -halfArc + value * arcRad;
     float ix = cx + std::sin (angle) * r * 0.78f;
     float iy = cy - std::cos (angle) * r * 0.78f;
     float ix2 = cx + std::sin (angle) * r * 0.3f;
     float iy2 = cy - std::cos (angle) * r * 0.3f;
-    g.setColour (juce::Colours::white);
+    g.setColour (cwColour (colorway, value, pf::Role::Accent, juce::Colours::white));
     float lineW = juce::jmax (1.0f, r * 0.125f);
     g.drawLine (ix2, iy2, ix, iy, lineW);
     // Highlight
@@ -99,7 +114,7 @@ inline void drawKnob (juce::Graphics& g, juce::Rectangle<float> area, float valu
     g.fillEllipse (cx - r * 0.5f, cy - r * 0.7f, r, r * 0.5f);
 }
 
-inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr)
+inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     if (custom != nullptr)
     {
@@ -119,21 +134,21 @@ inline void drawSwitch (juce::Graphics& g, juce::Rectangle<float> area, float va
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.35f;
     bool isOn = value > 0.5f;
 
-    // Hex nut
-    g.setColour (juce::Colour (0xFF5A5A6A));
+    // Hex nut (Chrome)
+    g.setColour (cwColour (colorway, 0.75f, pf::Role::Chrome, juce::Colour (0xFF5A5A6A)));
     g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
-    g.setColour (juce::Colour (0xFF4A4A5A));
+    g.setColour (cwColour (colorway, 0.65f, pf::Role::Chrome, juce::Colour (0xFF4A4A5A)));
     g.fillEllipse (cx - r * 0.7f, cy - r * 0.7f, r * 1.4f, r * 1.4f);
-    // Bat lever
+    // Bat lever — Accent on, dim Chrome implied off; emphasis carries state.
     float leverY = isOn ? (cy - r * 1.4f) : (cy + r * 1.4f);
-    g.setColour (juce::Colour (0xFFB0B0C0));
+    g.setColour (cwColour (colorway, isOn ? 0.9f : 0.4f, pf::Role::Accent, juce::Colour (0xFFB0B0C0)));
     float lineW = juce::jmax (1.0f, r * 0.15f);
     g.drawLine (cx, cy, cx, leverY, lineW);
     float batSize = juce::jmax (2.0f, r * 0.3f);
     g.fillEllipse (cx - batSize * 0.5f, leverY - batSize * 0.5f, batSize, batSize);
 }
 
-inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value = 1.0f, const CustomStyles* custom = nullptr)
+inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value = 1.0f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     if (custom != nullptr)
     {
@@ -152,10 +167,14 @@ inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value
     auto cx = area.getCentreX(), cy = area.getCentreY();
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.3f;
     bool isOn = value > 0.5f;
-    juce::Colour ledColor = custom ? custom->customColour : juce::Colours::red;
+    // Lit colour: a colorway's Glow role when active, else the per-control
+    // customColour (or red). This lets an LED's literal colour survive when no
+    // colorway is set but join the scheme when one is.
+    juce::Colour ledColor = cwColour (colorway, 1.0f, pf::Role::Glow,
+                                      custom ? custom->customColour : juce::Colours::red);
 
-    // Bezel
-    g.setColour (juce::Colour (0xFF3A3A4A));
+    // Bezel (Chrome)
+    g.setColour (cwColour (colorway, 1.0f, pf::Role::Chrome, juce::Colour (0xFF3A3A4A)));
     g.fillEllipse (cx - r * 1.3f, cy - r * 1.3f, r * 2.6f, r * 2.6f);
 
     if (isOn)
@@ -184,7 +203,7 @@ inline void drawLED (juce::Graphics& g, juce::Rectangle<float> area, float value
     match SelectorNode's "selection" parameter which is stored as a raw
     int (0..15). */
 inline void drawSelector (juce::Graphics& g, juce::Rectangle<float> area,
-                          float value = 0.0f, const CustomStyles* custom = nullptr)
+                          float value = 0.0f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     const int positions = juce::jlimit (2, 16, custom ? custom->positions : 4);
 
@@ -255,8 +274,8 @@ inline void drawSelector (juce::Graphics& g, juce::Rectangle<float> area,
         const float y0 = cy + tickInner * std::sin (a);
         const float x1 = cx + tickOuter * std::cos (a);
         const float y1 = cy + tickOuter * std::sin (a);
-        g.setColour (i == sel ? juce::Colour (0xFFE5E7EB)
-                              : juce::Colour (0xFF4B5563));
+        g.setColour (i == sel ? cwColour (colorway, 0.95f, pf::Role::Accent, juce::Colour (0xFFE5E7EB))
+                              : cwColour (colorway, 0.45f, pf::Role::Chrome, juce::Colour (0xFF4B5563)));
         g.drawLine (x0, y0, x1, y1, juce::jmax (1.0f, r * 0.06f));
     }
 
@@ -276,7 +295,8 @@ inline void drawSelector (juce::Graphics& g, juce::Rectangle<float> area,
     pointer.lineTo (baseWidth * 0.5f, 0.0f);
     pointer.lineTo (0.0f, -tipLen);
     pointer.closeSubPath();
-    g.setColour (custom ? custom->customColour : juce::Colour (0xFFF59E0B));
+    g.setColour (cwColour (colorway, 0.85f, pf::Role::Accent,
+                           custom ? custom->customColour : juce::Colour (0xFFF59E0B)));
     auto pt = juce::AffineTransform::rotation (pa).translated (cx, cy);
     g.fillPath (pointer, pt);
 
@@ -287,7 +307,7 @@ inline void drawSelector (juce::Graphics& g, juce::Rectangle<float> area,
     g.fillEllipse (cx - r * 0.6f, cy - r * 0.82f, r * 1.2f, r * 0.45f);
 }
 
-inline void drawFootswitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr)
+inline void drawFootswitch (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.0f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     if (custom != nullptr)
     {
@@ -306,20 +326,20 @@ inline void drawFootswitch (juce::Graphics& g, juce::Rectangle<float> area, floa
     auto cx = area.getCentreX(), cy = area.getCentreY();
     auto r = juce::jmin (area.getWidth(), area.getHeight()) * 0.4f;
 
-    // Washer
-    g.setColour (juce::Colours::lightgrey.darker());
+    // Washer (Chrome)
+    g.setColour (cwColour (colorway, 0.7f, pf::Role::Chrome, juce::Colours::lightgrey.darker()));
     g.fillEllipse (cx - r, cy - r, r * 2, r * 2);
-    // Button
+    // Button — Accent when engaged so an active stomp lights up in colorway.
     bool down = value > 0.5f;
     float pr = down ? r * 0.65f : r * 0.7f;
-    g.setColour (juce::Colours::whitesmoke);
+    g.setColour (cwColour (colorway, down ? 0.9f : 0.55f, pf::Role::Accent, juce::Colours::whitesmoke));
     g.fillEllipse (cx - pr, cy - pr, pr * 2, pr * 2);
     g.setColour (juce::Colours::black.withAlpha(0.3f));
     float lineW = juce::jmax (0.5f, r * 0.1f);
     g.drawEllipse (cx - pr, cy - pr, pr * 2, pr * 2, lineW);
 }
 
-inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr)
+inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float value = 0.5f, const CustomStyles* custom = nullptr, const pf::Colorway* colorway = nullptr)
 {
     // Draw track
     if (custom && custom->imageTrack.isNotEmpty())
@@ -331,12 +351,11 @@ inline void drawFader (juce::Graphics& g, juce::Rectangle<float> area, float val
     else
     {
         auto b = area.reduced (area.getWidth() * 0.1f, area.getHeight() * 0.15f);
-        // Track
-        g.setColour (juce::Colour (0xFF2A2A3A));
+        // Track (Chrome, mid) and recessed slot (Chrome, low).
+        g.setColour (cwColour (colorway, 0.55f, pf::Role::Chrome, juce::Colour (0xFF2A2A3A)));
         g.fillRoundedRectangle (b, b.getHeight() * 0.2f);
-        // Slot
         float slotH = juce::jmax (1.0f, b.getHeight() * 0.1f);
-        g.setColour (juce::Colour (0xFF0A0A14));
+        g.setColour (cwColour (colorway, 0.0f, pf::Role::Chrome, juce::Colour (0xFF0A0A14)));
         g.fillRoundedRectangle (b.getX() + 4, b.getCentreY() - slotH/2, b.getWidth() - 8, slotH, slotH/2);
     }
 

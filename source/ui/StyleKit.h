@@ -63,19 +63,25 @@ public:
                const juce::String& type,
                juce::Rectangle<float> area,
                const ControlState& state,
-               const Colorway& /*colorway*/,
+               const Colorway& colorway,
                const HardwareDrawing::CustomStyles* custom) const override
     {
         const float value = state.value;
 
-        if (type == "knob" || type == "slider")          HardwareDrawing::drawKnob (g, area, value, custom);
+        // Colorway travels as an explicit parameter to the leaf draw fns — no
+        // copying CustomStyles, nothing for call sites to wire. Pass nullptr when
+        // inactive so the legacy hardcoded look renders byte-identically. This is
+        // the single point where colorway meets the per-type dispatch.
+        const pf::Colorway* cw = colorway.active ? &colorway : nullptr;
+
+        if (type == "knob" || type == "slider")          HardwareDrawing::drawKnob (g, area, value, custom, cw);
         else if (type == "xypad")                         HardwareDrawing::drawXYPad (g, area, state.x, state.y, custom);
         else if (type == "joystick")                      HardwareDrawing::drawJoystick (g, area, state.x, state.y, custom);
-        else if (type == "switch")                        HardwareDrawing::drawSwitch (g, area, value, custom);
-        else if (type == "selector")                      HardwareDrawing::drawSelector (g, area, value, custom);
-        else if (type == "led")                           HardwareDrawing::drawLED (g, area, value, custom);
-        else if (type == "footswitch")                    HardwareDrawing::drawFootswitch (g, area, value, custom);
-        else if (type == "fader")                         HardwareDrawing::drawFader (g, area, value, custom);
+        else if (type == "switch")                        HardwareDrawing::drawSwitch (g, area, value, custom, cw);
+        else if (type == "selector")                      HardwareDrawing::drawSelector (g, area, value, custom, cw);
+        else if (type == "led")                           HardwareDrawing::drawLED (g, area, value, custom, cw);
+        else if (type == "footswitch")                    HardwareDrawing::drawFootswitch (g, area, value, custom, cw);
+        else if (type == "fader")                         HardwareDrawing::drawFader (g, area, value, custom, cw);
         // Display types
         else if (type == "7seg")                          HardwareDrawing::draw7Seg (g, area, value * 999.0f, 3, juce::Colour (0xFFFF3333), custom);
         else if (type == "display")                       HardwareDrawing::drawNumericDisplay (g, area, value, custom);

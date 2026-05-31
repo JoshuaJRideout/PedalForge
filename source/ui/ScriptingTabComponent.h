@@ -366,8 +366,18 @@ public:
              "PEDAL script - defines a pedal's chassis + face controls:\n"
              "  setMeta(\"name\",\"author\",\"category\",\"description\")\n"
              "  setChassis(width, height, \"RRGGBB\")\n"
+             "  setStyleKit(\"name\")                              // per-pedal StyleKit\n"
+             "  setColorway(seedARGB, mode)                         // 0=Semantic, 1=Tint\n"
              "  addKnob(\"id\", x, y, \"label\" [, w, h])\n"
              "  addSwitch / addFootswitch / addLed / addFader / addTextScreen(\"id\", x, y, \"label\")\n"
+             "  addControl(\"type\", \"id\", x, y, \"label\" [, w, h])   // any type: selector,\n"
+             "                                                      // xypad, joystick, vu_meter,\n"
+             "                                                      // 7seg, display, oscilloscope, ...\n"
+             "  setStyle(\"id\", \"styleName\")                    // per-control StyleKit override\n"
+             "  setGuard(\"id\", n)                                // 0=none,1=cover,2=hold,3=keylock\n"
+             "  setShift(\"id\", \"shiftBindingName\")             // page/mode shift binding\n"
+             "  setDefault(\"id\", value)                          // per-control default 0.0-1.0\n"
+             "  setPositions(\"id\", n)                            // selector/switch position count\n"
              "  mapControl(\"controlId\", \"<nodeID>_<paramID>\")   // bind a face control to a DSP param\n\n"
              "FX script - builds a pedal's DSP node graph (audible). It builds "
              "the COMPLETE graph from scratch each run:\n"
@@ -1477,33 +1487,87 @@ private:
             return parts;
         };
 
-        auto addControl = [&] (juce::String type, const juce::StringArray& parts, int lineNum)
+        // canonicalType maps both the friendly camelCase alias (Knob/Switch/...)
+        // AND a raw canonical name passed verbatim to addControl("xypad", ...)
+        // to the PedalDesign type string the renderer recognises.
+        auto canonicalType = [] (const juce::String& t) -> juce::String
+        {
+            auto lower = t.toLowerCase();
+            if (lower == "knob")        return "knob";
+            if (lower == "switch")      return "switch";
+            if (lower == "footswitch")  return "footswitch";
+            if (lower == "led")         return "led";
+            if (lower == "fader")       return "fader";
+            if (lower == "textscreen" || lower == "text_screen") return "text_screen";
+            if (lower == "selector")    return "selector";
+            if (lower == "xypad")       return "xypad";
+            if (lower == "joystick")    return "joystick";
+            if (lower == "vu_meter" || lower == "vumeter" || lower == "vu") return "vu_meter";
+            if (lower == "rgb_led" || lower == "rgbled")    return "rgb_led";
+            if (lower == "indicator")   return "indicator";
+            if (lower == "7seg")        return "7seg";
+            if (lower == "display")     return "display";
+            if (lower == "console")     return "console";
+            if (lower == "pixel_display" || lower == "pixeldisplay") return "pixel_display";
+            if (lower == "oscilloscope" || lower == "scope") return "oscilloscope";
+            if (lower == "label")       return "label";
+            if (lower == "graphic")     return "graphic";
+            if (lower == "file_loader" || lower == "fileloader")       return "file_loader";
+            if (lower == "plugin_browser" || lower == "pluginbrowser") return "plugin_browser";
+            if (lower == "overlay_launcher" || lower == "overlaylauncher") return "overlay_launcher";
+            if (lower == "library_loader" || lower == "libraryloader") return "library_loader";
+            // Unknown — pass through as-is so an unrecognised type still serializes
+            // round-trip (the renderer will fall back to a placeholder).
+            return lower;
+        };
+
+        auto addControl = [&] (const juce::String& type, const juce::StringArray& parts, int lineNum)
         {
             // Common shape: addX(id, x, y, label[, w, h])
             if (parts.size() < 4) { setLineErr (lineNum, "add" + type + " needs at least (id, x, y, label)"); return; }
             PedalDesign::Control c;
-            c.type      = type.toLowerCase().replace ("footswitch", "footswitch")
-                                            .replace ("textscreen",  "text_screen");
-            // map our friendly names to PedalDesign's actual type strings
-            if      (type == "Knob")        c.type = "knob";
-            else if (type == "Switch")      c.type = "switch";
-            else if (type == "Footswitch")  c.type = "footswitch";
-            else if (type == "Led")         c.type = "led";
-            else if (type == "Fader")       c.type = "fader";
-            else if (type == "TextScreen")  c.type = "text_screen";
-
+            c.type      = canonicalType (type);
             c.controlID = stripQuotes (parts[0]);
             c.x         = parts[1].getFloatValue();
             c.y         = parts[2].getFloatValue();
             c.label     = stripQuotes (parts[3]);
-            if (parts.size() >= 5) c.width  = parts[4].getFloatValue();
-            if (parts.size() >= 6) c.height = parts[5].getFloatValue();
-
-            // Sensible defaults by type if width/height not supplied
-            if (c.width  <= 0) c.width  = (c.type == "fader") ? 30.0f : (c.type == "text_screen" ? 120.0f : 40.0f);
-            if (c.height <= 0) c.height = (c.type == "fader") ? 120.0f : (c.type == "text_screen" ? 40.0f : 40.0f);
+            // Start from type-aware defaults so omitted w/h match what
+            // PedalDesign::fromJSON would produce — then let explicit args win.
+            c.width     = PedalDesign::defaultControlWidth  (c.type);
+            c.height    = PedalDesign::defaultControlHeight (c.type);
+            if (parts.size() >= 5)
+            {
+                float w = parts[4].getFloatValue();
+                if (w > 0) c.width = w;
+            }
+            if (parts.size() >= 6)
+            {
+                float h = parts[5].getFloatValue();
+                if (h > 0) c.height = h;
+            }
 
             next.controls.push_back (c);
+        };
+
+        // Generic addControl("type", "id", x, y, "label" [, w, h]) — handles any
+        // of the 23 canonical types in InventoryOverlay parts[] so the script
+        // round-trip isn't limited to the 6 friendly aliases below.
+        auto addControlGeneric = [&] (const juce::StringArray& parts, int lineNum)
+        {
+            if (parts.size() < 5) { setLineErr (lineNum, "addControl needs at least (\"type\", id, x, y, label)"); return; }
+            juce::String type = stripQuotes (parts[0]);
+            juce::StringArray rest;
+            for (int i = 1; i < parts.size(); ++i) rest.add (parts[i]);
+            addControl (type, rest, lineNum);
+        };
+
+        // Look up a previously-added control by ID so set* statements can
+        // decorate the most recent addX(...) line.
+        auto findControlByID = [&] (const juce::String& id) -> PedalDesign::Control*
+        {
+            for (auto& c : next.controls)
+                if (c.controlID == id) return &c;
+            return nullptr;
         };
 
         juce::StringArray lines = juce::StringArray::fromLines (source);
@@ -1546,12 +1610,60 @@ private:
                     next.chassisColour = juce::Colour ((juce::uint32) hex.getHexValue64());
                 }
             }
+            else if (rhs.startsWith ("addControl"))     addControlGeneric (parts, lineNum);
             else if (rhs.startsWith ("addKnob"))        addControl ("Knob",        parts, lineNum);
             else if (rhs.startsWith ("addSwitch"))      addControl ("Switch",      parts, lineNum);
             else if (rhs.startsWith ("addFootswitch"))  addControl ("Footswitch",  parts, lineNum);
             else if (rhs.startsWith ("addLed"))         addControl ("Led",         parts, lineNum);
             else if (rhs.startsWith ("addFader"))       addControl ("Fader",       parts, lineNum);
             else if (rhs.startsWith ("addTextScreen"))  addControl ("TextScreen",  parts, lineNum);
+            // Per-pedal style engine (docs/control-catalog.md): kit selection + colorway.
+            else if (rhs.startsWith ("setStyleKit"))
+            {
+                if (parts.size() >= 1) next.styleKit = stripQuotes (parts[0]);
+            }
+            else if (rhs.startsWith ("setColorway"))
+            {
+                if (parts.size() < 1) { setLineErr (lineNum, "setColorway needs (seedARGB[, mode])"); break; }
+                juce::String seedStr = parts[0].trim();
+                juce::uint32 argb = 0;
+                if (seedStr.startsWith ("0x") || seedStr.startsWith ("0X"))
+                    argb = (juce::uint32) seedStr.substring (2).getHexValue64();
+                else
+                    argb = (juce::uint32) seedStr.getLargeIntValue();
+                // Sign-extend through int32 so the stored int64 matches what the
+                // JSON loader produces from "-16744961"-style signed values.
+                next.colorwaySeed = (juce::int64) (juce::int32) argb;
+                if (parts.size() >= 2) next.colorwayMode = parts[1].getIntValue();
+            }
+            // Per-control decorators — apply to the most recently-added control
+            // matching the given id. Quiet no-op if id is unknown (lets a script
+            // declare style/guard/shift before the control without erroring).
+            else if (rhs.startsWith ("setStyle"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setStyle needs (controlID, \"style\")"); break; }
+                if (auto* c = findControlByID (stripQuotes (parts[0]))) c->style = stripQuotes (parts[1]);
+            }
+            else if (rhs.startsWith ("setGuard"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setGuard needs (controlID, guardInt)"); break; }
+                if (auto* c = findControlByID (stripQuotes (parts[0]))) c->guard = parts[1].getIntValue();
+            }
+            else if (rhs.startsWith ("setShift"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setShift needs (controlID, \"shiftBinding\")"); break; }
+                if (auto* c = findControlByID (stripQuotes (parts[0]))) c->shiftBinding = stripQuotes (parts[1]);
+            }
+            else if (rhs.startsWith ("setDefault"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setDefault needs (controlID, value)"); break; }
+                if (auto* c = findControlByID (stripQuotes (parts[0]))) c->defaultValue = parts[1].getFloatValue();
+            }
+            else if (rhs.startsWith ("setPositions"))
+            {
+                if (parts.size() < 2) { setLineErr (lineNum, "setPositions needs (controlID, n)"); break; }
+                if (auto* c = findControlByID (stripQuotes (parts[0]))) c->positions = parts[1].getIntValue();
+            }
             else if (rhs.startsWith ("mapControl"))
             {
                 if (parts.size() != 2) { setLineErr (lineNum, "mapControl needs (controlID, \"nodeID_paramID\")"); break; }
@@ -1604,7 +1716,7 @@ private:
             if (t == "led")         return "addLed";
             if (t == "fader")       return "addFader";
             if (t == "text_screen") return "addTextScreen";
-            return juce::String();
+            return juce::String();   // -> use generic addControl("type", ...)
         };
 
         juce::String s;
@@ -1616,26 +1728,62 @@ private:
           << d.category << "\", \"" << d.description << "\")\n";
         s << "setChassis(" << juce::String (d.chassisW, 0) << ", "
           <<                  juce::String (d.chassisH, 0) << ", 0x"
-          <<                  juce::String::toHexString ((juce::int64) d.chassisColour.getARGB()).toUpperCase() << ")\n\n";
+          <<                  juce::String::toHexString ((juce::int64) d.chassisColour.getARGB()).toUpperCase() << ")\n";
+
+        // Per-pedal style engine — emit only when non-default so simple pedals
+        // stay terse. Parsing side accepts these in any order before/after the
+        // add* statements.
+        if (d.styleKit.isNotEmpty() && d.styleKit != "default")
+            s << "setStyleKit(\"" << d.styleKit << "\")\n";
+        if (d.colorwaySeed != 0)
+        {
+            // colorwaySeed stores an ARGB in an int64 — emit the low 32 bits so
+            // a seed like 0xFF007DFF doesn't sign-extend into 0xFFFFFFFFFF007DFF.
+            const auto argb = (juce::uint32)(juce::int64) (d.colorwaySeed & 0xFFFFFFFFLL);
+            s << "setColorway(0x" << juce::String::toHexString ((juce::int64) argb).toUpperCase()
+              << ", " << juce::String (d.colorwayMode) << ")\n";
+        }
+        s << "\n";
 
         for (const auto& c : d.controls)
         {
             juce::String fn = typeToFunc (c.type);
-            if (fn.isEmpty()) { s << "-- (skipped unknown type \"" << c.type << "\" id=" << c.controlID << ")\n"; continue; }
-            s << fn << "(\"" << c.controlID << "\", "
-              << juce::String (c.x, 0) << ", " << juce::String (c.y, 0)
-              << ", \"" << c.label << "\"";
-            // Only emit width/height if non-default to keep scripts terse
-            bool defaultDims =
-                (c.type == "knob"        && c.width == 40.0f  && c.height == 40.0f) ||
-                (c.type == "switch"      && c.width == 40.0f  && c.height == 40.0f) ||
-                (c.type == "led"         && c.width == 40.0f  && c.height == 40.0f) ||
-                (c.type == "footswitch"  && c.width == 40.0f  && c.height == 40.0f) ||
-                (c.type == "fader"       && c.width == 30.0f  && c.height == 120.0f) ||
-                (c.type == "text_screen" && c.width == 120.0f && c.height == 40.0f);
-            if (!defaultDims)
-                s << ", " << juce::String (c.width, 0) << ", " << juce::String (c.height, 0);
-            s << ")\n";
+            // Unknown-to-alias types fall back to generic addControl("type", ...)
+            // — every PedalDesign control type round-trips losslessly now.
+            if (fn.isEmpty())
+            {
+                s << "addControl(\"" << c.type << "\", \"" << c.controlID << "\", "
+                  << juce::String (c.x, 0) << ", " << juce::String (c.y, 0)
+                  << ", \"" << c.label << "\"";
+                if (c.width != PedalDesign::defaultControlWidth (c.type)
+                    || c.height != PedalDesign::defaultControlHeight (c.type))
+                    s << ", " << juce::String (c.width, 0) << ", " << juce::String (c.height, 0);
+                s << ")\n";
+            }
+            else
+            {
+                s << fn << "(\"" << c.controlID << "\", "
+                  << juce::String (c.x, 0) << ", " << juce::String (c.y, 0)
+                  << ", \"" << c.label << "\"";
+                if (c.width != PedalDesign::defaultControlWidth (c.type)
+                    || c.height != PedalDesign::defaultControlHeight (c.type))
+                    s << ", " << juce::String (c.width, 0) << ", " << juce::String (c.height, 0);
+                s << ")\n";
+            }
+            // Per-control decorators (emitted only when non-default so terse pedals
+            // stay terse and diffs are clean).
+            if (c.style.isNotEmpty() && c.style != "default")
+                s << "setStyle(\"" << c.controlID << "\", \"" << c.style << "\")\n";
+            if (c.guard != 0)
+                s << "setGuard(\"" << c.controlID << "\", " << juce::String (c.guard) << ")\n";
+            if (c.shiftBinding.isNotEmpty())
+                s << "setShift(\"" << c.controlID << "\", \"" << c.shiftBinding << "\")\n";
+            // Non-struct-default scalar fields the add* statements don't carry:
+            // emit them only when they diverge so a typical knob stays a one-liner.
+            if (c.defaultValue != 0.5f)
+                s << "setDefault(\"" << c.controlID << "\", " << juce::String (c.defaultValue, 3) << ")\n";
+            if ((c.type == "selector" || c.type == "switch") && c.positions != 4)
+                s << "setPositions(\"" << c.controlID << "\", " << juce::String (c.positions) << ")\n";
         }
 
         if (! d.mappings.empty())
@@ -2049,8 +2197,17 @@ private:
                 "-- Functions:\n"
                 "--   setMeta(name, author, category, description)\n"
                 "--   setChassis(w, h, colorHex)\n"
+                "--   setStyleKit(name)                            -- per-pedal StyleKit\n"
+                "--   setColorway(seedARGB, mode)                  -- 0=Semantic, 1=Tint\n"
                 "--   addKnob(id, x, y, label[, w, h])\n"
                 "--   addSwitch / addFootswitch / addLed / addFader / addTextScreen\n"
+                "--   addControl(\"type\", id, x, y, label[, w, h])  -- any type (xypad, joystick,\n"
+                "--                                                   vu_meter, selector, 7seg, ...)\n"
+                "--   setStyle(id, \"styleName\")                  -- per-control StyleKit override\n"
+                "--   setGuard(id, n)                              -- 0=none,1=cover,2=hold,3=keylock\n"
+                "--   setShift(id, \"shiftBindingName\")           -- page/mode shift binding\n"
+                "--   setDefault(id, value)                        -- per-control default 0.0-1.0\n"
+                "--   setPositions(id, n)                          -- selector/switch position count\n"
                 "--   mapControl(controlID, \"nodeID_paramID\")\n"
                 "\n"
                 "setMeta(\"My Drive\", \"User\", \"Drive\", \"A simple overdrive\")\n"

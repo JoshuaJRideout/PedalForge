@@ -41,6 +41,12 @@ struct Colorway
     enum class Mode { Tint, Semantic };
     Mode mode = Mode::Semantic;
 
+    // When false (a freshly default-constructed Colorway), draw code treats it
+    // as "no colorway set" and uses its built-in hardcoded look — this keeps the
+    // Phase 0 default visuals byte-identical. The factories below set it true;
+    // PedalPainter only builds a Colorway at all when colorwaySeed != 0.
+    bool active = false;
+
     // Structural anchors (used in both modes).
     juce::Colour bg      { 0xFF14141C };  // chassis / deepest surface
     juce::Colour surface { 0xFF1E1E2E };  // raised panel / control body
@@ -108,6 +114,7 @@ struct Colorway
     {
         Colorway c;
         c.mode = Mode::Tint;
+        c.active = true;
 
         const float hue = seed.getHue();
         const float sat = juce::jlimit (0.0f, 1.0f, seed.getSaturation());
