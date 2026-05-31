@@ -1007,6 +1007,76 @@ bool PedalForgeEditor::writePedalDesign (const juce::String& uuid,
     return true;
 }
 
+juce::String PedalForgeEditor::listStyleKits()
+{
+    juce::Array<juce::var> arr;
+    auto describe = [] (pf::StyleKit& k)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("id", k.getId());
+        juce::Array<juce::var> sig;
+        for (const auto& t : k.signatureTypes()) sig.add (t);
+        o->setProperty ("signatureTypes", sig);
+        return juce::var (o);
+    };
+    arr.add (describe (pf::StyleKitRegistry::defaultKit()));
+    for (auto* k : pf::StyleKitRegistry::kits())
+        if (k != nullptr) arr.add (describe (*k));
+    return juce::JSON::toString (juce::var (arr));
+}
+
+bool PedalForgeEditor::setPedalStyle (const juce::String& uuid,
+                                      const juce::var& styleKit,
+                                      const juce::var& colorway,
+                                      const juce::var& colorwayMode,
+                                      juce::String& errorOut)
+{
+    AudioGraphEngine* eng = nullptr;
+    auto* inst = findByUuid (processorRef, uuid, &eng);
+    if (inst == nullptr || inst->design == nullptr || eng == nullptr)
+    {
+        errorOut = "No pedal with uuid " + uuid;
+        return false;
+    }
+
+    eng->saveUndoState();
+    auto& d = *inst->design;
+
+    // styleKit: any non-void value sets it; "" or "default" => the built-in look.
+    if (! styleKit.isVoid())
+    {
+        auto kit = styleKit.toString().trim();
+        d.styleKit = kit.isEmpty() ? juce::String ("default") : kit;
+    }
+
+    // colorway: a void value leaves it unchanged; "" clears it; a hex string sets
+    // the seed. Accept "#AARRGGBB", "#RRGGBB", or the same without the hash.
+    if (! colorway.isVoid())
+    {
+        auto s = colorway.toString().trim().removeCharacters ("#");
+        if (s.isEmpty())
+        {
+            d.colorwaySeed = 0;   // cleared
+        }
+        else
+        {
+            auto hex = (juce::uint32) s.getHexValue64();
+            if (s.length() <= 6) hex |= 0xFF000000;   // RRGGBB => opaque
+            d.colorwaySeed = (juce::int64) (juce::int32) hex;  // sign-extend, matches JSON
+        }
+    }
+
+    // colorwayMode: "tint" => 1, "semantic" => 0. Void leaves unchanged.
+    if (! colorwayMode.isVoid())
+        d.colorwayMode = (colorwayMode.toString().trim().equalsIgnoreCase ("tint")) ? 1 : 0;
+
+    // Pure visual change — no DSP rebuild needed. Refresh the board; the open
+    // designer picks up the change on its next selection/repaint.
+    grid.refreshSelectedPedal();
+    grid.repaint();
+    return true;
+}
+
 juce::String PedalForgeEditor::readFxGraph (const juce::String& pedalUuid)
 {
     if (auto* inst = findInstanceByUuid (pedalUuid))
