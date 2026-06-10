@@ -484,6 +484,83 @@ and the chunk mesher + vehicle damage re-mesher are the only renderer features M
 - **Demo strategy**: ship *Wreckyard* mode as a free Steam demo / Next Fest entry — it
   exercises voxel damage + netcode with 5% of the content surface.
 
+### 11.3 Server hosting model
+
+Three tiers, cheapest-trust first:
+
+1. **Listen servers (primary)** — any player hosts a match from inside the client. Zero
+   setup, SDR relays handle NAT traversal and hide the host's IP. This is how co-op,
+   customs, and casual PvP happen. Host migration is out of scope (match ends if host
+   quits; the event-log + reconnect design makes "resume from log" a possible later add).
+2. **Community dedicated servers** — the headless Linux binary (same code, no renderer),
+   distributed free via SteamCMD like Valve titles. Persistent browsers-listed servers,
+   admin config (map size, seed pools, mod list, tick rate), RCON. This tier is the
+   modding community's home (§13a).
+3. **Official dedicated servers (ranked only)** — the only tier where we pay for and
+   trust the hardware, because ranked integrity demands it. Everything else belongs to
+   players.
+
+The engine is **headless-first**: the simulation core never references the renderer
+(already true of the M0 code), so the dedicated server is a link target, not a port.
+
+---
+
+## 13a. Modding (first-class, designed-in)
+
+The original Urban Assault lived for twenty years on the back of its total-conversion
+modders. That is not an accident to imitate by luck — it's a requirement: **the game is
+its own first mod.** Factory content ships in the same package format modders use, so the
+mod path is exercised by every developer every day and can never rot.
+
+### Mod package anatomy ("forge packs")
+A mod is a directory/zip with a manifest (`forge.json`: id, semver, dependencies, min
+game version) containing any of:
+
+- **Vehicles**: `.vox` voxel models + parts-annotation sidecar (part names, types, HP,
+  armor, drop-table overrides) + stat block. The cost-balancing formula (§13 open
+  question) auto-prices custom vehicles for unranked play.
+- **Weapons & damage types**: data tables (damage, penetration, blast, type multipliers).
+- **Factions**: stat tables + palette/greeble profiles + unit roster references.
+- **Arena rulesets**: generation parameter sets (macro-pattern weights, biome mixes,
+  ritual-space lists, fairness thresholds) — new *kinds* of maps without new code.
+- **Game modes & unit AI**: **sandboxed Lua scripts** against a versioned, capability-based
+  API (spawn, orders, sectors, energy, part queries, UI toasts, objective markers). No
+  filesystem/network/OS access; instruction- and memory-budgeted per tick. Game modes are
+  Lua orchestrations of engine primitives — Colossus and Scrap Pilots (§7.1) will
+  themselves be written against this API as the proof.
+- **Cosmetics**: palettes, decals, music, SFX, UI skins (client-side-safe category).
+
+### Determinism & multiplayer rules
+- Mods are **server-side authoritative**: the host/server declares the mod list; joining
+  clients auto-fetch via Workshop (or direct download from community servers for
+  non-Workshop mods), then verify by **content hash** — every client runs byte-identical
+  mod data, preserving the seed/event-log determinism contract.
+- Client-only mods are restricted to the cosmetic category (validated by package
+  category, enforced by hash exclusion); everything that touches simulation comes from
+  the server's list.
+- **Ranked is vanilla-only** (hash-checked). Casual/custom/community tiers are wide open.
+- Replays embed the mod list + hashes, so modded replays stay reproducible.
+
+### Distribution
+- **Steam Workshop** as the storefront-integrated path (subscribe → auto-download →
+  appears in lobby). Workshop launches *with* Early Access, not after — community content
+  velocity is the EA retention strategy.
+- **Plain folder + direct-download fallback** so Workshop is never a hard dependency
+  (community servers can host their own packs; important for total conversions and for
+  any future non-Steam build).
+- In-client mod browser at the lobby level: server's required pack list, one-click fetch,
+  hash status.
+
+### Engineering implications (why this is cheap if decided now)
+- Everything gameplay-tunable lives in **data tables loaded at runtime**, never compiled
+  in (the M0 code's hardcoded templates migrate to the package format in M1).
+- Stable **content-addressed IDs** for vehicles/parts/weapons from day one, so packs
+  compose without collisions.
+- The Lua VM and capability API are an M2 deliverable (game modes need them anyway); the
+  package loader + hash verification land in M1 alongside the asset pipeline.
+- Native-code plugins are explicitly **out of scope** (security + determinism + platform
+  matrix); the pressure valve is expanding the Lua API, driven by what modders ask for.
+
 ---
 
 ## 12. Scope, milestones, risks
@@ -493,11 +570,14 @@ and the chunk mesher + vehicle damage re-mesher are the only renderer features M
   part damage with detach + drops, terrain craters, 2-player listen-server sync. *Gate:
   is shooting a wing off fun? Is the netcode plan sound?*
 - **M1 — Loop (3–4 mo)**: Host Station, sectors/energy, build menu, squad AI + orders,
-  possession switchboard, 1 faction complete, co-op vs 1 AI host, Wreckyard mode.
+  possession switchboard, 1 faction complete, co-op vs 1 AI host, Wreckyard mode;
+  asset pipeline = the mod package loader + content hashing (§13a — game-as-first-mod).
 - **M2 — Game (4–6 mo)**: 4 factions, all macro-patterns + 3 biomes, PvP modes, dedicated
-  server, Steam lobbies, reconnect, first balance pass. *Closed playtest on Steam.*
+  server, Steam lobbies, reconnect, first balance pass; Lua mode API lands here (Colossus
+  and Scrap Pilots written against it as proof). *Closed playtest on Steam.*
 - **M3 — Product (3–4 mo)**: ranked seed pools, replays, tutorial/co-op onboarding arc,
-  polish/perf (min spec: GTX 1060 / M1 / RX 580 @ 60 fps medium), localization, Early Access launch.
+  Workshop integration, polish/perf (min spec: GTX 1060 / M1 / RX 580 @ 60 fps medium),
+  localization, Early Access launch.
 
 ### 12.2 Top risks & mitigations
 1. **Netcode × destruction complexity** — mitigated by event-sourced terrain, hash audits,
