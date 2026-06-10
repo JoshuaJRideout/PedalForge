@@ -45,10 +45,17 @@ Headless core, zero external dependencies:
 - [x] Sector economy (§2.2): power stations claim 16x16 sectors, owned
       sectors pay energy per second, killing the station's core flips the
       sector neutral
+- [x] Arena generation: 4 biomes (incl. city ruin grammar), spawn rings
+      with carved route guarantees, tank-walkability validation bot
+- [x] Projectiles (arcs, missiles) + blast splash damage to vehicles
+- [x] Host Stations, annihilation match state machine, commander AI —
+      bot-vs-bot matches resolve deterministically in CI
+- [x] Replay system (byte-identical re-simulation), chunk re-sync repair
+- [x] UDP transport with fragmentation + voxfall_server dedicated binary
+- [x] MagicaVoxel .vox import with parts sidecar (the modding asset path)
+- [x] Parser/network fuzz tests (3 real bugs found and fixed)
 - [ ] Renderer binary (bgfx + SDL3): GPU upload + camera around the meshers
-- [ ] Real transport binding (UDP/GameNetworkingSockets) + client prediction
-      for the possessed vehicle
-- [ ] Squad AI + orders (M1)
+- [ ] Client prediction for the possessed vehicle; GameNetworkingSockets binding
 
 ## Build & run
 
