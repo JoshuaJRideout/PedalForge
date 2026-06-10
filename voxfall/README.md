@@ -25,8 +25,18 @@ Headless core, zero external dependencies:
 - [x] `.vxm` static map format (§3.4): RLE-compressed world + name/spawn
       metadata, save/load, malformed-input rejection — the future map
       editor's output format — `src/world/mapfile.*`
+- [x] Deterministic combat sim (`src/sim/`): world-space entities, hitscan
+      into rotated sub-voxel grids, terrain blasts, death craters, drop
+      pickups with magnet collection, team energy, SimEvent records
+- [x] Listen-server netcode (`src/net/`): server-authoritative sessions,
+      event-sourced terrain destruction, full entity snapshots, join-in-
+      progress via live `.vxm` transfer, rotating chunk-hash desync audits;
+      transport-agnostic (loopback in tests, Steam Networking Sockets later)
+- [x] Cross-platform CI (Windows/macOS/Linux build + tests + demo smoke run)
 - [ ] Renderer (bgfx + SDL3): greedy-meshed chunks, vehicle re-mesh on damage
-- [ ] 2-player listen-server sync (event-sourced destruction, snapshot vehicles)
+- [ ] Real transport binding (UDP/GameNetworkingSockets) + client prediction
+      for the possessed vehicle
+- [ ] Squad AI + orders (M1)
 
 ## Build & run
 
