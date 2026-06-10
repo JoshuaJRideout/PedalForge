@@ -62,6 +62,7 @@ public:
     BlastResult applyBlast(const BlastEvent& e);
 
     int seaLevel() const { return seaLevelY; }
+    void setSeaLevel(int y) { seaLevelY = y; } // map loading (§3.4)
 
     // FNV-1a over all voxel materials — whole-world audit / determinism tests.
     uint64_t contentHash() const;
