@@ -99,6 +99,23 @@ void placeBuilding(VoxelWorld& w, Rng& rng, int bx, int bz, int width, int depth
         w.set({ bx, y, doorZ }, Material::Air);
         w.set({ bx, y, doorZ + 1 }, Material::Air);
     }
+    // Window grid: per floor, punched through every facade (skip corners).
+    for (int floor = 0; floor < floors; ++floor) {
+        const int wy = ground + floor * floorHeight + 2;
+        if (wy + 1 >= top) break;
+        for (int x = bx + 2; x < bx + width - 2; x += 3) {
+            w.set({ x, wy, bz }, Material::Air);
+            w.set({ x, wy + 1, bz }, Material::Air);
+            w.set({ x, wy, bz + depth - 1 }, Material::Air);
+            w.set({ x, wy + 1, bz + depth - 1 }, Material::Air);
+        }
+        for (int z = bz + 2; z < bz + depth - 2; z += 3) {
+            w.set({ bx, wy, z }, Material::Air);
+            w.set({ bx, wy + 1, z }, Material::Air);
+            w.set({ bx + width - 1, wy, z }, Material::Air);
+            w.set({ bx + width - 1, wy + 1, z }, Material::Air);
+        }
+    }
     // Erosion: some buildings are already half-ruined.
     if (rng.chance(0.4f)) {
         const int bites = 2 + static_cast<int>(rng.range(4));
@@ -130,6 +147,37 @@ void cityPass(VoxelWorld& w, const ArenaParams& p) {
 
 int waterDepthAt(const VoxelWorld& w, int x, int z) {
     return std::max(0, w.seaLevel() - w.heightAt(x, z));
+}
+
+// Tree scatter (the concept-art greenery): trunk + leaf crown on dry soil.
+// Runs before spawn pads and corridors, which clear their own ground.
+void treePass(VoxelWorld& w, const ArenaParams& p, float density) {
+    const Int3 size = w.size();
+    for (int z = 4; z < size.z - 4; ++z) {
+        for (int x = 4; x < size.x - 4; ++x) {
+            const uint32_t threshold = static_cast<uint32_t>(density * 1024.0f);
+            if (hashCoords(p.seed ^ 0x7AEE5ull, x, 0, z) % 1024 >= threshold) continue;
+            const int ground = w.heightAt(x, z);
+            if (ground <= w.seaLevel() + 1 || ground + 9 >= size.y) continue;
+            if (w.at({ x, ground - 1, z }) != Material::Soil) continue;
+
+            const uint64_t h = hashCoords(p.seed ^ 0x73EEull, x, 1, z);
+            const int trunk = 3 + static_cast<int>(h % 3);
+            for (int y = ground; y < ground + trunk; ++y) w.set({ x, y, z }, Material::Wood);
+            // Leaf crown: stacked discs, widest at the bottom.
+            const int crownBase = ground + trunk;
+            for (int layer = 0; layer < 4; ++layer) {
+                const int r = layer < 2 ? 2 : 1;
+                for (int dx = -r; dx <= r; ++dx)
+                    for (int dz = -r; dz <= r; ++dz) {
+                        if (std::abs(dx) == r && std::abs(dz) == r && r > 1) continue;
+                        const Int3 cell{ x + dx, crownBase + layer, z + dz };
+                        if (w.inBounds(cell) && w.at(cell) == Material::Air)
+                            w.set(cell, Material::Foliage);
+                    }
+            }
+        }
+    }
 }
 
 // Carve a tank-passable ramped corridor between two points (§3.3.5).
@@ -177,6 +225,11 @@ MapMeta generateArena(VoxelWorld& world, const ArenaParams& p) {
     hardrockRibs(world, p.seed, p.biome == Biome::Canyons ? 0.30f : 0.38f);
     crystals(world, p.seed);
     if (p.biome == Biome::ShatteredCity) cityPass(world, p);
+    // Greenery: parks between city ruins, scattered woods elsewhere.
+    treePass(world, p,
+             p.biome == Biome::ShatteredCity ? 0.012f
+             : p.biome == Biome::Canyons     ? 0.006f
+                                             : 0.010f);
 
     // Spawns on a ring, route-carved in a cycle so all are ground-connected.
     MapMeta meta;

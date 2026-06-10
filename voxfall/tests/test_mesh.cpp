@@ -63,7 +63,7 @@ TEST(mesh_vehicle_loses_destroyed_parts) {
     CHECK(clipped.vertices.size() < full.vertices.size());
 
     // Damaged-but-alive parts darken (shade < 255 appears after hull damage).
-    damaged.applyHit({ 12, 8, 4 }, 120, DamageType::Kinetic, rng); // hull to ~33%
+    damaged.applyHit({ 24, 16, 8 }, 120, DamageType::Kinetic, rng); // hull to ~33%
     const Mesh charred = meshVehicle(tmpl, damaged);
     bool darkened = false;
     for (const MeshVertex& v : charred.vertices) darkened |= (v.shade < 255);

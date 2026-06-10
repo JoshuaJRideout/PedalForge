@@ -51,6 +51,9 @@ struct VehicleTemplate {
     std::string name;
     TemplateId id = TemplateId::Count;
     LocomotionClass locomotion = LocomotionClass::Tracked;
+    // Sub-voxel edge length in meters (§4.1): 0.25 m standard; small craft
+    // use 0.125 m for detail, huge units (Colossus) may go coarser.
+    float voxelSize = 0.25f;
     Int3 dims;                       // sub-voxel grid dimensions
     std::vector<uint8_t> partIndex;  // per sub-voxel: kEmptySubvoxel or index into parts
     std::vector<PartDef> parts;

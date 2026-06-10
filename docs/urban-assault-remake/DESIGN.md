@@ -166,9 +166,10 @@ Rules:
 ## 4. Vehicles: sub-voxel construction and parts
 
 ### 4.1 Resolution
-- Vehicles are modeled at **0.25 m sub-voxels** — 4× finer per axis (64× per volume) than
-  the world grid. A small fighter ≈ 6×4×2 m = 24×16×8 = ~1,500 occupied sub-voxels;
-  the Host Station ≈ 40×40×20 m ≈ low hundreds of thousands (heavily hollow).
+- Vehicle sub-voxel scale is **per template**: 0.25 m standard, **0.125 m for small
+  craft** (8× finer per axis than the world grid — concept-art density), coarser for
+  huge units like the Colossus. A small fighter at 0.125 m ≈ 6×4×2 m = 48×32×16 grid
+  = several thousand occupied sub-voxels; buildings stay at 0.25 m.
 - Vehicle voxel models are **authored as templates** (hand-built in-house in MagicaVoxel
   /Goxel-compatible `.vox`, plus a parts-annotation sidecar), then **procedurally skinned**
   per faction/match (palette, wear, decals, greeble pass) so the same chassis never looks
