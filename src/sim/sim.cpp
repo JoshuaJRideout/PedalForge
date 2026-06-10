@@ -63,9 +63,10 @@ std::optional<Int3> Sim::worldToSubvoxel(const VehicleEntity& e, Vec3 p) const {
     const float fwd = c * dx + s * dz;
     const float side = -s * dx + c * dz;
 
-    const Int3 sub{ static_cast<int>(std::floor(fwd / kSubvoxelSize + static_cast<float>(dims.x) * 0.5f)),
-                    static_cast<int>(std::floor(side / kSubvoxelSize + static_cast<float>(dims.y) * 0.5f)),
-                    static_cast<int>(std::floor(up / kSubvoxelSize)) };
+    const float vs = e.tmpl->voxelSize;
+    const Int3 sub{ static_cast<int>(std::floor(fwd / vs + static_cast<float>(dims.x) * 0.5f)),
+                    static_cast<int>(std::floor(side / vs + static_cast<float>(dims.y) * 0.5f)),
+                    static_cast<int>(std::floor(up / vs)) };
     // Template grids store height in z; partAt expects (x=fwd, y=side, z=up).
     if (e.tmpl->partAt({ sub.x, sub.y, sub.z }) < 0) return std::nullopt;
     return sub;
@@ -100,7 +101,8 @@ void Sim::recordPartEvents(VehicleEntity& target, const HitResult& hit, Vec3 at)
             stations.erase(it);
         }
         // Vehicle-mass crater (§4.2): scale with sub-voxel volume.
-        const float mass = static_cast<float>(target.tmpl->occupiedCount());
+        const float k = target.tmpl->voxelSize / 0.25f;
+        const float mass = static_cast<float>(target.tmpl->occupiedCount()) * k * k * k;
         applyBlast({ at, std::clamp(mass / 250.0f, 1.5f, 6.0f),
                      static_cast<int>(std::clamp(mass / 4.0f, 60.0f, 400.0f)),
                      DamageType::Explosive });
@@ -127,8 +129,8 @@ VehicleEntity* Sim::vehicleAt(Vec3 p, uint32_t exclude, Int3& subvoxelOut) {
         if (target.id == exclude || target.state.destroyed()) continue;
         const Int3 dims = target.tmpl->dims;
         const float horiz =
-            static_cast<float>(std::max(dims.x, dims.y)) * kSubvoxelSize * 0.5f + 0.3f;
-        const float height = static_cast<float>(dims.z) * kSubvoxelSize + 0.3f;
+            static_cast<float>(std::max(dims.x, dims.y)) * target.tmpl->voxelSize * 0.5f + 0.3f;
+        const float height = static_cast<float>(dims.z) * target.tmpl->voxelSize + 0.3f;
         if (std::abs(p.x - target.body.position.x) > horiz) continue;
         if (std::abs(p.z - target.body.position.z) > horiz) continue;
         const float up = p.y - target.body.position.y;
@@ -149,7 +151,7 @@ uint32_t Sim::launch(uint32_t shooter, Vec3 dir, float speed, const WeaponSpec& 
     --src->ammo;
 
     const Vec3 d = normalized(dir);
-    const float muzzleUp = static_cast<float>(src->tmpl->dims.z) * kSubvoxelSize * 0.6f;
+    const float muzzleUp = static_cast<float>(src->tmpl->dims.z) * src->tmpl->voxelSize * 0.6f;
     Projectile p;
     p.id = nextProjectileId++;
     p.shooter = shooter;
@@ -215,7 +217,7 @@ std::optional<HitscanResult> Sim::fire(uint32_t shooter, Vec3 dir, const WeaponS
     --src->ammo;
 
     const Vec3 d = normalized(dir);
-    const float muzzleUp = static_cast<float>(src->tmpl->dims.z) * kSubvoxelSize * 0.6f;
+    const float muzzleUp = static_cast<float>(src->tmpl->dims.z) * src->tmpl->voxelSize * 0.6f;
     const Vec3 origin{ src->body.position.x, src->body.position.y + muzzleUp,
                        src->body.position.z };
 
@@ -279,7 +281,7 @@ uint32_t Sim::eject(uint32_t vehicleId) {
     if (v->tmpl->id == TemplateId::Pilot) return 0; // can't eject from yourself
 
     // Step out beside the left flank, snapped to the ground.
-    const float side = static_cast<float>(v->tmpl->dims.y) * kSubvoxelSize * 0.5f + 1.0f;
+    const float side = static_cast<float>(v->tmpl->dims.y) * v->tmpl->voxelSize * 0.5f + 1.0f;
     const float c = std::cos(v->body.yaw), s = std::sin(v->body.yaw);
     Vec3 pos{ v->body.position.x - s * side, 0.0f, v->body.position.z + c * side };
     pos.y = static_cast<float>(voxels.heightAt(static_cast<int>(std::floor(pos.x)),
@@ -337,11 +339,11 @@ void Sim::applyBlast(const BlastEvent& e) {
         if (v.state.destroyed()) continue;
         const Vec3 center{ v.body.position.x,
                            v.body.position.y
-                               + static_cast<float>(v.tmpl->dims.z) * kSubvoxelSize * 0.5f,
+                               + static_cast<float>(v.tmpl->dims.z) * v.tmpl->voxelSize * 0.5f,
                            v.body.position.z };
         const float bound =
             static_cast<float>(std::max({ v.tmpl->dims.x, v.tmpl->dims.y, v.tmpl->dims.z }))
-            * kSubvoxelSize;
+            * v.tmpl->voxelSize;
         const float centerDist = distance(e.center, center);
         if (centerDist > e.radius + bound) continue;
 

@@ -34,7 +34,7 @@ TEST(raycast_vehicle_damage_is_visible) {
     Vehicle intact(tmpl);
     Vehicle damaged(tmpl);
     Rng rng(1);
-    damaged.applyHit({ 10, 2, 4 }, 60, DamageType::Kinetic, rng); // wing off
+    damaged.applyHit({ 20, 4, 8 }, 60, DamageType::Kinetic, rng); // wing off
 
     const Image a = renderVehicle(tmpl, intact, 128, 96);
     const Image b = renderVehicle(tmpl, damaged, 128, 96);

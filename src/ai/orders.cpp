@@ -89,9 +89,9 @@ void AiController::drive(Sim& sim, VehicleEntity& e, Order& order) {
             }
             if (dist <= kWeaponRange && cooldown[e.id] <= 0) {
                 const float muzzleUp =
-                    static_cast<float>(e.tmpl->dims.z) * Sim::kSubvoxelSize * 0.6f;
+                    static_cast<float>(e.tmpl->dims.z) * e.tmpl->voxelSize * 0.6f;
                 const float aimUp =
-                    static_cast<float>(target->tmpl->dims.z) * Sim::kSubvoxelSize * 0.4f;
+                    static_cast<float>(target->tmpl->dims.z) * target->tmpl->voxelSize * 0.4f;
                 const Vec3 dir{ target->body.position.x - e.body.position.x,
                                 (target->body.position.y + aimUp)
                                     - (e.body.position.y + muzzleUp),

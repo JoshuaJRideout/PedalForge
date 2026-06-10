@@ -155,7 +155,7 @@ TEST(sim_boarding_rules) {
     int cockpit = -1;
     for (size_t i = 0; i < m->tmpl->parts.size(); ++i)
         if (m->tmpl->parts[i].name == "cockpit") cockpit = static_cast<int>(i);
-    m->state.applyHit({ 10, 5, 25 }, 50, DamageType::Kinetic, rng);
+    m->state.applyHit({ 20, 10, 50 }, 50, DamageType::Kinetic, rng);
     CHECK(!m->state.partAlive(cockpit));
     CHECK(!sim.board(enemyPilot, mech));
 }
@@ -265,7 +265,7 @@ TEST(sim_repair_kit_heals_lowest_part) {
     int turret = -1;
     for (size_t i = 0; i < e->tmpl->parts.size(); ++i)
         if (e->tmpl->parts[i].name == "weapon.turret") turret = static_cast<int>(i);
-    e->state.applyHit({ 8, 5, 8 }, 30, DamageType::Kinetic, rng); // hits turret block
+    e->state.applyHit({ 16, 10, 16 }, 30, DamageType::Kinetic, rng); // hits turret block
     const int hpAfterDamage = e->state.partHp(turret);
     CHECK(hpAfterDamage < e->tmpl->parts[static_cast<size_t>(turret)].maxHp);
 

@@ -20,6 +20,8 @@ Rgb materialColor(Material m) {
         case Material::Water:    return { 48, 110, 180 };
         case Material::Crystal:  return { 120, 230, 210 };
         case Material::Bedrock:  return { 30, 30, 34 };
+        case Material::Wood:     return { 112, 80, 48 };
+        case Material::Foliage:  return { 64, 138, 56 };
         default:                 return { 255, 0, 255 };
     }
 }

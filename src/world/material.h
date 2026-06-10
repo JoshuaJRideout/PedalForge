@@ -14,6 +14,8 @@ enum class Material : uint8_t {
     Water,
     Crystal,
     Bedrock,
+    Wood,
+    Foliage,
     Count
 };
 
@@ -35,6 +37,8 @@ inline const MaterialInfo& materialInfo(Material m) {
         { "water",    0,   false, false },
         { "crystal",  50,  true,  false },
         { "bedrock",  -1,  true,  false },
+        { "wood",     40,  true,  false },
+        { "foliage",  15,  true,  false },
     };
     static_assert(sizeof(table) / sizeof(table[0]) == static_cast<size_t>(Material::Count));
     return table[static_cast<size_t>(m)];

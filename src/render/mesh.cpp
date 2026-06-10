@@ -141,9 +141,9 @@ Mesh meshVehicle(const VehicleTemplate& tmpl, const Vehicle& state) {
     });
 
     // Lattice (x=fwd, y=side, z=up) -> model space (x=fwd, y=up, z=side),
-    // 0.25 m sub-voxels, anchor at bottom center. The axis swap mirrors
+    // template voxelSize meters, anchor at bottom center. The axis swap mirrors
     // handedness, so triangle winding is reversed to stay CCW.
-    constexpr float s = 0.25f;
+    const float s = tmpl.voxelSize;
     const float cx = static_cast<float>(tmpl.dims.x) * 0.5f;
     const float cy = static_cast<float>(tmpl.dims.y) * 0.5f;
     for (MeshVertex& vtx : mesh.vertices) {

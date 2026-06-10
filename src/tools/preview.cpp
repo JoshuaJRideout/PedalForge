@@ -66,10 +66,10 @@ int main(int argc, char** argv) {
     Vehicle winged(tmpl);
     Vehicle battered(tmpl);
     Rng combat(7);
-    winged.applyHit({ 10, 2, 4 }, 60, DamageType::Kinetic, combat);   // left wing off
-    battered.applyHit({ 10, 2, 4 }, 60, DamageType::Kinetic, combat); // wing off
-    battered.applyHit({ 2, 8, 4 }, 90, DamageType::Kinetic, combat);  // engine out
-    battered.applyHit({ 12, 8, 4 }, 120, DamageType::Kinetic, combat);// hull mauled
+    winged.applyHit({ 20, 4, 8 }, 60, DamageType::Kinetic, combat);   // left wing off
+    battered.applyHit({ 20, 4, 8 }, 60, DamageType::Kinetic, combat); // wing off
+    battered.applyHit({ 4, 16, 8 }, 90, DamageType::Kinetic, combat);  // engine out
+    battered.applyHit({ 24, 16, 8 }, 120, DamageType::Kinetic, combat);// hull mauled
 
     writePng(outDir + "/wasp_intact.png", renderVehicle(tmpl, intact, 480, 360));
     writePng(outDir + "/wasp_wing_destroyed.png", renderVehicle(tmpl, winged, 480, 360));
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
         const VehicleTemplate& talon = VehicleTemplate::talonMech();
         Vehicle legless(talon);
         Rng mechRng(3);
-        legless.applyHit({ 8, 1, 6 }, 500, DamageType::Kinetic, mechRng); // left leg
+        legless.applyHit({ 16, 2, 12 }, 500, DamageType::Kinetic, mechRng); // left leg
         writePng(outDir + "/vehicle_talon_leg_destroyed.png",
                  renderVehicle(talon, legless, 480, 360));
         std::printf("wrote vehicle_talon_leg_destroyed.png\n");
