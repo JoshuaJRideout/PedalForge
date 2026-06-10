@@ -149,6 +149,17 @@ void Vehicle::rollDrops(const PartDef& def, bool isCore, Rng& rng, std::vector<D
     if (isCore) out.push_back(DropKind::EnergyShard); // whole-vehicle kill: bigger roll
 }
 
+bool Vehicle::isHusk() const {
+    if (dead) return false;
+    bool hasCockpit = false;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (templ->parts[i].type != PartType::Cockpit) continue;
+        hasCockpit = true;
+        if (!parts[i].destroyed) return false;
+    }
+    return hasCockpit;
+}
+
 bool Vehicle::hasAlivePartOfType(PartType type) const {
     return alivePartCountOfType(type) > 0;
 }

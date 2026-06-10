@@ -18,7 +18,10 @@ Headless core, zero external dependencies:
       with group HP, armor, damage-type interaction, overkill bleed, part
       detachment, and deterministic loot drops — `src/vehicle/`
 - [x] Unit tests + headless demo (`voxfall_sim`)
-- [ ] Kinematic vehicle controllers (per locomotion class)
+- [x] Kinematic locomotion controllers (tracked, jet, walker/mech, pilot) wired
+      to part status: track loss = limp, engine loss = glide, leg loss =
+      immobile, cockpit loss = stealable husk — `src/vehicle/locomotion.*`
+- [x] Mech ("Talon") and on-foot pilot templates (§4.7 of the design)
 - [ ] Renderer (bgfx + SDL3): greedy-meshed chunks, vehicle re-mesh on damage
 - [ ] 2-player listen-server sync (event-sourced destruction, snapshot vehicles)
 

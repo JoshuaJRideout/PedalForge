@@ -79,6 +79,7 @@ void VoxelWorld::generate(uint64_t seed) {
 }
 
 int VoxelWorld::heightAt(int x, int z) const {
+    if (x < 0 || z < 0 || x >= dims.x || z >= dims.z) return 0;
     for (int y = dims.y - 1; y >= 0; --y) {
         if (materialInfo(voxels[index({ x, y, z })]).solid) return y + 1;
     }

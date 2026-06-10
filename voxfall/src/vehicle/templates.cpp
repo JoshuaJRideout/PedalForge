@@ -57,6 +57,48 @@ VehicleTemplate makeBrick() {
     return t;
 }
 
+VehicleTemplate makeTalon() {
+    // "Talon" mid mech (DESIGN.md §4.7): 4 x 3 x 8 m at 0.25 m sub-voxels.
+    // Cockpit is a part but NOT the core: destroying it husks the mech.
+    VehicleTemplate t;
+    t.name = "Talon";
+    t.dims = { 16, 12, 32 };
+    t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
+
+    const int torso = t.addPart("torso", PartType::Hull, 220, 0.8f);
+    const int cockpit = t.addPart("cockpit", PartType::Cockpit, 50);
+    const int legL = t.addPart("leg.left", PartType::Leg, 90);
+    const int legR = t.addPart("leg.right", PartType::Leg, 90);
+    const int armL = t.addPart("arm.left", PartType::Weapon, 60);
+    const int armR = t.addPart("arm.right", PartType::Weapon, 60);
+    const int jets = t.addPart("jumpjets", PartType::JumpJets, 40);
+    const int sensor = t.addPart("sensor", PartType::Sensor, 25);
+
+    t.fillBox({ 4, 0, 0 }, { 12, 4, 14 }, legL);
+    t.fillBox({ 4, 8, 0 }, { 12, 12, 14 }, legR);
+    t.fillBox({ 2, 4, 14 }, { 14, 8, 24 }, torso);
+    t.fillBox({ 8, 4, 24 }, { 14, 8, 28 }, cockpit);
+    t.fillBox({ 4, 2, 16 }, { 14, 4, 22 }, armL);
+    t.fillBox({ 4, 8, 16 }, { 14, 10, 22 }, armR);
+    t.fillBox({ 0, 4, 16 }, { 2, 8, 22 }, jets);
+    t.fillBox({ 8, 5, 28 }, { 12, 7, 30 }, sensor);
+
+    t.finalize();
+    return t;
+}
+
+VehicleTemplate makePilot() {
+    // On-foot pilot (DESIGN.md §4.7): 0.5 x 0.5 x 2 m. One fragile part.
+    VehicleTemplate t;
+    t.name = "Pilot";
+    t.dims = { 2, 2, 8 };
+    t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
+    const int body = t.addPart("body", PartType::Hull, 40);
+    t.fillBox({ 0, 0, 0 }, { 2, 2, 8 }, body);
+    t.finalize();
+    return t;
+}
+
 } // namespace
 
 const VehicleTemplate& VehicleTemplate::waspFighter() {
@@ -66,6 +108,16 @@ const VehicleTemplate& VehicleTemplate::waspFighter() {
 
 const VehicleTemplate& VehicleTemplate::brickTank() {
     static const VehicleTemplate t = makeBrick();
+    return t;
+}
+
+const VehicleTemplate& VehicleTemplate::talonMech() {
+    static const VehicleTemplate t = makeTalon();
+    return t;
+}
+
+const VehicleTemplate& VehicleTemplate::pilot() {
+    static const VehicleTemplate t = makePilot();
     return t;
 }
 

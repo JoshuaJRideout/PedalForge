@@ -22,6 +22,9 @@ enum class PartType : uint8_t {
     ShieldGen,
     Cargo,
     Power,
+    Cockpit,   // mechs (§4.7): destroyed while core lives -> powered-down husk
+    Leg,       // walkers/mechs: per-leg mobility loss
+    JumpJets,  // mechs: jump capability
 };
 
 struct PartDef {
@@ -65,9 +68,12 @@ struct VehicleTemplate {
 
     std::vector<std::set<int>> adjacency; // per part: touching parts
 
-    // Factory templates (DESIGN.md §4.2 "Wasp" fighter, plus a tank).
+    // Factory templates (DESIGN.md §4.2 "Wasp" fighter, plus a tank, a mid
+    // mech for Scrap Pilots, and the on-foot pilot — §4.7).
     static const VehicleTemplate& waspFighter();
     static const VehicleTemplate& brickTank();
+    static const VehicleTemplate& talonMech();
+    static const VehicleTemplate& pilot();
 };
 
 enum class DropKind : uint8_t { AmmoCell, RepairKit, EnergyShard };
@@ -96,6 +102,12 @@ public:
     int partHp(int part) const { return parts[static_cast<size_t>(part)].hp; }
     bool partAlive(int part) const { return !parts[static_cast<size_t>(part)].destroyed; }
     bool destroyed() const { return dead; }
+
+    // Husk rule (§4.7): cockpit(s) destroyed while the core lives. The machine
+    // is intact but pilotless — boardable by anyone, ignores control input.
+    bool isHusk() const;
+    // Alive, not a husk: accepts control input.
+    bool operable() const { return !dead && !isHusk(); }
 
     // Functional status queries — locomotion/weapon models read these.
     bool hasAlivePartOfType(PartType type) const;
