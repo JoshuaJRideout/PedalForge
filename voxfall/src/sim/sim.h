@@ -50,6 +50,18 @@ struct Pickup {
     uint64_t despawnTick = 0;
 };
 
+// In-flight ordnance (§5.1): ballistic point integrated per tick with
+// sub-steps; impacts resolve through the same hit pipeline as hitscan.
+struct Projectile {
+    uint32_t id = 0;
+    uint32_t shooter = 0;
+    Vec3 position;
+    Vec3 velocity;
+    WeaponSpec spec;
+    float gravityFactor = 1.0f; // 0 = missile/rocket, 1 = lobbed shell
+    uint64_t expireTick = 0;
+};
+
 struct SimEvent {
     enum class Type : uint8_t {
         Blast,            // terrain destruction (blast field valid)
@@ -96,7 +108,15 @@ public:
     // damage or terrain blast, spawn drops). Requires an alive weapon part and ammo.
     std::optional<HitscanResult> fire(uint32_t shooter, Vec3 dir, const WeaponSpec& spec = {});
 
+    // Launch a projectile from an entity's weapon (consumes ammo). Returns
+    // projectile id (0 = failed).
+    uint32_t launch(uint32_t shooter, Vec3 dir, float speed, const WeaponSpec& spec,
+                    float gravityFactor = 1.0f);
+    const std::vector<Projectile>& projectiles() const { return ordnance; }
+
     // Server-authoritative terrain event (also what clients apply on receipt).
+    // Also damages vehicles in the radius (entry-point sampling, falloff) —
+    // so death craters chain into tightly packed formations.
     void applyBlast(const BlastEvent& e);
 
     // Eject the pilot from a vehicle (§4.7): spawns an on-foot pilot beside it
@@ -147,11 +167,16 @@ public:
 private:
     void recordPartEvents(VehicleEntity& target, const HitResult& hit, Vec3 at);
     void collectPickups();
+    void stepProjectiles();
+    // First vehicle hit at point p (excluding one entity); -1 part = none.
+    VehicleEntity* vehicleAt(Vec3 p, uint32_t exclude, Int3& subvoxelOut);
 
     VoxelWorld voxels;
     Rng rng;
     std::vector<VehicleEntity> vehicles;
     std::vector<Pickup> drops;
+    std::vector<Projectile> ordnance;
+    uint32_t nextProjectileId = 1;
     std::vector<SimEvent> pending;
     uint64_t tickCount = 0;
     uint32_t nextEntityId = 1;

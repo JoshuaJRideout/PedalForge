@@ -104,6 +104,12 @@ void Server::tick() {
         writeVec3(w, p.position);
         w.u64(p.despawnTick);
     }
+    w.u32(static_cast<uint32_t>(simulation.projectiles().size()));
+    for (const Projectile& p : simulation.projectiles()) {
+        w.u32(p.id);
+        writeVec3(w, p.position);
+        writeVec3(w, p.velocity);
+    }
     const std::vector<uint8_t> update = w.data;
 
     std::optional<std::vector<uint8_t>> audit;
@@ -249,6 +255,15 @@ void Client::receive(const std::vector<uint8_t>& msg) {
                 p.position = readVec3(r);
                 p.despawnTick = r.u64();
                 replicaPickups.push_back(p);
+            }
+            replicaProjectiles.clear();
+            const uint32_t projectileCount = r.u32();
+            for (uint32_t i = 0; i < projectileCount && r.ok; ++i) {
+                Projectile p;
+                p.id = r.u32();
+                p.position = readVec3(r);
+                p.velocity = readVec3(r);
+                replicaProjectiles.push_back(p);
             }
             break;
         }

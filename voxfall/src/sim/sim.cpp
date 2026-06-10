@@ -122,6 +122,92 @@ void Sim::recordPartEvents(VehicleEntity& target, const HitResult& hit, Vec3 at)
     }
 }
 
+VehicleEntity* Sim::vehicleAt(Vec3 p, uint32_t exclude, Int3& subvoxelOut) {
+    for (VehicleEntity& target : vehicles) {
+        if (target.id == exclude || target.state.destroyed()) continue;
+        const Int3 dims = target.tmpl->dims;
+        const float horiz =
+            static_cast<float>(std::max(dims.x, dims.y)) * kSubvoxelSize * 0.5f + 0.3f;
+        const float height = static_cast<float>(dims.z) * kSubvoxelSize + 0.3f;
+        if (std::abs(p.x - target.body.position.x) > horiz) continue;
+        if (std::abs(p.z - target.body.position.z) > horiz) continue;
+        const float up = p.y - target.body.position.y;
+        if (up < -0.3f || up > height) continue;
+        if (const std::optional<Int3> sub = worldToSubvoxel(target, p)) {
+            subvoxelOut = *sub;
+            return &target;
+        }
+    }
+    return nullptr;
+}
+
+uint32_t Sim::launch(uint32_t shooter, Vec3 dir, float speed, const WeaponSpec& spec,
+                     float gravityFactor) {
+    VehicleEntity* src = find(shooter);
+    if (!src || !src->state.operable() || src->ammo <= 0) return 0;
+    if (!src->state.hasAlivePartOfType(PartType::Weapon)) return 0;
+    --src->ammo;
+
+    const Vec3 d = normalized(dir);
+    const float muzzleUp = static_cast<float>(src->tmpl->dims.z) * kSubvoxelSize * 0.6f;
+    Projectile p;
+    p.id = nextProjectileId++;
+    p.shooter = shooter;
+    p.position = { src->body.position.x + d.x * 1.5f,
+                   src->body.position.y + muzzleUp + d.y * 1.5f,
+                   src->body.position.z + d.z * 1.5f };
+    p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+    p.spec = spec;
+    p.gravityFactor = gravityFactor;
+    p.expireTick = tickCount + 10 * 60;
+    ordnance.push_back(p);
+    return p.id;
+}
+
+void Sim::stepProjectiles() {
+    for (size_t i = 0; i < ordnance.size();) {
+        Projectile& p = ordnance[i];
+        bool impact = false;
+        p.velocity.y -= kGravity * p.gravityFactor * kTickDt;
+
+        // Sub-step so fast shells cannot tunnel through vehicles or walls.
+        const float moveLen = std::sqrt(p.velocity.x * p.velocity.x
+                                        + p.velocity.y * p.velocity.y
+                                        + p.velocity.z * p.velocity.z)
+                            * kTickDt;
+        const int substeps = std::max(1, static_cast<int>(std::ceil(moveLen / 0.5f)));
+        for (int s = 0; s < substeps && !impact; ++s) {
+            p.position.x += p.velocity.x * kTickDt / static_cast<float>(substeps);
+            p.position.y += p.velocity.y * kTickDt / static_cast<float>(substeps);
+            p.position.z += p.velocity.z * kTickDt / static_cast<float>(substeps);
+
+            Int3 sub;
+            if (VehicleEntity* target = vehicleAt(p.position, p.shooter, sub)) {
+                const HitResult hit =
+                    target->state.applyHit(sub, p.spec.damage, p.spec.type, rng);
+                if (hit.partHit >= 0) recordPartEvents(*target, hit, p.position);
+                if (p.spec.blastRadius > 0.0f)
+                    applyBlast({ p.position, p.spec.blastRadius,
+                                 std::max(p.spec.blastDamage, p.spec.damage), p.spec.type });
+                impact = true;
+            } else if (materialInfo(voxels.at({ static_cast<int>(std::floor(p.position.x)),
+                                                static_cast<int>(std::floor(p.position.y)),
+                                                static_cast<int>(std::floor(p.position.z)) }))
+                           .solid) {
+                applyBlast({ p.position, std::max(p.spec.blastRadius, 0.75f),
+                             std::max(p.spec.blastDamage, p.spec.damage), p.spec.type });
+                impact = true;
+            }
+        }
+
+        if (impact || p.expireTick <= tickCount) {
+            ordnance.erase(ordnance.begin() + static_cast<long>(i));
+        } else {
+            ++i;
+        }
+    }
+}
+
 std::optional<HitscanResult> Sim::fire(uint32_t shooter, Vec3 dir, const WeaponSpec& spec) {
     VehicleEntity* src = find(shooter);
     if (!src || !src->state.operable() || src->ammo <= 0) return std::nullopt;
@@ -138,22 +224,16 @@ std::optional<HitscanResult> Sim::fire(uint32_t shooter, Vec3 dir, const WeaponS
     for (float t = 1.0f; t <= spec.range; t += stepLen) {
         const Vec3 p{ origin.x + d.x * t, origin.y + d.y * t, origin.z + d.z * t };
 
-        for (VehicleEntity& target : vehicles) {
-            if (target.id == shooter || target.state.destroyed()) continue;
-            const Int3 dims = target.tmpl->dims;
-            const float horiz = static_cast<float>(std::max(dims.x, dims.y)) * kSubvoxelSize * 0.5f + 0.3f;
-            const float height = static_cast<float>(dims.z) * kSubvoxelSize + 0.3f;
-            if (std::abs(p.x - target.body.position.x) > horiz) continue;
-            if (std::abs(p.z - target.body.position.z) > horiz) continue;
-            const float up = p.y - target.body.position.y;
-            if (up < -0.3f || up > height) continue;
-
-            if (const std::optional<Int3> sub = worldToSubvoxel(target, p)) {
-                const HitResult hit = target.state.applyHit(*sub, spec.damage, spec.type, rng);
-                if (hit.partHit < 0) continue;
-                recordPartEvents(target, hit, p);
+        Int3 sub;
+        if (VehicleEntity* target = vehicleAt(p, shooter, sub)) {
+            const HitResult hit = target->state.applyHit(sub, spec.damage, spec.type, rng);
+            if (hit.partHit >= 0) {
+                recordPartEvents(*target, hit, p);
+                if (spec.blastRadius > 0.0f)
+                    applyBlast({ p, spec.blastRadius,
+                                 std::max(spec.blastDamage, spec.damage), spec.type });
                 result.hitVehicle = true;
-                result.entity = target.id;
+                result.entity = target->id;
                 result.hit = hit;
                 result.impact = p;
                 return result;
@@ -246,6 +326,45 @@ void Sim::applyBlast(const BlastEvent& e) {
     ev.blast = e;
     ev.position = e.center;
     pending.push_back(ev);
+
+    // Splash vs vehicles: march from the blast center toward each vehicle and
+    // damage the entry sub-voxel with linear falloff. Iterates by index —
+    // chained death craters may grow the vector's event log but never the
+    // vehicle list itself.
+    if (e.damage <= 0 || e.radius <= 0.0f) return;
+    for (size_t i = 0; i < vehicles.size(); ++i) {
+        VehicleEntity& v = vehicles[i];
+        if (v.state.destroyed()) continue;
+        const Vec3 center{ v.body.position.x,
+                           v.body.position.y
+                               + static_cast<float>(v.tmpl->dims.z) * kSubvoxelSize * 0.5f,
+                           v.body.position.z };
+        const float bound =
+            static_cast<float>(std::max({ v.tmpl->dims.x, v.tmpl->dims.y, v.tmpl->dims.z }))
+            * kSubvoxelSize;
+        const float centerDist = distance(e.center, center);
+        if (centerDist > e.radius + bound) continue;
+
+        const Vec3 dir = centerDist > 0.01f
+                             ? Vec3{ (center.x - e.center.x) / centerDist,
+                                     (center.y - e.center.y) / centerDist,
+                                     (center.z - e.center.z) / centerDist }
+                             : Vec3{ 1.0f, 0.0f, 0.0f };
+        for (float t = 0.0f; t <= centerDist + 0.2f; t += 0.2f) {
+            const Vec3 p{ e.center.x + dir.x * t, e.center.y + dir.y * t,
+                          e.center.z + dir.z * t };
+            if (const std::optional<Int3> sub = worldToSubvoxel(v, p)) {
+                if (t > e.radius) break; // armor's outer skin is beyond the blast
+                const float falloff = 1.0f - t / e.radius;
+                const int damage = static_cast<int>(static_cast<float>(e.damage) * falloff);
+                if (damage > 0) {
+                    const HitResult hit = v.state.applyHit(*sub, damage, e.type, rng);
+                    if (hit.partHit >= 0) recordPartEvents(v, hit, p);
+                }
+                break;
+            }
+        }
+    }
 }
 
 void Sim::collectPickups() {
@@ -324,6 +443,7 @@ void Sim::step() {
                 break; // buildings don't move
         }
     }
+    stepProjectiles();
     collectPickups();
 
     // Sector income (§2.2): owned sectors pay out once a second.
@@ -352,6 +472,12 @@ uint64_t Sim::stateHash() const {
             h = fnv(h, static_cast<uint64_t>(e.state.partHp(static_cast<int>(i))));
             h = fnv(h, e.state.partAlive(static_cast<int>(i)) ? 1 : 0);
         }
+    }
+    for (const Projectile& p : ordnance) {
+        h = fnv(h, p.id);
+        h = fnvF(h, p.position.x);
+        h = fnvF(h, p.position.y);
+        h = fnvF(h, p.position.z);
     }
     for (const Pickup& p : drops) {
         h = fnv(h, p.id);
