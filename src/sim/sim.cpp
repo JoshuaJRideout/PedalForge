@@ -94,6 +94,11 @@ void Sim::recordPartEvents(VehicleEntity& target, const HitResult& hit, Vec3 at)
         ev.entity = target.id;
         ev.position = at;
         pending.push_back(ev);
+        // A dead power station releases its sector (§2.2).
+        if (const auto it = stations.find(target.id); it != stations.end()) {
+            sectors.erase(it->second);
+            stations.erase(it);
+        }
         // Vehicle-mass crater (§4.2): scale with sub-voxel volume.
         const float mass = static_cast<float>(target.tmpl->occupiedCount());
         applyBlast({ at, std::clamp(mass / 250.0f, 1.5f, 6.0f),
@@ -167,6 +172,25 @@ std::optional<HitscanResult> Sim::fire(uint32_t shooter, Vec3 dir, const WeaponS
         }
     }
     return result; // flew off into the distance
+}
+
+int Sim::sectorOwner(Int3 sector) const {
+    const auto it = sectors.find({ sector.x, sector.z });
+    return it == sectors.end() ? -1 : static_cast<int>(it->second);
+}
+
+uint32_t Sim::buildPowerStation(uint8_t team, Vec3 position) {
+    const Int3 sector = sectorOf(position);
+    if (sectorOwner(sector) >= 0) return 0;        // contested ground: clear it first
+    if (energy[team & 3] < kPowerStationCost) return 0;
+    energy[team & 3] -= kPowerStationCost;
+
+    position.y = static_cast<float>(voxels.heightAt(static_cast<int>(std::floor(position.x)),
+                                                    static_cast<int>(std::floor(position.z))));
+    const uint32_t id = spawnVehicle(TemplateId::PowerStation, team, position, 0.0f);
+    sectors[{ sector.x, sector.z }] = team;
+    stations[id] = { sector.x, sector.z };
+    return id;
 }
 
 uint32_t Sim::eject(uint32_t vehicleId) {
@@ -296,9 +320,15 @@ void Sim::step() {
             case LocomotionClass::Pilot:
                 stepPilot(e.body, in, e.state, voxels);
                 break;
+            case LocomotionClass::Static:
+                break; // buildings don't move
         }
     }
     collectPickups();
+
+    // Sector income (§2.2): owned sectors pay out once a second.
+    if (tickCount % kIncomeIntervalTicks == 0)
+        for (const auto& [sector, team] : sectors) energy[team & 3] += kSectorIncome;
 }
 
 uint64_t Sim::stateHash() const {
@@ -331,6 +361,11 @@ uint64_t Sim::stateHash() const {
         h = fnvF(h, p.position.z);
     }
     for (int e : energy) h = fnv(h, static_cast<uint64_t>(e));
+    for (const auto& [sector, team] : sectors) {
+        h = fnv(h, static_cast<uint64_t>(static_cast<uint32_t>(sector.first)));
+        h = fnv(h, static_cast<uint64_t>(static_cast<uint32_t>(sector.second)));
+        h = fnv(h, team);
+    }
     return h;
 }
 

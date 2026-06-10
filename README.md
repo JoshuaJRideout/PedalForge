@@ -40,6 +40,11 @@ Headless core, zero external dependencies:
 - [x] CPU meshing (`src/render/mesh.*`): greedy-merged chunk meshes with
       cross-chunk face culling; vehicle re-mesh on damage (destroyed parts
       vanish, damaged parts darken) — the renderer's algorithmic core
+- [x] Unit AI (`src/ai/`): move/attack/escort orders driving the same input
+      interface as players — AI and possession are interchangeable
+- [x] Sector economy (§2.2): power stations claim 16x16 sectors, owned
+      sectors pay energy per second, killing the station's core flips the
+      sector neutral
 - [ ] Renderer binary (bgfx + SDL3): GPU upload + camera around the meshers
 - [ ] Real transport binding (UDP/GameNetworkingSockets) + client prediction
       for the possessed vehicle

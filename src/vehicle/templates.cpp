@@ -107,6 +107,27 @@ VehicleTemplate makePilot() {
     return t;
 }
 
+VehicleTemplate makePowerStation() {
+    // Sector-claiming building (DESIGN.md §2.2): 4 x 4 x 6 m tower. Destroy
+    // the core and the sector flips neutral.
+    VehicleTemplate t;
+    t.name = "PowerStation";
+    t.id = TemplateId::PowerStation;
+    t.locomotion = LocomotionClass::Static;
+    t.dims = { 16, 16, 24 };
+    t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
+
+    const int core = t.addPart("power.core", PartType::Power, 300, 0.9f);
+    const int mast = t.addPart("mast", PartType::Sensor, 60);
+    t.fillBox({ 2, 2, 0 }, { 14, 14, 16 }, core);
+    t.fillBox({ 6, 6, 16 }, { 10, 10, 24 }, mast);
+    // Power is the working core here, not Hull:
+    t.corePart = core;
+
+    t.finalize();
+    return t;
+}
+
 } // namespace
 
 const VehicleTemplate& VehicleTemplate::waspFighter() {
@@ -129,12 +150,18 @@ const VehicleTemplate& VehicleTemplate::pilot() {
     return t;
 }
 
+const VehicleTemplate& VehicleTemplate::powerStation() {
+    static const VehicleTemplate t = makePowerStation();
+    return t;
+}
+
 const VehicleTemplate& VehicleTemplate::byId(TemplateId id) {
     switch (id) {
         case TemplateId::Wasp:  return waspFighter();
         case TemplateId::Brick: return brickTank();
         case TemplateId::Talon: return talonMech();
         case TemplateId::Pilot: return pilot();
+        case TemplateId::PowerStation: return powerStation();
         case TemplateId::Count: break;
     }
     return brickTank();

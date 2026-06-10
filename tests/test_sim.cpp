@@ -160,6 +160,37 @@ TEST(sim_boarding_rules) {
     CHECK(!sim.board(enemyPilot, mech));
 }
 
+TEST(sim_sector_economy) {
+    Sim sim(flatWorld(), 9);
+    sim.addEnergy(0, 150);
+
+    // Not enough for two stations; second build in the same sector also fails.
+    const uint32_t station = sim.buildPowerStation(0, { 24.0f, 10.0f, 24.0f });
+    CHECK(station != 0);
+    CHECK(sim.teamEnergy(0) == 50);
+    CHECK(sim.sectorOwner(sim.sectorOf({ 24.0f, 10.0f, 24.0f })) == 0);
+    CHECK(sim.buildPowerStation(0, { 26.0f, 10.0f, 26.0f }) == 0); // sector taken
+    CHECK(sim.buildPowerStation(0, { 70.0f, 10.0f, 70.0f }) == 0); // 50 < cost
+
+    // Income: 10 seconds of holding one sector pays 10 * kSectorIncome.
+    for (int t = 0; t < 600; ++t) sim.step();
+    CHECK(sim.teamEnergy(0) == 50 + 10 * Sim::kSectorIncome);
+
+    // Shell the station until its core dies: the sector flips neutral and
+    // income stops.
+    const uint32_t raider = sim.spawnVehicle(TemplateId::Brick, 1, { 40.0f, 10.0f, 24.0f },
+                                             3.14159f); // facing -x toward station
+    WeaponSpec gun;
+    gun.damage = 120;
+    for (int i = 0; i < 30 && !sim.find(station)->state.destroyed(); ++i)
+        sim.fire(raider, { -1.0f, 0.0f, 0.0f }, gun);
+    CHECK(sim.find(station)->state.destroyed());
+    CHECK(sim.sectorOwner(sim.sectorOf({ 24.0f, 10.0f, 24.0f })) == -1);
+    const int frozen = sim.teamEnergy(0);
+    for (int t = 0; t < 600; ++t) sim.step();
+    CHECK(sim.teamEnergy(0) == frozen);
+}
+
 TEST(sim_repair_kit_heals_lowest_part) {
     Sim sim(flatWorld(), 5);
     const uint32_t id = sim.spawnVehicle(TemplateId::Brick, 0, { 30.0f, 10.0f, 48.0f }, 0.0f);
