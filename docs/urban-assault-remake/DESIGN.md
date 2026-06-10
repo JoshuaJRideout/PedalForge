@@ -134,6 +134,33 @@ Deterministic from a 64-bit seed (all clients generate identically; only the see
 Players can also enter a seed manually ("daily arena" community play) and tweak generation
 sliders (water level, ruin density, verticality) in custom lobbies.
 
+### 3.4 Static & hybrid maps (and the road to a map editor)
+
+Procedural is the default, not the only source. A match's arena comes from one of three
+**map sources**, identical to the engine after load:
+
+1. **Seed** — generated per §3.3; only the seed travels over the wire.
+2. **Static map** — a hand-authored world in the **`.vxm` map file format**: dimensions,
+   sea level, palette/RLE-compressed voxel data, plus metadata (name, team spawn points,
+   and later: sector overrides, ritual-space placements, mode hints). Static maps are
+   content-hashed and distributed exactly like mods (§13a) — the server declares the map
+   hash, clients fetch/verify before joining.
+3. **Hybrid ("baked seed")** — a generated world that was hand-edited and saved as `.vxm`.
+   This is the expected editor workflow: generate a good seed, sculpt the fixes, publish.
+
+Rules:
+- Everything downstream (destruction events, chunk-hash audits, pathing, AI) operates on
+  the loaded voxel world and **cannot tell the sources apart** — static support is a
+  loader feature, not a parallel code path.
+- Static maps are eligible for ranked pools only after passing the same validation bots
+  as procedural seeds (§3.3.7, §8.4) — hand-made does not mean exempt from fairness.
+- The **map editor** ships as a tool milestone after Early Access, but it is *designed
+  from the format outward*: in-game free-camera voxel sculpting (brush/box/material
+  tools reusing the destruction and placement code paths), prefab stamps for ritual
+  spaces, spawn/sector painting, a one-click validation-bot run, and publish-to-Workshop.
+  Until then, the format is already writable by the engine (worldgen → save), so
+  community tooling can start before our editor exists.
+
 ---
 
 ## 4. Vehicles: sub-voxel construction and parts
@@ -362,7 +389,8 @@ as remote-link, "board" in pilot modes is physical, but it is one system in code
 - **Client–server, server-authoritative.** Listen server (any player hosts) + dedicated
   server binary (headless Linux build, shipped via SteamCMD) for community servers and ranked.
 - Determinism-where-it's-cheap, replication-where-it's-not:
-  - **World gen**: seed-deterministic (only the seed is transmitted).
+  - **World gen**: seed-deterministic (only the seed is transmitted). Static maps (§3.4)
+    are transmitted/fetched by content hash instead, then verified before join.
   - **Terrain destruction**: server-authoritative *events* ("blast: pos, radius, type, tick"),
     applied deterministically by all clients; periodic chunk-hash audits with chunk
     re-sync on mismatch.
@@ -523,6 +551,8 @@ game version) containing any of:
 - **Factions**: stat tables + palette/greeble profiles + unit roster references.
 - **Arena rulesets**: generation parameter sets (macro-pattern weights, biome mixes,
   ritual-space lists, fairness thresholds) — new *kinds* of maps without new code.
+- **Static maps**: hand-authored or hand-edited `.vxm` worlds (§3.4), the map-editor
+  output format; shared and hash-verified like any other pack content.
 - **Game modes & unit AI**: **sandboxed Lua scripts** against a versioned, capability-based
   API (spawn, orders, sectors, energy, part queries, UI toasts, objective markers). No
   filesystem/network/OS access; instruction- and memory-budgeted per tick. Game modes are

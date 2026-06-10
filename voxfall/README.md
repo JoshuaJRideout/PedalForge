@@ -22,6 +22,9 @@ Headless core, zero external dependencies:
       to part status: track loss = limp, engine loss = glide, leg loss =
       immobile, cockpit loss = stealable husk — `src/vehicle/locomotion.*`
 - [x] Mech ("Talon") and on-foot pilot templates (§4.7 of the design)
+- [x] `.vxm` static map format (§3.4): RLE-compressed world + name/spawn
+      metadata, save/load, malformed-input rejection — the future map
+      editor's output format — `src/world/mapfile.*`
 - [ ] Renderer (bgfx + SDL3): greedy-meshed chunks, vehicle re-mesh on damage
 - [ ] 2-player listen-server sync (event-sourced destruction, snapshot vehicles)
 
