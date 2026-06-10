@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three shipping platforms (docs/design/DESIGN.md §11.2).
+        # Ubuntu doubles as the headless dedicated server build.
+        os: [ubuntu-22.04, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Headless demo smoke run
+        shell: bash
+        run: |
+          demo=build/voxfall_sim
+          [ -f "$demo" ] || demo=build/Release/voxfall_sim.exe
+          "$demo" 1337 | tail -5

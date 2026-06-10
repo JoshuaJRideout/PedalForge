@@ -1,7 +1,7 @@
 # Voxfall
 
 Procedural voxel-world remake of the 1998 strategy/action hybrid *Urban Assault*
-(working title). Full design: [`../docs/urban-assault-remake/DESIGN.md`](../docs/urban-assault-remake/DESIGN.md).
+(working title). Full design: [`docs/design/DESIGN.md`](docs/design/DESIGN.md).
 
 This directory is a standalone CMake project (no dependency on the surrounding
 repo) so it can be extracted into its own repository when it grows up.
