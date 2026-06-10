@@ -59,6 +59,8 @@ struct VehicleTemplate {
     int addPart(std::string name, PartType type, int maxHp, float armorMul = 1.0f);
     // [min, max) box fill of a part's sub-voxels.
     void fillBox(Int3 min, Int3 max, int part);
+    // [min, max) box clear — sculpting tool for template authoring.
+    void carveBox(Int3 min, Int3 max);
     // Compute part adjacency from grid contact. Call once after authoring.
     void finalize();
 

@@ -18,6 +18,13 @@ void VehicleTemplate::fillBox(Int3 min, Int3 max, int part) {
                 partIndex[index({ x, y, z })] = static_cast<uint8_t>(part);
 }
 
+void VehicleTemplate::carveBox(Int3 min, Int3 max) {
+    for (int z = min.z; z < max.z; ++z)
+        for (int y = min.y; y < max.y; ++y)
+            for (int x = min.x; x < max.x; ++x)
+                partIndex[index({ x, y, z })] = kEmptySubvoxel;
+}
+
 size_t VehicleTemplate::occupiedCount() const {
     return static_cast<size_t>(
         std::count_if(partIndex.begin(), partIndex.end(),
