@@ -1,3 +1,5 @@
+#include <chrono>
+#include <thread>
 #include "test_framework.h"
 #include "net/udp.h"
 
@@ -57,11 +59,25 @@ TEST(udp_client_joins_and_syncs_over_real_sockets) {
         link.pump(replica);
     }
     const VehicleEntity* serverSide = host.server().sim().find(replica.myEntity());
-    const VehicleEntity* clientSide = replica.entity(replica.myEntity());
     CHECK(serverSide != nullptr);
-    CHECK(clientSide != nullptr);
     CHECK(serverSide->body.speed > 0.0f); // input arrived, tank moving
-    CHECK(clientSide->body.position.x == serverSide->body.position.x);
+
+    // Datagram delivery is asynchronous (macOS delivers late where Linux
+    // loopback is effectively synchronous): compare positions only at a
+    // matched tick, retrying while the final update is in flight.
+    bool matched = false;
+    for (int i = 0; i < 300 && !matched; ++i) {
+        host.pumpOnce();
+        for (int j = 0; j < 100 && replica.lastTick() < host.server().sim().tick(); ++j) {
+            link.pump(replica);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const VehicleEntity* clientSide = replica.entity(replica.myEntity());
+        matched = clientSide != nullptr
+               && replica.lastTick() == host.server().sim().tick()
+               && clientSide->body.position.x == serverSide->body.position.x;
+    }
+    CHECK(matched);
 
     // Garbage and stranger datagrams must be ignored, not crash anything.
     UdpSocket stranger;

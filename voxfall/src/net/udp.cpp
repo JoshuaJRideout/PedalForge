@@ -1,8 +1,11 @@
 #include "net/udp.h"
+#include <algorithm>
 #include <cstring>
 #include "core/bytes.h"
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX // windows.h min/max macros vs std::min/std::max
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
