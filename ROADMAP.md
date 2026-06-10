@@ -5,18 +5,18 @@ no audio, no Steam SDK, no user input): simulation, data, protocol, tooling,
 and CPU-side algorithms. Items marked (CI-provable) get automated tests.
 
 ## World & generation
-- [ ] Full §3.3 pipeline: biome Voronoi regions + domain warp, 3D cave/arch
+- [x] (partial) §3.3 pipeline: 4 biomes incl. city ruin grammar + domain warp, 3D cave/arch
       carving, procedural ruin grammar (enterable, collapsible buildings),
       road-graph guarantee between spawns, mirrored resource scatter (CI-provable)
 - [ ] Macro-patterns as generation rulesets: Crossfire, Lanes, Archipelago,
       Undercity, Ringworld, Bunker Hill (CI-provable)
-- [ ] Seed validation bots: reachability flood fill, income sim, fairness
+- [x] Seed validation bots: reachability flood fill, income sim, fairness
       thresholds — the ranked-pool gatekeeper (CI-provable)
 - [ ] Falling debris as damage-dealing server bodies; loose-soil slump
 - [ ] .vxm v2: partial-damage persistence (late-joiner gap), sector/ritual/mode metadata
 
 ## Vehicles & combat
-- [ ] Projectile weapons (travel time, arcs, missiles); blast damage to vehicles
+- [x] Projectile weapons (travel time, arcs, missiles); blast damage to vehicles
 - [ ] Weapon definition tables: mounts, muzzle positions, cooldowns, ammo classes
 - [ ] Template roster: Host Station, Colossus (armor plates, buried reactor),
       transports, turrets, beam gates, repair pads, tier 1-3 per faction
@@ -25,24 +25,24 @@ and CPU-side algorithms. Items marked (CI-provable) get automated tests.
 
 ## Game loop
 - [ ] Host Station build queue, supply caps, reinforcement discounts, tech tiers
-- [ ] Win conditions + match state machine; modes as orchestration:
+- [x] (annihilation) win conditions + match state machine; other modes pending:
       Wreckyard, Last Light, Colossus (capture + the Trade), Scrap Pilots
-- [ ] Commander AI (utility AI skirmish opponent) — verified by bot-vs-bot
+- [x] Commander AI (utility AI skirmish opponent) — verified by bot-vs-bot
       matches in CI that must reach a winner (CI-provable)
 - [ ] Pathfinding: flow fields / HPA* with incremental repair on destruction
-- [ ] Replay system: seed + input log -> byte-identical re-simulation (CI-provable)
+- [x] Replay system: seed + input log -> byte-identical re-simulation (CI-provable)
 
 ## Netcode
 - [ ] Client prediction + reconciliation (possessed vehicle); interpolation for others
 - [ ] Delta-compressed snapshots, replication priority, lag-compensated fire
-- [ ] Chunk re-sync repair on audit mismatch (currently flag-only)
-- [ ] Real UDP transport: two processes over localhost (CI-provable)
-- [ ] Dedicated server binary with tick scheduler (the Linux build)
+- [x] Chunk re-sync repair on audit mismatch (self-healing)
+- [x] Real UDP transport with fragmentation, over real sockets (CI-provable)
+- [x] Dedicated server binary with tick scheduler (voxfall_server)
 - [ ] Reconnect flow; sector-ownership replication
 
 ## Modding & data pipeline
 - [ ] Forge pack loader: manifest parse, content hashing, load order
-- [ ] MagicaVoxel .vox parser + parts-annotation sidecar (real asset pipeline)
+- [x] MagicaVoxel .vox parser + parts-annotation sidecar (real asset pipeline)
 - [ ] Migrate hardcoded templates to data files; vehicle cost-balancing formula
 
 ## Rendering-adjacent (CPU-only)
@@ -53,7 +53,7 @@ and CPU-side algorithms. Items marked (CI-provable) get automated tests.
 
 ## Tooling, CI, docs
 - [ ] CLI tools: worldgen previewer, .vxm inspector, seed-validation runner
-- [ ] Fuzz tests for map/protocol parsers; perf benchmarks with CI budgets
+- [x] Fuzz tests for map/protocol parsers (found+fixed 3 real bugs); perf benchmarks pending
 - [ ] Sanitizer CI job; clang-format; release packaging; server Dockerfile
 - [ ] Architecture doc, protocol spec, modding spec, contributing guide
 
