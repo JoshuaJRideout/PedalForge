@@ -96,7 +96,7 @@ void AiController::drive(Sim& sim, VehicleEntity& e, Order& order) {
                                 (target->body.position.y + aimUp)
                                     - (e.body.position.y + muzzleUp),
                                 target->body.position.z - e.body.position.z };
-                sim.fire(e.id, dir);
+                sim.fire(e.id, dir, weapon);
                 cooldown[e.id] = kFireCooldownTicks;
             }
             break;

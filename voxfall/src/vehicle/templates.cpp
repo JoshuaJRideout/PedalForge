@@ -128,6 +128,30 @@ VehicleTemplate makePowerStation() {
     return t;
 }
 
+VehicleTemplate makeHostStation() {
+    // The player's avatar, factory, and life (DESIGN.md §2.1). Grounded
+    // fortress for M0; slow flight comes with the strategy layer.
+    VehicleTemplate t;
+    t.name = "HostStation";
+    t.id = TemplateId::HostStation;
+    t.locomotion = LocomotionClass::Static;
+    t.dims = { 48, 48, 28 }; // 12 x 12 x 7 m
+    t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
+
+    const int hull = t.addPart("hull", PartType::Hull, 1200, 0.7f);
+    const int reactor = t.addPart("reactor", PartType::Power, 400);
+    const int sensor = t.addPart("sensor.array", PartType::Sensor, 120);
+    const int gun = t.addPart("weapon.defense", PartType::Weapon, 150);
+
+    t.fillBox({ 4, 4, 0 }, { 44, 44, 16 }, hull);
+    t.fillBox({ 16, 16, 16 }, { 32, 32, 22 }, reactor);
+    t.fillBox({ 20, 20, 22 }, { 28, 28, 28 }, sensor);
+    t.fillBox({ 36, 20, 16 }, { 44, 28, 20 }, gun);
+
+    t.finalize();
+    return t;
+}
+
 } // namespace
 
 const VehicleTemplate& VehicleTemplate::waspFighter() {
@@ -162,9 +186,15 @@ const VehicleTemplate& VehicleTemplate::byId(TemplateId id) {
         case TemplateId::Talon: return talonMech();
         case TemplateId::Pilot: return pilot();
         case TemplateId::PowerStation: return powerStation();
+        case TemplateId::HostStation: return hostStation();
         case TemplateId::Count: break;
     }
     return brickTank();
+}
+
+const VehicleTemplate& VehicleTemplate::hostStation() {
+    static const VehicleTemplate t = makeHostStation();
+    return t;
 }
 
 } // namespace vox

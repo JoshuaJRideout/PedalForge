@@ -32,6 +32,9 @@ public:
     static constexpr int kFireCooldownTicks = 30;
     static constexpr float kEscortDistance = 8.0f;
 
+    // Weapon used by Attack orders (commander/faction configurable).
+    WeaponSpec weapon;
+
     void setOrder(uint32_t entityId, const Order& order) { orders[entityId] = order; }
     void clearOrder(uint32_t entityId) { orders.erase(entityId); }
     const Order* orderOf(uint32_t entityId) const;
