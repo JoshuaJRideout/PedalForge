@@ -73,13 +73,16 @@ TEST(map_file_save_and_load) {
     meta.name = "disk test";
     meta.spawns = { { { 5, 20, 5 }, 0 } };
 
-    const std::string path = "/tmp/voxfall_test_map.vxm";
+    // CWD-relative: portable across Linux/macOS/Windows CI runners.
+    const std::string path = "voxfall_test_map.vxm";
     CHECK(saveMapFile(path, world, meta));
     const std::optional<LoadedMap> loaded = loadMapFile(path);
     CHECK(loaded.has_value());
-    CHECK(loaded->world.contentHash() == world.contentHash());
-    CHECK(loaded->meta.name == "disk test");
+    if (loaded) {
+        CHECK(loaded->world.contentHash() == world.contentHash());
+        CHECK(loaded->meta.name == "disk test");
+    }
     std::remove(path.c_str());
 
-    CHECK(!loadMapFile("/tmp/voxfall_does_not_exist.vxm").has_value());
+    CHECK(!loadMapFile("voxfall_does_not_exist.vxm").has_value());
 }

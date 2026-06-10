@@ -33,7 +33,14 @@ Headless core, zero external dependencies:
       progress via live `.vxm` transfer, rotating chunk-hash desync audits;
       transport-agnostic (loopback in tests, Steam Networking Sockets later)
 - [x] Cross-platform CI (Windows/macOS/Linux build + tests + demo smoke run)
-- [ ] Renderer (bgfx + SDL3): greedy-meshed chunks, vehicle re-mesh on damage
+- [x] Structural integrity (§5.3): unsupported concrete/metal clusters
+      collapse after blasts, deterministically and network-synced
+- [x] Possession (§4.7): eject to an on-foot pilot, board any pilotless
+      vehicle in range (incl. enemy theft); Action/ControlAssign protocol
+- [x] CPU meshing (`src/render/mesh.*`): greedy-merged chunk meshes with
+      cross-chunk face culling; vehicle re-mesh on damage (destroyed parts
+      vanish, damaged parts darken) — the renderer's algorithmic core
+- [ ] Renderer binary (bgfx + SDL3): GPU upload + camera around the meshers
 - [ ] Real transport binding (UDP/GameNetworkingSockets) + client prediction
       for the possessed vehicle
 - [ ] Squad AI + orders (M1)
