@@ -20,11 +20,16 @@ add_library(voxfall_core
     src/net/net.cpp
     src/render/mesh.cpp
     src/ai/orders.cpp
+    src/core/png.cpp
+    src/render/raycast.cpp
 )
 target_include_directories(voxfall_core PUBLIC src)
 
 add_executable(voxfall_sim src/sim/main.cpp)
 target_link_libraries(voxfall_sim PRIVATE voxfall_core)
+
+add_executable(voxfall_preview src/tools/preview.cpp)
+target_link_libraries(voxfall_preview PRIVATE voxfall_core)
 
 enable_testing()
 add_executable(voxfall_tests
@@ -37,6 +42,7 @@ add_executable(voxfall_tests
     tests/test_net.cpp
     tests/test_mesh.cpp
     tests/test_ai.cpp
+    tests/test_preview.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
