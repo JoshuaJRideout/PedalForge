@@ -21,6 +21,8 @@ add_library(voxfall_core
     src/net/net.cpp
     src/render/mesh.cpp
     src/ai/orders.cpp
+    src/ai/commander.cpp
+    src/game/match.cpp
     src/core/png.cpp
     src/render/raycast.cpp
 )
@@ -45,6 +47,7 @@ add_executable(voxfall_tests
     tests/test_ai.cpp
     tests/test_preview.cpp
     tests/test_gen.cpp
+    tests/test_match.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)

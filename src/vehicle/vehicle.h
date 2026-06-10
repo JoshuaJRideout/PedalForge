@@ -43,7 +43,9 @@ constexpr uint8_t kEmptySubvoxel = 0xFF;
 enum class LocomotionClass : uint8_t { Tracked, Jet, Walker, Pilot, Static };
 
 // Stable wire/content IDs for templates (network + forge packs need these).
-enum class TemplateId : uint8_t { Wasp = 0, Brick, Talon, Pilot, PowerStation, Count };
+enum class TemplateId : uint8_t {
+    Wasp = 0, Brick, Talon, Pilot, PowerStation, HostStation, Count
+};
 
 struct VehicleTemplate {
     std::string name;
@@ -84,6 +86,7 @@ struct VehicleTemplate {
     static const VehicleTemplate& talonMech();
     static const VehicleTemplate& pilot();
     static const VehicleTemplate& powerStation();
+    static const VehicleTemplate& hostStation();
     static const VehicleTemplate& byId(TemplateId id);
 };
 
