@@ -39,10 +39,11 @@ struct PartDef {
 constexpr uint8_t kEmptySubvoxel = 0xFF;
 
 // Movement model selector (locomotion.h implements each — DESIGN.md §4.5).
-enum class LocomotionClass : uint8_t { Tracked, Jet, Walker, Pilot };
+// Static = buildings: "vehicles without locomotion", same part/damage system.
+enum class LocomotionClass : uint8_t { Tracked, Jet, Walker, Pilot, Static };
 
 // Stable wire/content IDs for templates (network + forge packs need these).
-enum class TemplateId : uint8_t { Wasp = 0, Brick, Talon, Pilot, Count };
+enum class TemplateId : uint8_t { Wasp = 0, Brick, Talon, Pilot, PowerStation, Count };
 
 struct VehicleTemplate {
     std::string name;
@@ -82,6 +83,7 @@ struct VehicleTemplate {
     static const VehicleTemplate& brickTank();
     static const VehicleTemplate& talonMech();
     static const VehicleTemplate& pilot();
+    static const VehicleTemplate& powerStation();
     static const VehicleTemplate& byId(TemplateId id);
 };
 

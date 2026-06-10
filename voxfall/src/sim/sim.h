@@ -1,5 +1,7 @@
 #pragma once
+#include <cmath>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -113,6 +115,25 @@ public:
     VoxelWorld& world() { return voxels; }
     const VoxelWorld& world() const { return voxels; }
     int teamEnergy(uint8_t team) const { return energy[team & 3]; }
+    void addEnergy(uint8_t team, int amount) { energy[team & 3] += amount; }
+
+    // --- Sector economy (DESIGN.md §2.2) ---
+    static constexpr int kSectorSize = 16;          // world-voxel columns
+    static constexpr int kPowerStationCost = 100;
+    static constexpr int kSectorIncome = 5;         // per owned sector...
+    static constexpr uint64_t kIncomeIntervalTicks = 60; // ...per second
+
+    Int3 sectorOf(Vec3 worldPos) const {
+        return { static_cast<int>(std::floor(worldPos.x)) / kSectorSize, 0,
+                 static_cast<int>(std::floor(worldPos.z)) / kSectorSize };
+    }
+    // -1 = neutral.
+    int sectorOwner(Int3 sector) const;
+    // Builds a power station (energy permitting) and claims its sector.
+    // Fails on insufficient energy or an already-claimed sector. Returns
+    // the station's entity id (0 = failed). Destroying the station's core
+    // flips the sector back to neutral.
+    uint32_t buildPowerStation(uint8_t team, Vec3 position);
 
     // Events recorded since the last takeEvents() — the replication payload.
     std::vector<SimEvent> takeEvents() { return std::exchange(pending, {}); }
@@ -136,6 +157,8 @@ private:
     uint32_t nextEntityId = 1;
     uint32_t nextPickupId = 1;
     int energy[4] = { 0, 0, 0, 0 };
+    std::map<std::pair<int, int>, uint8_t> sectors;   // (sx, sz) -> owner team
+    std::map<uint32_t, std::pair<int, int>> stations; // station entity -> sector
 };
 
 } // namespace vox
