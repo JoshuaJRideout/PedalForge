@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include "vehicle/locomotion.h"
 #include "vehicle/vehicle.h"
 #include "world/world.h"
 
@@ -118,6 +119,63 @@ int main(int argc, char** argv) {
                                   : "miss",
                 kill.vehicleDestroyed ? "  ** VEHICLE DESTROYED **" : "");
     for (DropKind d : kill.drops) std::printf("  [drop: %s]\n", dropName(d));
+
+    // --- Locomotion: damage changes handling ---
+    std::printf("\n--- Locomotion on generated terrain ---\n");
+
+    // Tank drives east across the real terrain for 8 s.
+    Vehicle tank(VehicleTemplate::brickTank());
+    BodyState tankBody;
+    tankBody.position = { 20.0f, static_cast<float>(world.heightAt(20, 96)), 96.0f };
+    tankBody.grounded = true;
+    ControlInput drive;
+    drive.throttle = 1.0f;
+    int blockedTicks = 0;
+    for (int t = 0; t < 8 * 60; ++t)
+        if (stepTracked(tankBody, drive, tank, world).blocked) ++blockedTicks;
+    std::printf("Brick tank, 8 s east: x %.1f -> %.1f (y %.1f, %.1f s blocked by slopes)\n",
+                20.0f, tankBody.position.x, tankBody.position.y,
+                static_cast<float>(blockedTicks) / 60.0f);
+
+    // Jet loses its engine mid-flight and glides down.
+    Vehicle glider(VehicleTemplate::waspFighter());
+    BodyState jetBody;
+    jetBody.position = { 20.0f, 80.0f, 60.0f };
+    jetBody.speed = 60.0f;
+    ControlInput fly;
+    fly.throttle = 1.0f;
+    for (int t = 0; t < 120; ++t) stepJet(jetBody, fly, glider, world);
+    Rng locoRng(seed ^ 0x10C0ull);
+    glider.applyHit({ 2, 8, 4 }, 90, DamageType::Kinetic, locoRng); // engine out
+    std::printf("Wasp engine destroyed at altitude %.1f, airspeed %.1f. Gliding:\n",
+                jetBody.position.y, jetBody.speed);
+    for (int s = 1; s <= 4; ++s) {
+        for (int t = 0; t < 60; ++t) stepJet(jetBody, fly, glider, world);
+        std::printf("  +%d s: altitude %.1f, airspeed %.1f\n", s, jetBody.position.y, jetBody.speed);
+    }
+
+    // Mech jumps; then loses its cockpit and becomes a stealable husk.
+    Vehicle mech(VehicleTemplate::talonMech());
+    BodyState mechBody;
+    mechBody.position = { 100.0f, static_cast<float>(world.heightAt(100, 96)), 96.0f };
+    mechBody.grounded = true;
+    ControlInput stride;
+    stride.throttle = 1.0f;
+    stride.jump = true;
+    stepWalker(mechBody, stride, mech, world);
+    stride.jump = false;
+    float peak = mechBody.position.y;
+    while (!mechBody.grounded) {
+        stepWalker(mechBody, stride, mech, world);
+        peak = std::max(peak, mechBody.position.y);
+    }
+    std::printf("Talon mech jump: peak +%.1f m, landed at y %.1f\n",
+                peak - static_cast<float>(world.heightAt(100, 96)), mechBody.position.y);
+    mech.applyHit({ 10, 5, 25 }, 50, DamageType::Kinetic, locoRng); // cockpit out
+    const float beforeX = mechBody.position.x;
+    for (int t = 0; t < 60; ++t) stepWalker(mechBody, stride, mech, world);
+    std::printf("Cockpit destroyed -> husk: %s, input ignored (moved %.2f m). Steal it.\n",
+                mech.isHusk() ? "yes" : "no", mechBody.position.x - beforeX);
 
     std::printf("\nDone.\n");
     return 0;
