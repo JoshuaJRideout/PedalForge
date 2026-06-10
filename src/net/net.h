@@ -70,6 +70,7 @@ public:
     const VehicleEntity* entity(uint32_t id) const;
     const std::vector<VehicleEntity>& entities() const { return replicaEntities; }
     const std::vector<Pickup>& pickups() const { return replicaPickups; }
+    const std::vector<Projectile>& projectiles() const { return replicaProjectiles; }
     const std::vector<SimEvent>& lastEvents() const { return events; } // VFX hooks
 
 private:
@@ -78,6 +79,7 @@ private:
     std::optional<VoxelWorld> replicaWorld;
     std::vector<VehicleEntity> replicaEntities;
     std::vector<Pickup> replicaPickups;
+    std::vector<Projectile> replicaProjectiles;
     std::vector<SimEvent> events;
     uint32_t myEntityId = 0;
     uint64_t tick = 0;

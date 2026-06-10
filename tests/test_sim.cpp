@@ -160,6 +160,70 @@ TEST(sim_boarding_rules) {
     CHECK(!sim.board(enemyPilot, mech));
 }
 
+TEST(sim_lobbed_shell_arcs_and_craters) {
+    Sim sim(flatWorld(), 11);
+    const uint32_t arty = sim.spawnVehicle(TemplateId::Brick, 0, { 20.0f, 10.0f, 48.0f }, 0.0f);
+
+    WeaponSpec shell;
+    shell.type = DamageType::Explosive;
+    shell.damage = 120;
+    shell.blastRadius = 3.0f;
+    shell.blastDamage = 300;
+    // Lob at 45 degrees: range = v^2/g = 30*30/20 = 45 m downrange.
+    const uint32_t round = sim.launch(arty, { 0.7071f, 0.7071f, 0.0f }, 30.0f, shell);
+    CHECK(round != 0);
+    CHECK(sim.projectiles().size() == 1);
+
+    const uint64_t before = sim.world().contentHash();
+    for (int t = 0; t < 60 * 6 && !sim.projectiles().empty(); ++t) sim.step();
+    CHECK(sim.projectiles().empty());              // landed
+    CHECK(sim.world().contentHash() != before);    // cratered
+    // The crater should be well downrange, not at the gun's feet.
+    CHECK(sim.world().heightAt(20, 48) == 10);
+    bool craterDownrange = false;
+    for (int x = 50; x < 80; ++x) craterDownrange |= (sim.world().heightAt(x, 48) < 10);
+    CHECK(craterDownrange);
+}
+
+TEST(sim_blast_splash_damages_vehicles) {
+    Sim sim(flatWorld(), 12);
+    const uint32_t a = sim.spawnVehicle(TemplateId::Brick, 0, { 40.0f, 10.0f, 48.0f }, 0.0f);
+    const uint32_t b = sim.spawnVehicle(TemplateId::Brick, 1, { 46.0f, 10.0f, 48.0f }, 0.0f);
+
+    // Detonation between the two tanks: both take part damage.
+    sim.applyBlast({ { 43.0f, 11.0f, 48.0f }, 6.0f, 200, DamageType::Explosive });
+    auto damaged = [&](uint32_t id) {
+        const VehicleEntity* e = sim.find(id);
+        for (size_t p = 0; p < e->tmpl->parts.size(); ++p)
+            if (e->state.partHp(static_cast<int>(p)) < e->tmpl->parts[p].maxHp) return true;
+        return false;
+    };
+    CHECK(damaged(a));
+    CHECK(damaged(b));
+}
+
+TEST(sim_missile_direct_hit_with_splash) {
+    Sim sim(flatWorld(), 13);
+    const uint32_t shooter = sim.spawnVehicle(TemplateId::Brick, 0, { 20.0f, 10.0f, 48.0f }, 0.0f);
+    const uint32_t target = sim.spawnVehicle(TemplateId::Brick, 1, { 60.0f, 10.0f, 48.0f }, 0.0f);
+
+    WeaponSpec missile;
+    missile.type = DamageType::Explosive;
+    missile.damage = 150;
+    missile.blastRadius = 4.0f;
+    missile.blastDamage = 250;
+    // Flat trajectory (gravityFactor 0), straight at the target.
+    CHECK(sim.launch(shooter, { 1.0f, 0.0f, 0.0f }, 60.0f, missile, 0.0f) != 0);
+    for (int t = 0; t < 120 && !sim.projectiles().empty(); ++t) sim.step();
+    CHECK(sim.projectiles().empty());
+
+    const VehicleEntity* e = sim.find(target);
+    int damagedParts = 0;
+    for (size_t p = 0; p < e->tmpl->parts.size(); ++p)
+        if (e->state.partHp(static_cast<int>(p)) < e->tmpl->parts[p].maxHp) ++damagedParts;
+    CHECK(damagedParts >= 2); // direct hit + splash spreads across parts
+}
+
 TEST(sim_sector_economy) {
     Sim sim(flatWorld(), 9);
     sim.addEnergy(0, 150);
