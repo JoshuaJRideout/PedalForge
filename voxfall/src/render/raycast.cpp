@@ -122,6 +122,26 @@ Image renderGrid(const PreviewCamera& cam, int width, int height, float maxDist,
     return img;
 }
 
+Image downsample2x(const Image& src) {
+    Image out(src.width / 2, src.height / 2);
+    for (int y = 0; y < out.height; ++y) {
+        for (int x = 0; x < out.width; ++x) {
+            int sum[3] = { 0, 0, 0 };
+            for (int dy = 0; dy < 2; ++dy)
+                for (int dx = 0; dx < 2; ++dx) {
+                    const size_t i =
+                        (static_cast<size_t>(y * 2 + dy) * src.width + (x * 2 + dx)) * 3;
+                    sum[0] += src.rgb[i];
+                    sum[1] += src.rgb[i + 1];
+                    sum[2] += src.rgb[i + 2];
+                }
+            out.put(x, y, static_cast<uint8_t>(sum[0] / 4), static_cast<uint8_t>(sum[1] / 4),
+                    static_cast<uint8_t>(sum[2] / 4));
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 Image renderWorld(const VoxelWorld& world, const PreviewCamera& cam, int width, int height) {
@@ -157,8 +177,9 @@ Image renderVehicle(const VehicleTemplate& tmpl, const Vehicle& state, int width
                      center.z + radius * 0.85f };
     cam.fovDegrees = 40.0f;
 
-    return renderGrid(
-        cam, width, height, radius * 4.0f,
+    // 2x supersample: rotated-lattice sampling aliases badly at 1x.
+    return downsample2x(renderGrid(
+        cam, width * 2, height * 2, radius * 4.0f,
         [&](Int3 cell) {
             // Ray space (x, y=up, z=side) -> template grid (x, y=side, z=up),
             // rotated by -yaw around the vertical axis through the center.
@@ -176,7 +197,7 @@ Image renderVehicle(const VehicleTemplate& tmpl, const Vehicle& state, int width
             const Rgb base = palette[(id / 4) % 8];
             const float k = 1.0f - 0.22f * static_cast<float>(id % 4); // damage charring
             return Rgb{ base.r * k, base.g * k, base.b * k };
-        });
+        }));
 }
 
 } // namespace vox
