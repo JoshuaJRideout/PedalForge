@@ -66,10 +66,10 @@ int main(int argc, char** argv) {
     Vehicle winged(tmpl);
     Vehicle battered(tmpl);
     Rng combat(7);
-    winged.applyHit({ 20, 4, 8 }, 60, DamageType::Kinetic, combat);   // left wing off
-    battered.applyHit({ 20, 4, 8 }, 60, DamageType::Kinetic, combat); // wing off
-    battered.applyHit({ 4, 16, 8 }, 90, DamageType::Kinetic, combat);  // engine out
-    battered.applyHit({ 24, 16, 8 }, 120, DamageType::Kinetic, combat);// hull mauled
+    winged.applyHit({ 40, 14, 10 }, 60, DamageType::Kinetic, combat);   // left wing off
+    battered.applyHit({ 40, 14, 10 }, 60, DamageType::Kinetic, combat); // wing off
+    battered.applyHit({ 8, 32, 10 }, 90, DamageType::Kinetic, combat);  // engine out
+    battered.applyHit({ 48, 32, 10 }, 120, DamageType::Kinetic, combat);// hull mauled
 
     writePng(outDir + "/wasp_intact.png", renderVehicle(tmpl, intact, 480, 360));
     writePng(outDir + "/wasp_wing_destroyed.png", renderVehicle(tmpl, winged, 480, 360));
