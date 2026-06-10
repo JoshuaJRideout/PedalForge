@@ -13,6 +13,7 @@ endif()
 add_library(voxfall_core
     src/world/world.cpp
     src/world/mapfile.cpp
+    src/world/gen.cpp
     src/vehicle/vehicle.cpp
     src/vehicle/templates.cpp
     src/vehicle/locomotion.cpp
@@ -43,6 +44,7 @@ add_executable(voxfall_tests
     tests/test_mesh.cpp
     tests/test_ai.cpp
     tests/test_preview.cpp
+    tests/test_gen.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)

@@ -7,9 +7,28 @@
 #include <cstdlib>
 #include <string>
 #include "render/raycast.h"
+#include "world/gen.h"
 #include "world/world.h"
 
 using namespace vox;
+
+namespace {
+void renderBiome(Biome biome, const char* name, uint64_t seed, const std::string& outDir) {
+    VoxelWorld w({ 224, 96, 224 });
+    ArenaParams p;
+    p.seed = seed;
+    p.biome = biome;
+    const MapMeta meta = generateArena(w, p);
+    PreviewCamera cam;
+    const float ground = static_cast<float>(w.heightAt(112, 112));
+    cam.position = { 24.0f, ground + 50.0f, 24.0f };
+    cam.lookAt = { 112.0f, ground, 112.0f };
+    const std::string path = outDir + "/biome_" + name + ".png";
+    writePng(path, renderWorld(w, cam, 960, 540));
+    std::printf("wrote %s (valid: %s)\n", path.c_str(),
+                validateArena(w, meta) ? "yes" : "NO");
+}
+} // namespace
 
 int main(int argc, char** argv) {
     const uint64_t seed = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 1337ull;
@@ -56,5 +75,9 @@ int main(int argc, char** argv) {
     writePng(outDir + "/wasp_wing_destroyed.png", renderVehicle(tmpl, winged, 480, 360));
     writePng(outDir + "/wasp_battered.png", renderVehicle(tmpl, battered, 480, 360));
     std::printf("wrote wasp_intact.png, wasp_wing_destroyed.png, wasp_battered.png\n");
+
+    renderBiome(Biome::ShatteredCity, "city", seed, outDir);
+    renderBiome(Biome::Canyons, "canyons", seed, outDir);
+    renderBiome(Biome::Archipelago, "archipelago", seed, outDir);
     return 0;
 }
