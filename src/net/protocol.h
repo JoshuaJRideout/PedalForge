@@ -15,11 +15,15 @@ namespace vox {
 constexpr uint32_t kProtocolVersion = 1;
 
 enum class MsgType : uint8_t {
-    Welcome = 1,   // server->client: your entity, the map, full state
-    Input = 2,     // client->server: control input (+ optional fire command)
-    TickUpdate = 3,// server->clients: tick, snapshots, events, pickups
-    Audit = 4,     // server->clients: rotating chunk hash check
+    Welcome = 1,      // server->client: your entity, the map, full state
+    Input = 2,        // client->server: control input (+ optional fire command)
+    TickUpdate = 3,   // server->clients: tick, snapshots, events, pickups
+    Audit = 4,        // server->clients: rotating chunk hash check
+    Action = 5,       // client->server: eject / board (possession, §4.7)
+    ControlAssign = 6,// server->client: you now control this entity
 };
+
+enum class ActionKind : uint8_t { Eject = 1, Board = 2 };
 
 struct InputMsg {
     ControlInput input;
@@ -52,6 +56,7 @@ inline void writeEntitySnapshot(ByteWriter& w, const VehicleEntity& e) {
     w.f32(e.body.pitchAngle);
     w.f32(e.body.speed);
     w.u8(e.body.grounded ? 1 : 0);
+    w.u8(e.hasPilot ? 1 : 0);
     w.i32(e.ammo);
     w.u8(static_cast<uint8_t>(e.tmpl->parts.size()));
     for (size_t i = 0; i < e.tmpl->parts.size(); ++i) {

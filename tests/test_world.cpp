@@ -84,6 +84,43 @@ TEST(blast_below_sea_level_floods_with_water) {
     CHECK(tested);
 }
 
+TEST(structural_collapse_when_support_destroyed) {
+    // A concrete mushroom: 1x1 pillar (y 1..8) on bedrock, 5x5 platform on top.
+    VoxelWorld w({ 32, 32, 32 });
+    for (int x = 0; x < 32; ++x)
+        for (int z = 0; z < 32; ++z) w.set({ x, 0, z }, Material::Bedrock);
+    for (int y = 1; y < 8; ++y) w.set({ 16, y, 16 }, Material::Concrete);
+    for (int x = 14; x < 19; ++x)
+        for (int z = 14; z < 19; ++z) w.set({ x, 8, z }, Material::Concrete);
+
+    // Shoot out the middle of the pillar: the platform must fall.
+    const BlastResult r = w.applyBlast({ { 16.5f, 4.5f, 16.5f }, 1.2f, 5000, DamageType::Seismic });
+    CHECK(!r.destroyed.empty());
+    CHECK(!r.collapsed.empty());
+    CHECK(w.at({ 16, 8, 16 }) == Material::Air); // platform gone
+    CHECK(w.at({ 14, 8, 14 }) == Material::Air);
+    CHECK(w.at({ 16, 1, 16 }) == Material::Concrete); // stump below the cut survives
+}
+
+TEST(structural_bridge_survives_via_remaining_pillar) {
+    // Two pillars + deck. Destroying one pillar leaves the deck connected to
+    // the other -> supported, no collapse.
+    VoxelWorld w({ 32, 32, 32 });
+    for (int x = 0; x < 32; ++x)
+        for (int z = 0; z < 32; ++z) w.set({ x, 0, z }, Material::Bedrock);
+    for (int y = 1; y < 6; ++y) {
+        w.set({ 8, y, 16 }, Material::Metal);
+        w.set({ 24, y, 16 }, Material::Metal);
+    }
+    for (int x = 8; x <= 24; ++x) w.set({ x, 6, 16 }, Material::Metal);
+
+    const BlastResult r = w.applyBlast({ { 8.5f, 3.5f, 16.5f }, 1.6f, 9000, DamageType::Seismic });
+    CHECK(!r.destroyed.empty());
+    CHECK(r.collapsed.empty());                  // nothing orphaned
+    CHECK(w.at({ 16, 6, 16 }) == Material::Metal); // deck still standing
+    CHECK(w.at({ 24, 3, 16 }) == Material::Metal); // other pillar intact
+}
+
 TEST(chunk_hash_changes_only_in_damaged_chunk) {
     VoxelWorld w({ 64, 64, 64 });
     w.generate(42);

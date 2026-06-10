@@ -143,6 +143,40 @@ TEST(net_late_joiner_gets_destroyed_world) {
     CHECK(first.world()->contentHash() == second.world()->contentHash());
 }
 
+TEST(net_eject_board_reassigns_control) {
+    Server server(arena(), 7);
+    Client client;
+    const float gy = groundY(server.sim().world(), 30, 48);
+    const uint32_t peer = server.addClient(0, TemplateId::Brick, { 30.0f, gy, 48.0f });
+    pump(server, peer, client);
+    const uint32_t tank = client.myEntity();
+
+    // Eject: server reassigns control and tells us about the new pilot entity.
+    server.receive(peer, client.makeAction(ActionKind::Eject));
+    server.tick();
+    pump(server, peer, client);
+    const uint32_t pilot = client.myEntity();
+    CHECK(pilot != tank);
+    CHECK(client.entity(pilot) != nullptr);
+    CHECK(client.entity(pilot)->tmpl->id == TemplateId::Pilot);
+    CHECK(!client.entity(tank)->hasPilot); // replicated pilotless state
+
+    // Walk the pilot a little, then board the tank again.
+    ControlInput walk;
+    walk.throttle = 1.0f;
+    for (int t = 0; t < 30; ++t) {
+        server.receive(peer, client.makeInput(walk));
+        server.tick();
+        pump(server, peer, client);
+    }
+    server.receive(peer, client.makeAction(ActionKind::Board, tank));
+    server.tick();
+    pump(server, peer, client);
+    CHECK(client.myEntity() == tank);
+    CHECK(client.entity(pilot) == nullptr); // consumed pilot removed from replica
+    CHECK(client.entity(tank)->hasPilot);
+}
+
 TEST(net_audit_catches_tampered_world) {
     Server server(arena(), 6);
     Client client;
