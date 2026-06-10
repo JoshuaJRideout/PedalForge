@@ -44,8 +44,22 @@ enum class LocomotionClass : uint8_t { Tracked, Jet, Walker, Pilot, Static };
 
 // Stable wire/content IDs for templates (network + forge packs need these).
 enum class TemplateId : uint8_t {
-    Wasp = 0, Brick, Talon, Pilot, PowerStation, HostStation, Count
+    Wasp = 0, Brick, Talon, Pilot, PowerStation, HostStation,
+    KesselFighter, KesselTank, KesselMech, KesselPilot,
+    MirageFighter, MirageTank, MirageMech, MiragePilot,
+    ChoirFighter, ChoirTank, ChoirMech, ChoirPilot,
+    Count
 };
+
+// The four cultures (DESIGN.md §4.6), each with a real-world design language:
+// Vanguard = NATO-modern, Kessler = heavy eastern-bloc industry, Mirage =
+// faceted stealth drones, Choir = organic forward-swept bio-craft.
+enum class Faction : uint8_t { Vanguard = 0, Kessler, Mirage, Choir, Count };
+enum class UnitClass : uint8_t { Fighter = 0, Tank, Mech, PilotUnit, Count };
+
+struct VehicleTemplate;
+const VehicleTemplate& factionTemplate(Faction f, UnitClass c);
+inline Faction factionOfTeam(uint8_t team) { return static_cast<Faction>(team % 4); }
 
 struct VehicleTemplate {
     std::string name;

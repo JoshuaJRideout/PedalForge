@@ -16,7 +16,7 @@ int CommanderAi::armySize(const Sim& sim) const {
     for (const VehicleEntity& e : sim.entities())
         if (e.team == team && !e.state.destroyed()
             && e.tmpl->locomotion != LocomotionClass::Static
-            && e.tmpl->id != TemplateId::Pilot)
+            && e.tmpl->locomotion != LocomotionClass::Pilot)
             ++count;
     return count;
 }
@@ -26,7 +26,7 @@ uint32_t CommanderAi::nearestEnemy(const Sim& sim, Vec3 from) const {
     float bestDist = 1e30f;
     for (const VehicleEntity& e : sim.entities()) {
         if (e.team == team || e.state.destroyed()) continue;
-        if (e.tmpl->id == TemplateId::Pilot) continue; // squishing pilots is not strategy
+        if (e.tmpl->locomotion == LocomotionClass::Pilot) continue; // squishing pilots is not strategy
         const float d = distance(from, e.body.position);
         if (d < bestDist) {
             bestDist = d;
@@ -70,14 +70,15 @@ void CommanderAi::think(Sim& sim, AiController& ai) {
                   hostPosition.z + std::sin(angle) * radius };
         pos.y = static_cast<float>(
             sim.world().heightAt(static_cast<int>(pos.x), static_cast<int>(pos.z)));
-        sim.spawnVehicle(TemplateId::Brick, team, pos, angle);
+        sim.spawnVehicle(factionTemplate(factionOfTeam(team), UnitClass::Tank).id, team, pos,
+                         angle);
     }
 
     // Orders: idle units attack the nearest enemy (§2.3 step 3).
     for (const VehicleEntity& e : sim.entities()) {
         if (e.team != team || e.state.destroyed()) continue;
         if (e.tmpl->locomotion == LocomotionClass::Static) continue;
-        if (e.tmpl->id == TemplateId::Pilot) continue;
+        if (e.tmpl->locomotion == LocomotionClass::Pilot) continue;
         const Order* current = ai.orderOf(e.id);
         bool needsOrder = !current || current->type == OrderType::Hold;
         if (current && current->type == OrderType::Attack) {

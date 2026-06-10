@@ -251,6 +251,14 @@ Factions mirror the *roles* of the original's factions without copying them:
 
 Each faction has ~12 vehicle templates across 3 tech tiers + Host Station + 4 buildings.
 
+Each culture follows a real-world design language (first roster implemented):
+| Faction | Language | Fighter | Tank | Mech |
+|---|---|---|---|---|
+| Vanguard | NATO-modern | "Wasp" (F/A-18) | "Brick" (MBT) | "Talon" |
+| Kessler | Eastern-bloc heavy industry | "Grinder" (A-10) | "Bastion" (KV-2) | "Jotun" |
+| Mirage | Faceted stealth drones | "Specter" (flying wing) | "Dart" (wheeled recon) | "Stilt" (reverse-joint) |
+| Choir | Organic bio-craft | "Hymn" (forward-swept) | "Tide" (grav-lozenge) | "Psalter" (digitigrade + halo) |
+
 ### 4.7 Mechs, the Colossus, and the pilot scale
 
 Three additions built entirely from the existing part/possession systems:
