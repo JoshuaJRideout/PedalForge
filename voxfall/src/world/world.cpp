@@ -91,7 +91,13 @@ int VoxelWorld::heightAt(int x, int z) const {
 BlastResult VoxelWorld::applyBlast(const BlastEvent& e) {
     BlastResult result;
     const float mul = terrainDamageMul(e.type);
-    if (mul <= 0.0f || e.radius <= 0.0f || e.damage <= 0) return result;
+    if (mul <= 0.0f || e.damage <= 0) return result;
+    // Blast events arrive over the network: reject non-finite/absurd values
+    // (fuzzing found a mutated radius spinning the crater loop for eons).
+    if (!(e.radius > 0.0f) || e.radius > 64.0f || e.damage > 1000000) return result;
+    if (!std::isfinite(e.center.x) || !std::isfinite(e.center.y)
+        || !std::isfinite(e.center.z))
+        return result;
 
     const int r = static_cast<int>(std::ceil(e.radius));
     const Int3 c{ static_cast<int>(std::floor(e.center.x)),
