@@ -6,6 +6,15 @@ namespace vox {
 
 namespace {
 
+// Chunk coords arrive over the network: validate before any arithmetic
+// (fuzzing found garbage * kChunkSize overflowing into release-build UB).
+bool validChunkCoord(const VoxelWorld& world, Int3 c) {
+    const int n = VoxelWorld::kChunkSize;
+    const Int3 size = world.size();
+    return c.x >= 0 && c.y >= 0 && c.z >= 0 && c.x * n < size.x && c.y * n < size.y
+        && c.z * n < size.z;
+}
+
 // RLE one 32^3 chunk's materials (repair payload — same scheme as .vxm).
 void writeChunkPayload(ByteWriter& w, const VoxelWorld& world, Int3 chunkCoord) {
     const int n = VoxelWorld::kChunkSize;
@@ -38,7 +47,9 @@ bool applyChunkPayload(ByteReader& r, VoxelWorld& world, Int3 chunkCoord) {
     while (written < total && r.ok) {
         const uint8_t mat = r.u8();
         const uint32_t run = r.u32();
-        if (!r.ok || mat >= static_cast<uint8_t>(Material::Count) || written + run > total)
+        // run == 0 would loop forever on malformed input (found by fuzzing).
+        if (!r.ok || run == 0 || mat >= static_cast<uint8_t>(Material::Count)
+            || written + run > total)
             return false;
         for (uint32_t i = 0; i < run; ++i) {
             const Int3 cell = base + p;
@@ -121,7 +132,7 @@ void Server::receive(uint32_t peerId, const std::vector<uint8_t>& msg) {
 
     if (type == MsgType::ChunkRequest) {
         const Int3 coord{ r.i32(), r.i32(), r.i32() };
-        if (!r.ok) return;
+        if (!r.ok || !validChunkCoord(simulation.world(), coord)) return;
         ByteWriter w;
         w.u8(static_cast<uint8_t>(MsgType::ChunkData));
         w.i32(coord.x);
@@ -343,7 +354,8 @@ void Client::receive(const std::vector<uint8_t>& msg) {
             if (!joined()) return;
             const Int3 coord{ r.i32(), r.i32(), r.i32() };
             const uint64_t serverHash = r.u64();
-            if (r.ok && replicaWorld->chunkHash(coord) != serverHash) {
+            if (r.ok && validChunkCoord(*replicaWorld, coord)
+                && replicaWorld->chunkHash(coord) != serverHash) {
                 desync = true;
                 // Ask for the authoritative chunk (§7.2 "chunk re-sync").
                 ByteWriter w;
@@ -358,6 +370,7 @@ void Client::receive(const std::vector<uint8_t>& msg) {
         case MsgType::ChunkData: {
             if (!joined()) return;
             const Int3 coord{ r.i32(), r.i32(), r.i32() };
+            if (!r.ok || !validChunkCoord(*replicaWorld, coord)) return;
             if (applyChunkPayload(r, *replicaWorld, coord)) desync = false;
             break;
         }

@@ -71,8 +71,14 @@ std::optional<LoadedMap> decodeMap(const std::vector<uint8_t>& bytes) {
     const Int3 dims{ r.i32(), r.i32(), r.i32() };
     const int seaLevel = r.i32();
     if (!r.ok || dims.x <= 0 || dims.y <= 0 || dims.z <= 0) return std::nullopt;
-    // Reject absurd dimensions before allocating (max L map is 2048x2048x192, §3.1).
+    // Reject absurd dimensions BEFORE allocating: fuzzing found that garbage
+    // bytes posing as a map could demand multi-GB worlds. 256M voxels covers
+    // every §3.1 size short of L, which needs palette chunks regardless.
     if (dims.x > 4096 || dims.y > 1024 || dims.z > 4096) return std::nullopt;
+    const uint64_t totalVoxelsGuard = static_cast<uint64_t>(dims.x)
+                                    * static_cast<uint64_t>(dims.y)
+                                    * static_cast<uint64_t>(dims.z);
+    if (totalVoxelsGuard > (1ull << 28)) return std::nullopt;
 
     MapMeta meta;
     meta.name = r.str(1 << 16);

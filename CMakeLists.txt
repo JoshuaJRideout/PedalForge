@@ -61,6 +61,7 @@ add_executable(voxfall_tests
     tests/test_replay.cpp
     tests/test_udp.cpp
     tests/test_voxformat.cpp
+    tests/test_fuzz.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
