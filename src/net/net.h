@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <utility>
 #include <vector>
 #include "net/protocol.h"
 #include "sim/sim.h"
@@ -60,6 +61,9 @@ public:
     // Eject from / board a vehicle; server answers with ControlAssign on success.
     std::vector<uint8_t> makeAction(ActionKind action, uint32_t target = 0) const;
 
+    // Client-initiated messages (chunk repair requests). Pump to the server.
+    std::vector<std::vector<uint8_t>> takeOutbox() { return std::exchange(outbox, {}); }
+
     bool joined() const { return replicaWorld.has_value(); }
     uint32_t myEntity() const { return myEntityId; }
     uint64_t lastTick() const { return tick; }
@@ -76,6 +80,7 @@ public:
 private:
     void applySnapshot(ByteReader& r);
 
+    std::vector<std::vector<uint8_t>> outbox;
     std::optional<VoxelWorld> replicaWorld;
     std::vector<VehicleEntity> replicaEntities;
     std::vector<Pickup> replicaPickups;

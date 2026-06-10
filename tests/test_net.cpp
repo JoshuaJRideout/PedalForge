@@ -177,6 +177,31 @@ TEST(net_eject_board_reassigns_control) {
     CHECK(client.entity(tank)->hasPilot);
 }
 
+TEST(net_audit_repairs_tampered_chunk) {
+    Server server(arena(), 8);
+    Client client;
+    const uint32_t peer = server.addClient(0, TemplateId::Brick,
+                                           { 20.0f, groundY(server.sim().world(), 20, 48), 48.0f });
+    pump(server, peer, client);
+
+    // Corrupt several voxels in one chunk.
+    client.mutableWorld()->set({ 5, 5, 5 }, Material::Metal);
+    client.mutableWorld()->set({ 6, 5, 5 }, Material::Metal);
+    CHECK(client.world()->contentHash() != server.sim().world().contentHash());
+
+    // Audits rotate; the mismatch triggers ChunkRequest -> ChunkData repair.
+    bool repaired = false;
+    for (int t = 0; t < 30 * 20 && !repaired; ++t) {
+        server.tick();
+        pump(server, peer, client);
+        for (const auto& msg : client.takeOutbox()) server.receive(peer, msg);
+        pump(server, peer, client);
+        repaired = client.world()->contentHash() == server.sim().world().contentHash()
+                && !client.desyncDetected();
+    }
+    CHECK(repaired); // self-healing, not just self-aware
+}
+
 TEST(net_audit_catches_tampered_world) {
     Server server(arena(), 6);
     Client client;
