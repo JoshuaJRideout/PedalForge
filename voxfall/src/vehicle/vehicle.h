@@ -38,8 +38,16 @@ struct PartDef {
 
 constexpr uint8_t kEmptySubvoxel = 0xFF;
 
+// Movement model selector (locomotion.h implements each — DESIGN.md §4.5).
+enum class LocomotionClass : uint8_t { Tracked, Jet, Walker, Pilot };
+
+// Stable wire/content IDs for templates (network + forge packs need these).
+enum class TemplateId : uint8_t { Wasp = 0, Brick, Talon, Pilot, Count };
+
 struct VehicleTemplate {
     std::string name;
+    TemplateId id = TemplateId::Count;
+    LocomotionClass locomotion = LocomotionClass::Tracked;
     Int3 dims;                       // sub-voxel grid dimensions
     std::vector<uint8_t> partIndex;  // per sub-voxel: kEmptySubvoxel or index into parts
     std::vector<PartDef> parts;
@@ -74,6 +82,7 @@ struct VehicleTemplate {
     static const VehicleTemplate& brickTank();
     static const VehicleTemplate& talonMech();
     static const VehicleTemplate& pilot();
+    static const VehicleTemplate& byId(TemplateId id);
 };
 
 enum class DropKind : uint8_t { AmmoCell, RepairKit, EnergyShard };
@@ -115,6 +124,17 @@ public:
 
     // Damage-state fraction for cosmetic chip thresholds (75/50/25%).
     float partHpFraction(int part) const;
+
+    // Field repair (§5.4): restores HP to a damaged-but-alive part. Destroyed
+    // parts cannot be re-fabricated in the field. Returns HP actually restored.
+    int repairPart(int part, int amount);
+    // The alive part with the lowest HP fraction (-1 if none damaged) — repair
+    // kits target this (§4.4).
+    int lowestDamagedPart() const;
+
+    // Direct part-state write for replication (client replicas mirror the
+    // server's authoritative state; this skips drops/bleed logic on purpose).
+    void replicatePartState(int part, int hp, bool destroyedFlag);
 
 private:
     struct PartState {

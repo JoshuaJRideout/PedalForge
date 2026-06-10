@@ -171,6 +171,36 @@ int Vehicle::alivePartCountOfType(PartType type) const {
     return count;
 }
 
+int Vehicle::repairPart(int part, int amount) {
+    PartState& state = parts[static_cast<size_t>(part)];
+    if (state.destroyed || amount <= 0) return 0;
+    const int max = templ->parts[static_cast<size_t>(part)].maxHp;
+    const int restored = std::min(amount, max - state.hp);
+    state.hp += restored;
+    return restored;
+}
+
+int Vehicle::lowestDamagedPart() const {
+    int best = -1;
+    float bestFraction = 1.0f;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (parts[i].destroyed) continue;
+        const float f = partHpFraction(static_cast<int>(i));
+        if (f < bestFraction) {
+            bestFraction = f;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+void Vehicle::replicatePartState(int part, int hp, bool destroyedFlag) {
+    PartState& state = parts[static_cast<size_t>(part)];
+    state.hp = hp;
+    state.destroyed = destroyedFlag;
+    if (part == templ->corePart && destroyedFlag) dead = true;
+}
+
 float Vehicle::partHpFraction(int part) const {
     const int max = templ->parts[static_cast<size_t>(part)].maxHp;
     return max <= 0 ? 0.0f : static_cast<float>(parts[static_cast<size_t>(part)].hp)

@@ -12,6 +12,8 @@ VehicleTemplate makeWasp() {
     // Axes: x = length (tail->nose), y = width (left->right), z = height.
     VehicleTemplate t;
     t.name = "Wasp";
+    t.id = TemplateId::Wasp;
+    t.locomotion = LocomotionClass::Jet;
     t.dims = { 24, 16, 8 };
     t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
 
@@ -37,6 +39,8 @@ VehicleTemplate makeBrick() {
     // "Brick" tank: 5 x 3 x 2.5 m at 0.25 m sub-voxels.
     VehicleTemplate t;
     t.name = "Brick";
+    t.id = TemplateId::Brick;
+    t.locomotion = LocomotionClass::Tracked;
     t.dims = { 20, 12, 10 };
     t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
 
@@ -62,6 +66,8 @@ VehicleTemplate makeTalon() {
     // Cockpit is a part but NOT the core: destroying it husks the mech.
     VehicleTemplate t;
     t.name = "Talon";
+    t.id = TemplateId::Talon;
+    t.locomotion = LocomotionClass::Walker;
     t.dims = { 16, 12, 32 };
     t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
 
@@ -91,6 +97,8 @@ VehicleTemplate makePilot() {
     // On-foot pilot (DESIGN.md §4.7): 0.5 x 0.5 x 2 m. One fragile part.
     VehicleTemplate t;
     t.name = "Pilot";
+    t.id = TemplateId::Pilot;
+    t.locomotion = LocomotionClass::Pilot;
     t.dims = { 2, 2, 8 };
     t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
     const int body = t.addPart("body", PartType::Hull, 40);
@@ -119,6 +127,17 @@ const VehicleTemplate& VehicleTemplate::talonMech() {
 const VehicleTemplate& VehicleTemplate::pilot() {
     static const VehicleTemplate t = makePilot();
     return t;
+}
+
+const VehicleTemplate& VehicleTemplate::byId(TemplateId id) {
+    switch (id) {
+        case TemplateId::Wasp:  return waspFighter();
+        case TemplateId::Brick: return brickTank();
+        case TemplateId::Talon: return talonMech();
+        case TemplateId::Pilot: return pilot();
+        case TemplateId::Count: break;
+    }
+    return brickTank();
 }
 
 } // namespace vox
