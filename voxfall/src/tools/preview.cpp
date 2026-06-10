@@ -76,6 +76,31 @@ int main(int argc, char** argv) {
     writePng(outDir + "/wasp_battered.png", renderVehicle(tmpl, battered, 480, 360));
     std::printf("wrote wasp_intact.png, wasp_wing_destroyed.png, wasp_battered.png\n");
 
+    // The full roster, intact.
+    const struct { TemplateId id; const char* file; } roster[] = {
+        { TemplateId::Brick, "vehicle_brick_tank.png" },
+        { TemplateId::Talon, "vehicle_talon_mech.png" },
+        { TemplateId::Pilot, "vehicle_pilot.png" },
+        { TemplateId::PowerStation, "vehicle_power_station.png" },
+        { TemplateId::HostStation, "vehicle_host_station.png" },
+    };
+    for (const auto& entry : roster) {
+        const VehicleTemplate& rosterTmpl = VehicleTemplate::byId(entry.id);
+        Vehicle fresh(rosterTmpl);
+        writePng(outDir + "/" + entry.file, renderVehicle(rosterTmpl, fresh, 480, 360));
+        std::printf("wrote %s\n", entry.file);
+    }
+    // A mobility-killed Talon: one leg shot away.
+    {
+        const VehicleTemplate& talon = VehicleTemplate::talonMech();
+        Vehicle legless(talon);
+        Rng mechRng(3);
+        legless.applyHit({ 8, 1, 6 }, 500, DamageType::Kinetic, mechRng); // left leg
+        writePng(outDir + "/vehicle_talon_leg_destroyed.png",
+                 renderVehicle(talon, legless, 480, 360));
+        std::printf("wrote vehicle_talon_leg_destroyed.png\n");
+    }
+
     renderBiome(Biome::ShatteredCity, "city", seed, outDir);
     renderBiome(Biome::Canyons, "canyons", seed, outDir);
     renderBiome(Biome::Archipelago, "archipelago", seed, outDir);
