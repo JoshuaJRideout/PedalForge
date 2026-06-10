@@ -21,6 +21,8 @@ enum class MsgType : uint8_t {
     Audit = 4,        // server->clients: rotating chunk hash check
     Action = 5,       // client->server: eject / board (possession, §4.7)
     ControlAssign = 6,// server->client: you now control this entity
+    ChunkRequest = 7, // client->server: my chunk hash mismatched, resend it
+    ChunkData = 8,    // server->client: authoritative chunk contents (RLE)
 };
 
 enum class ActionKind : uint8_t { Eject = 1, Board = 2 };

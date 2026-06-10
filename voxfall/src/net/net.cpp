@@ -4,6 +4,60 @@
 
 namespace vox {
 
+namespace {
+
+// RLE one 32^3 chunk's materials (repair payload — same scheme as .vxm).
+void writeChunkPayload(ByteWriter& w, const VoxelWorld& world, Int3 chunkCoord) {
+    const int n = VoxelWorld::kChunkSize;
+    const Int3 base{ chunkCoord.x * n, chunkCoord.y * n, chunkCoord.z * n };
+    Material current = world.at(base);
+    uint32_t run = 0;
+    for (int y = 0; y < n; ++y)
+        for (int z = 0; z < n; ++z)
+            for (int x = 0; x < n; ++x) {
+                const Material m = world.at(base + Int3{ x, y, z });
+                if (m == current) {
+                    ++run;
+                } else {
+                    w.u8(static_cast<uint8_t>(current));
+                    w.u32(run);
+                    current = m;
+                    run = 1;
+                }
+            }
+    w.u8(static_cast<uint8_t>(current));
+    w.u32(run);
+}
+
+bool applyChunkPayload(ByteReader& r, VoxelWorld& world, Int3 chunkCoord) {
+    const int n = VoxelWorld::kChunkSize;
+    const Int3 base{ chunkCoord.x * n, chunkCoord.y * n, chunkCoord.z * n };
+    uint64_t written = 0;
+    const uint64_t total = static_cast<uint64_t>(n) * n * n;
+    Int3 p{ 0, 0, 0 };
+    while (written < total && r.ok) {
+        const uint8_t mat = r.u8();
+        const uint32_t run = r.u32();
+        if (!r.ok || mat >= static_cast<uint8_t>(Material::Count) || written + run > total)
+            return false;
+        for (uint32_t i = 0; i < run; ++i) {
+            const Int3 cell = base + p;
+            if (world.inBounds(cell)) world.set(cell, static_cast<Material>(mat));
+            if (++p.x == n) {
+                p.x = 0;
+                if (++p.z == n) {
+                    p.z = 0;
+                    ++p.y;
+                }
+            }
+        }
+        written += run;
+    }
+    return r.ok && written == total;
+}
+
+} // namespace
+
 // ---------------------------------------------------------------- Server ----
 
 Server::Server(VoxelWorld world, uint64_t seed) : simulation(std::move(world), seed) {}
@@ -62,6 +116,19 @@ void Server::receive(uint32_t peerId, const std::vector<uint8_t>& msg) {
 
         simulation.setInput(peer->entityId, input);
         if (fire) simulation.fire(peer->entityId, fireDir);
+        return;
+    }
+
+    if (type == MsgType::ChunkRequest) {
+        const Int3 coord{ r.i32(), r.i32(), r.i32() };
+        if (!r.ok) return;
+        ByteWriter w;
+        w.u8(static_cast<uint8_t>(MsgType::ChunkData));
+        w.i32(coord.x);
+        w.i32(coord.y);
+        w.i32(coord.z);
+        writeChunkPayload(w, simulation.world(), coord);
+        peer->outbox.push_back(std::move(w.data));
         return;
     }
 
@@ -276,7 +343,22 @@ void Client::receive(const std::vector<uint8_t>& msg) {
             if (!joined()) return;
             const Int3 coord{ r.i32(), r.i32(), r.i32() };
             const uint64_t serverHash = r.u64();
-            if (r.ok && replicaWorld->chunkHash(coord) != serverHash) desync = true;
+            if (r.ok && replicaWorld->chunkHash(coord) != serverHash) {
+                desync = true;
+                // Ask for the authoritative chunk (§7.2 "chunk re-sync").
+                ByteWriter w;
+                w.u8(static_cast<uint8_t>(MsgType::ChunkRequest));
+                w.i32(coord.x);
+                w.i32(coord.y);
+                w.i32(coord.z);
+                outbox.push_back(std::move(w.data));
+            }
+            break;
+        }
+        case MsgType::ChunkData: {
+            if (!joined()) return;
+            const Int3 coord{ r.i32(), r.i32(), r.i32() };
+            if (applyChunkPayload(r, *replicaWorld, coord)) desync = false;
             break;
         }
         default:
