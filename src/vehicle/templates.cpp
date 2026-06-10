@@ -249,6 +249,29 @@ VehicleTemplate makeBrick() {
     t.fillBox({ 36, 10, 15 }, { 39, 14, 19 }, turret); // muzzle brake
     t.carveBox({ 37, 11, 16 }, { 38, 13, 18 });        // brake vent
 
+    // NATO paint: olive body, dark tracks, steel barrel, white turret number.
+    {
+        enum : uint8_t { Olive = 1, DarkOlive, TrackDark, Steel, White };
+        const uint8_t pal[][3] = { { 102, 108, 78 }, { 74, 80, 58 }, { 48, 48, 52 },
+                                   { 118, 122, 126 }, { 214, 214, 210 } };
+        for (int i = 0; i < 5; ++i)
+            for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = pal[i][k];
+        t.paint.assign(t.partIndex.size(), 0);
+        for (int z = 0; z < t.dims.z; ++z)
+            for (int y = 0; y < t.dims.y; ++y)
+                for (int x = 0; x < t.dims.x; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = Olive;
+                    if (part == trackL || part == trackR) c = TrackDark;
+                    else if (part == engine) c = DarkOlive;
+                    else if (part == turret) c = x >= 26 ? Steel : Olive;
+                    else if (z <= 5) c = DarkOlive;
+                    if (part == turret && x >= 15 && x <= 17 && z >= 17) c = White;
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    }
+
     t.finalize();
     return t;
 }
@@ -284,7 +307,9 @@ VehicleTemplate makeTalon() {
         t.carveBox({ 12, y0, 4 }, { 14, y0 + 2, 10 });        // shin chamfers
         t.carveBox({ 12, y0 + 6, 4 }, { 14, y0 + 8, 10 });
         t.fillBox({ 10, y0, 16 }, { 22, y0 + 8, 20 }, leg);   // knee armor
-        t.fillBox({ 12, y0 + 2, 20 }, { 20, y0 + 8, 28 }, leg); // thigh
+        // Thigh hugs the pelvis side (mirrored per side so both connect).
+        const int ty = side == 0 ? y0 + 2 : y0;
+        t.fillBox({ 12, ty, 20 }, { 20, ty + 6, 28 }, leg); // thigh
     }
 
     // Torso: pelvis, waist, broad chest with collar.
@@ -324,6 +349,30 @@ VehicleTemplate makeTalon() {
     t.carveBox({ 22, 10, 58 }, { 24, 14, 60 }); // visor rake
     t.fillBox({ 20, 11, 60 }, { 22, 13, 64 }, sensor);
 
+    // Gunmetal paint with navy plates, dark joints, glass canopy.
+    {
+        enum : uint8_t { Gunmetal = 1, Navy, Joint, Glass, Steel };
+        const uint8_t pal[][3] = { { 118, 126, 138 }, { 58, 92, 164 }, { 52, 56, 62 },
+                                   { 30, 36, 50 }, { 150, 154, 160 } };
+        for (int i = 0; i < 5; ++i)
+            for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = pal[i][k];
+        t.paint.assign(t.partIndex.size(), 0);
+        for (int z = 0; z < t.dims.z; ++z)
+            for (int y = 0; y < t.dims.y; ++y)
+                for (int x = 0; x < t.dims.x; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = Gunmetal;
+                    if (part == legL || part == legR) c = z < 16 ? Joint : Gunmetal;
+                    else if (part == cockpit) c = Glass;
+                    else if (part == sensor) c = Navy;
+                    else if (part == armL || part == armR) c = x >= 18 ? Steel : Navy;
+                    else if (part == jets) c = Joint;
+                    else if (part == torso && z >= 18 && z < 24) c = Navy; // chest plate
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    }
+
     t.finalize();
     return t;
 }
@@ -347,6 +396,22 @@ VehicleTemplate makePilot() {
     t.fillBox({ 2, 9, 6 }, { 6, 11, 11 }, body); // right arm
     t.fillBox({ 3, 4, 12 }, { 6, 8, 15 }, body); // head
     t.fillBox({ 3, 4, 15 }, { 5, 8, 16 }, body); // helmet crest
+    // Navy flight suit, white trim, dark visor.
+    {
+        const uint8_t pal[][3] = { { 58, 92, 164 }, { 210, 212, 216 }, { 26, 32, 46 } };
+        for (int i = 0; i < 3; ++i)
+            for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = pal[i][k];
+        t.paint.assign(t.partIndex.size(), 0);
+        for (int z = 0; z < t.dims.z; ++z)
+            for (int y = 0; y < t.dims.y; ++y)
+                for (int x = 0; x < t.dims.x; ++x) {
+                    if (t.partAt({ x, y, z }) < 0) continue;
+                    uint8_t c = 1;
+                    if (z < 1 || (z >= 6 && z < 8)) c = 2;
+                    if (z >= 12) c = (x >= 5 && z >= 13 && z < 15) ? 3 : 2;
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    }
     t.finalize();
     return t;
 }
@@ -470,6 +535,18 @@ const VehicleTemplate& VehicleTemplate::byId(TemplateId id) {
         case TemplateId::Pilot: return pilot();
         case TemplateId::PowerStation: return powerStation();
         case TemplateId::HostStation: return hostStation();
+        case TemplateId::KesselFighter: return factionTemplate(Faction::Kessler, UnitClass::Fighter);
+        case TemplateId::KesselTank: return factionTemplate(Faction::Kessler, UnitClass::Tank);
+        case TemplateId::KesselMech: return factionTemplate(Faction::Kessler, UnitClass::Mech);
+        case TemplateId::KesselPilot: return factionTemplate(Faction::Kessler, UnitClass::PilotUnit);
+        case TemplateId::MirageFighter: return factionTemplate(Faction::Mirage, UnitClass::Fighter);
+        case TemplateId::MirageTank: return factionTemplate(Faction::Mirage, UnitClass::Tank);
+        case TemplateId::MirageMech: return factionTemplate(Faction::Mirage, UnitClass::Mech);
+        case TemplateId::MiragePilot: return factionTemplate(Faction::Mirage, UnitClass::PilotUnit);
+        case TemplateId::ChoirFighter: return factionTemplate(Faction::Choir, UnitClass::Fighter);
+        case TemplateId::ChoirTank: return factionTemplate(Faction::Choir, UnitClass::Tank);
+        case TemplateId::ChoirMech: return factionTemplate(Faction::Choir, UnitClass::Mech);
+        case TemplateId::ChoirPilot: return factionTemplate(Faction::Choir, UnitClass::PilotUnit);
         case TemplateId::Count: break;
     }
     return brickTank();

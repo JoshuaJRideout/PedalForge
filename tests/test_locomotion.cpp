@@ -162,10 +162,11 @@ TEST(mech_leg_damage_and_husk_rules) {
     ControlInput in;
     in.throttle = 1.0f;
 
-    // Both legs gone: immobile but alive.
+    // Both legs gone: immobile but alive. Exact-HP hits: overkill would
+    // bleed into the torso (legs are properly attached now).
     Vehicle legless(VehicleTemplate::talonMech());
-    destroyPart(legless, "leg.left", 500);
-    destroyPart(legless, "leg.right", 500);
+    destroyPart(legless, "leg.left", 90);
+    destroyPart(legless, "leg.right", 90);
     CHECK(!legless.destroyed());
     BodyState body = onGround(20.0f, 32.0f);
     for (int t = 0; t < 120; ++t) stepWalker(body, in, legless, w);

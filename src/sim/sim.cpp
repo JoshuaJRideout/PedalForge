@@ -278,7 +278,7 @@ uint32_t Sim::buildPowerStation(uint8_t team, Vec3 position) {
 uint32_t Sim::eject(uint32_t vehicleId) {
     VehicleEntity* v = find(vehicleId);
     if (!v || !v->hasPilot || v->state.destroyed()) return 0;
-    if (v->tmpl->id == TemplateId::Pilot) return 0; // can't eject from yourself
+    if (v->tmpl->locomotion == LocomotionClass::Pilot) return 0; // can't eject from yourself
 
     // Step out beside the left flank, snapped to the ground.
     const float side = static_cast<float>(v->tmpl->dims.y) * v->tmpl->voxelSize * 0.5f + 1.0f;
@@ -289,17 +289,19 @@ uint32_t Sim::eject(uint32_t vehicleId) {
 
     v->hasPilot = false;
     v->input = {};
-    const uint32_t pilotId = spawnVehicle(TemplateId::Pilot, v->team, pos, v->body.yaw);
+    const TemplateId pilotTemplate =
+        factionTemplate(factionOfTeam(v->team), UnitClass::PilotUnit).id;
+    const uint32_t pilotId = spawnVehicle(pilotTemplate, v->team, pos, v->body.yaw);
     return pilotId; // note: spawn may invalidate v
 }
 
 bool Sim::board(uint32_t pilotId, uint32_t vehicleId) {
     VehicleEntity* pilot = find(pilotId);
     VehicleEntity* target = find(vehicleId);
-    if (!pilot || !target || pilot->tmpl->id != TemplateId::Pilot) return false;
+    if (!pilot || !target || pilot->tmpl->locomotion != LocomotionClass::Pilot) return false;
     if (pilot->state.destroyed() || target->state.destroyed()) return false;
     if (target->hasPilot) return false;
-    if (target->tmpl->id == TemplateId::Pilot) return false;
+    if (target->tmpl->locomotion == LocomotionClass::Pilot) return false;
     if (distance(pilot->body.position, target->body.position) > kBoardRange) return false;
     // A shot-out cockpit means there is nowhere to sit until it's repaired (§4.7).
     bool hasCockpit = false, cockpitAlive = false;
