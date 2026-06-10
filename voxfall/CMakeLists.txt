@@ -19,6 +19,7 @@ add_library(voxfall_core
     src/sim/sim.cpp
     src/net/net.cpp
     src/render/mesh.cpp
+    src/ai/orders.cpp
 )
 target_include_directories(voxfall_core PUBLIC src)
 
@@ -35,6 +36,7 @@ add_executable(voxfall_tests
     tests/test_sim.cpp
     tests/test_net.cpp
     tests/test_mesh.cpp
+    tests/test_ai.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
