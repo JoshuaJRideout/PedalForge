@@ -184,6 +184,8 @@ Part rules:
 | `shield_gen` | shields drop instantly, no recharge | 8% |
 | `cargo` (transports) | carried squad ejects/spills | 10% |
 | `power` (buildings/host) | production halts | 20% |
+| `cockpit` (mechs, §4.7) | pilot killed/ejected; machine becomes a stealable husk | 8% |
+| `leg` (walkers/mechs) | mobility loss per leg: limp → crawl → immobile | 2–4×8% |
 
 ### 4.4 Drops
 When a part (or whole vehicle) is destroyed it may spawn pickups — glowing voxel cubes
@@ -205,6 +207,10 @@ force that's winning sustains itself ("conveyor of war"), but never fully replac
 - **Rotor / VTOL** (gunships): full 3D, slower, hover-capable, drops when engine dies.
 - **Jet** (fighters/bombers): fastest, must keep airspeed, stall mechanics; wing loss is dramatic.
 - **Walker** (tier-3 heavies): slow, steps over low walls, parts = legs (mobility kill chess).
+- **Mech** (mid walker, jump-capable): humanoid silhouette, jump jets, can crouch behind
+  ruins, arms = weapon mounts. The star of the Scrap Pilots mode (§7.1) — handling inspired
+  by 16-bit mech brawlers: weighty, deliberate, but acrobatic in short bursts.
+- **On foot** (pilot, §4.7): the smallest "vehicle" in the system.
 - **Static** (turrets, power stations, beam gates, radar): buildings are "vehicles without locomotion" — same part/damage system.
 
 ### 4.6 Faction identity (4 at launch, original lore)
@@ -216,6 +222,41 @@ Factions mirror the *roles* of the original's factions without copying them:
 4. **Choir (bio-ships)** — self-repairing parts (slow regen), no ammo (cooldown weapons), expensive units; loses no drops to enemies (wrecks dissolve).
 
 Each faction has ~12 vehicle templates across 3 tech tiers + Host Station + 4 buildings.
+
+### 4.7 Mechs, the Colossus, and the pilot scale
+
+Three additions built entirely from the existing part/possession systems:
+
+**Mid mechs** (~8–10 m tall, ≈ 32–40 sub-voxels): jump-jet humanoid walkers with parts
+`cockpit` (NOT the core), `torso` (core), `leg.left/right`, `arm.left/right` (weapon
+mounts), `jumpjets`, `sensor`. Two damage outcomes matter:
+- **Torso destroyed** → normal vehicle death, drops, crater.
+- **Cockpit destroyed while torso lives** → the pilot is killed (or auto-ejects at the
+  last second, mode-dependent) and the mech becomes a powered-down **husk**: intact,
+  repairable, and **boardable by any pilot — including the enemy**. Stealing a half-wrecked
+  mech mid-fight is an intended signature moment (the Metal Warriors homage).
+
+**The Colossus** (~30–40 m tall, ≈ 120–160 sub-voxels — by far the largest mobile unit):
+a tier-beyond-3 giant mech that only exists in its dedicated mode (§7.1). Parts:
+`reactor` (core, deeply buried — must strip armor plates to expose it), 2× `leg`
+(immobilize it by leg-stripping), 2–3× `arm.weapon` (siege beam, cluster pods, seismic
+fist), `head.sensor`, `shield_gen`, 4× `armor.plate` (ablative, no function, must be
+chewed through). Every destroyed Colossus part spawns a *large* drop cluster — killing
+it piece by piece literally feeds the army fighting it. Its footsteps crack terrain
+(small seismic blasts), and it can wade through buildings.
+
+**The pilot** (on foot, ~2 m, 8 sub-voxels): what you are when you eject. Mostly
+defenseless by design — 40 HP single `body` part, a sidearm that cannot meaningfully hurt
+vehicles, a weak jetpack hop, and a grapple for climbing wrecks. Pilots can: sprint,
+crouch into 1-voxel gaps (buildings, tunnels, mech wrecks), **board any empty/husked
+vehicle** (3 s animation, interruptible), and set demolition charges (slow, loud — a
+desperation tool). Death as a pilot is cheap in modes with respawns, but while on foot
+you are radar-invisible: the sneak-and-steal loop is the point.
+
+Boarding rule (all modes where pilots exist): possession = a pilot body being inside a
+cockpit/hull. Vehicles without a pilot are husks anyone can take. This unifies Urban
+Assault possession with Metal Warriors theft — "possess" in strategy modes is flavored
+as remote-link, "board" in pilot modes is physical, but it is one system in code.
 
 ---
 
@@ -285,6 +326,32 @@ Each faction has ~12 vehicle templates across 3 tech tiers + Host Station + 4 bu
 - **Wreckyard (arena brawl, 2–8 players)** — no strategy layer: everyone possesses one
   respawning vehicle, pure part-damage dogfight/tank-brawl in a small arena. This mode is
   also our public **netcode and damage-model testbed** and a low-commitment Steam demo candidate.
+- **Colossus (asymmetric race, 2–4 players / 2 teams)** — a neutral fortified base sits at
+  map center (Bunker Hill pattern, §8.1) housing a dormant **Colossus** (§4.7). Standard
+  sector/energy play, but the base is capturable: hold its capture zone uncontested for
+  60 s. The first team to capture it triggers **the Trade**: every one of their
+  conventional units detonates on the spot (refunding 50% energy into the Colossus as
+  bonus armor), their Host Station flies in and docks as its reactor — and the match
+  becomes **one giant mech versus everything the other side has**. The Colossus player
+  wins by destroying the enemy Host Station; the army wins by bringing the Colossus down
+  (host docked = host dead). The army side keeps sectors, income, and rebuilds; the
+  Colossus self-repairs only from the drop clusters its own destruction-in-progress and
+  kills scatter around it. Capturing is therefore a genuine gamble: trade your whole
+  army and economy for one apocalyptic unit. If nobody captures by the 20-minute mark,
+  the Colossus wakes up hostile to everyone (AI-driven) — resolve forced either way.
+- **Scrap Pilots (mech brawl, 2–8 players, FFA or teams)** — the Metal Warriors mode.
+  No strategy layer, no host station. Each player spawns as a **pilot** (§4.7) beside
+  their starting mid-mech in a compact, dense arena (Shattered City or Undercity dressing).
+  Eject any time: on foot you are fragile and slow but radar-invisible and small enough
+  to use tunnels, ruins, and mech-wreck interiors. Scattered through the arena — in
+  garages, hangars, and buried bays the generator guarantees (§8.3) — are **mothballed
+  vehicles**: tanks, jets, AA crawlers, and a few rarer mech variants. Any of them can be
+  boarded and fought. Kill the cockpit and the mech husks for stealing; kill the torso
+  and it's scrap and drops. Pilots respawn on a timer; abandoned and husked machines
+  persist where they died, so the arena's vehicle pool migrates and dwindles over the
+  match. Scoring: team deathmatch on machine kills (pilot kills worth little — squishing
+  a fleeing pilot with a mech foot is its own reward), or **last-pilot-standing** rounds
+  in competitive playlists. Shares the Wreckyard tech surface plus the pilot entity.
 - **Last Light (co-op wave survival, 1–4 players)** — the mode shown in the concept art:
   defend a fixed base in a procedural city against escalating enemy waves. Each player
   possesses one vehicle (respawn costs base energy); score/kills/wave HUD; between waves,
@@ -331,7 +398,7 @@ Arenas = **biome + macro-pattern + mode dressing**, all procedural within author
 | **Archipelago** | island clusters in shallow sea; ruins on big isles | hover/air, beam-gate beachheads |
 | **Undercity** | thin crust over a large cavern layer; surface + underworld fronts | tunnelers, vertical play, seismic weapons |
 | **Ringworld** | playable ring around an impassable storm-core; flanking is always possible in 2 directions | mobility factions, map awareness |
-| **Bunker Hill** | one fortified neutral mega-ruin center with garrison-able buildings | sieges, Beacon War |
+| **Bunker Hill** | one fortified neutral mega-ruin center with garrison-able buildings | sieges, Beacon War, Colossus |
 
 ### 8.2 Biome dressings (visual + mechanical modifiers)
 - **Shattered City** — dense collapsible ruins, +sector income, terrible sightlines, infantry— er, light-unit ambush heaven.
@@ -343,7 +410,10 @@ Arenas = **biome + macro-pattern + mode dressing**, all procedural within author
 ### 8.3 Hand-authored *ritual* spaces (procedural placement, fixed micro-design)
 Small prefab set-pieces injected by the generator: neutral tech bunkers (guarded by
 derelict AI turrets, contain tech salvage), crashed mega-freighter (cover + loot field),
-storm obelisks (capturable map-wide radar pulse). These give procedural maps memorable
+storm obelisks (capturable map-wide radar pulse), and — in pilot modes — **mothballed
+vehicle bays**: garages, hangars, and buried depots holding boardable machines, with
+placement balanced so no spawn starts nearer than any other to the rare finds (§7.1
+Scrap Pilots). These give procedural maps memorable
 landmarks and shoutcaster vocabulary ("they're fighting at the freighter").
 
 ### 8.4 Fairness rules for PvP
