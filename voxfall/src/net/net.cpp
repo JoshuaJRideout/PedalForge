@@ -1,0 +1,228 @@
+#include "net/net.h"
+#include <algorithm>
+#include <utility>
+
+namespace vox {
+
+// ---------------------------------------------------------------- Server ----
+
+Server::Server(VoxelWorld world, uint64_t seed) : simulation(std::move(world), seed) {}
+
+Server::Peer* Server::findPeer(uint32_t peerId) {
+    for (Peer& p : peers)
+        if (p.id == peerId) return &p;
+    return nullptr;
+}
+
+uint32_t Server::entityOf(uint32_t peerId) const {
+    for (const Peer& p : peers)
+        if (p.id == peerId) return p.entityId;
+    return 0;
+}
+
+uint32_t Server::addClient(uint8_t team, TemplateId vehicle, Vec3 spawnPos, float yaw) {
+    Peer peer;
+    peer.id = nextPeerId++;
+    peer.entityId = simulation.spawnVehicle(vehicle, team, spawnPos, yaw);
+    peer.outbox.push_back(buildWelcome(peer));
+    peers.push_back(std::move(peer));
+    return peers.back().id;
+}
+
+std::vector<uint8_t> Server::buildWelcome(const Peer& peer) {
+    ByteWriter w;
+    w.u8(static_cast<uint8_t>(MsgType::Welcome));
+    w.u32(kProtocolVersion);
+    w.u32(peer.entityId);
+    w.u64(simulation.tick());
+    // Full current world (join-in-progress gets destruction baked in). Note:
+    // partial per-voxel damage accumulation is not yet in the map format; a
+    // voxel at 90% damage arrives pristine on the late joiner. Tracked for v2.
+    w.bytes(encodeMap(simulation.world(), { "live", {} }));
+    w.u32(static_cast<uint32_t>(simulation.entities().size()));
+    for (const VehicleEntity& e : simulation.entities()) writeEntitySnapshot(w, e);
+    return std::move(w.data);
+}
+
+void Server::receive(uint32_t peerId, const std::vector<uint8_t>& msg) {
+    Peer* peer = findPeer(peerId);
+    if (!peer) return;
+    ByteReader r(msg);
+    const MsgType type = static_cast<MsgType>(r.u8());
+    if (type != MsgType::Input) return;
+
+    ControlInput input;
+    input.throttle = r.f32();
+    input.steer = r.f32();
+    input.pitch = r.f32();
+    input.jump = r.u8() != 0;
+    const bool fire = r.u8() != 0;
+    const Vec3 fireDir = readVec3(r);
+    if (!r.ok) return; // malformed input is dropped, never trusted
+
+    simulation.setInput(peer->entityId, input);
+    if (fire) simulation.fire(peer->entityId, fireDir);
+}
+
+void Server::tick() {
+    simulation.step();
+    const std::vector<SimEvent> events = simulation.takeEvents();
+
+    ByteWriter w;
+    w.u8(static_cast<uint8_t>(MsgType::TickUpdate));
+    w.u64(simulation.tick());
+    w.u32(static_cast<uint32_t>(simulation.entities().size()));
+    for (const VehicleEntity& e : simulation.entities()) writeEntitySnapshot(w, e);
+    w.u32(static_cast<uint32_t>(events.size()));
+    for (const SimEvent& ev : events) writeEvent(w, ev);
+    w.u32(static_cast<uint32_t>(simulation.pickups().size()));
+    for (const Pickup& p : simulation.pickups()) {
+        w.u32(p.id);
+        w.u8(static_cast<uint8_t>(p.kind));
+        writeVec3(w, p.position);
+        w.u64(p.despawnTick);
+    }
+    const std::vector<uint8_t> update = w.data;
+
+    std::optional<std::vector<uint8_t>> audit;
+    if (simulation.tick() % kAuditIntervalTicks == 0) {
+        const Int3 size = simulation.world().size();
+        const Int3 chunks{ (size.x + VoxelWorld::kChunkSize - 1) / VoxelWorld::kChunkSize,
+                           (size.y + VoxelWorld::kChunkSize - 1) / VoxelWorld::kChunkSize,
+                           (size.z + VoxelWorld::kChunkSize - 1) / VoxelWorld::kChunkSize };
+        const uint64_t total = static_cast<uint64_t>(chunks.x) * chunks.y * chunks.z;
+        const uint64_t index = auditCursor++ % total;
+        const Int3 coord{ static_cast<int>(index % chunks.x),
+                          static_cast<int>((index / chunks.x) % chunks.y),
+                          static_cast<int>(index / (static_cast<uint64_t>(chunks.x) * chunks.y)) };
+        ByteWriter a;
+        a.u8(static_cast<uint8_t>(MsgType::Audit));
+        a.i32(coord.x);
+        a.i32(coord.y);
+        a.i32(coord.z);
+        a.u64(simulation.world().chunkHash(coord));
+        audit = std::move(a.data);
+    }
+
+    for (Peer& peer : peers) {
+        peer.outbox.push_back(update);
+        if (audit) peer.outbox.push_back(*audit);
+    }
+}
+
+std::vector<std::vector<uint8_t>> Server::takeOutbox(uint32_t peerId) {
+    Peer* peer = findPeer(peerId);
+    if (!peer) return {};
+    return std::exchange(peer->outbox, {});
+}
+
+// ---------------------------------------------------------------- Client ----
+
+const VehicleEntity* Client::entity(uint32_t id) const {
+    for (const VehicleEntity& e : replicaEntities)
+        if (e.id == id) return &e;
+    return nullptr;
+}
+
+std::vector<uint8_t> Client::makeInput(const ControlInput& input, bool fire, Vec3 fireDir) const {
+    ByteWriter w;
+    w.u8(static_cast<uint8_t>(MsgType::Input));
+    w.f32(input.throttle);
+    w.f32(input.steer);
+    w.f32(input.pitch);
+    w.u8(input.jump ? 1 : 0);
+    w.u8(fire ? 1 : 0);
+    writeVec3(w, fireDir);
+    return std::move(w.data);
+}
+
+void Client::applySnapshot(ByteReader& r) {
+    const uint32_t count = r.u32();
+    for (uint32_t i = 0; i < count && r.ok; ++i) {
+        const uint32_t id = r.u32();
+        const TemplateId tmplId = static_cast<TemplateId>(r.u8());
+        const uint8_t team = r.u8();
+        const bool dead = r.u8() != 0;
+
+        VehicleEntity* e = nullptr;
+        for (VehicleEntity& existing : replicaEntities)
+            if (existing.id == id) e = &existing;
+        if (!e) {
+            if (tmplId >= TemplateId::Count) return;
+            replicaEntities.emplace_back(id, team, VehicleTemplate::byId(tmplId));
+            e = &replicaEntities.back();
+        }
+
+        e->body.position = readVec3(r);
+        e->body.velocity = readVec3(r);
+        e->body.yaw = r.f32();
+        e->body.pitchAngle = r.f32();
+        e->body.speed = r.f32();
+        e->body.grounded = r.u8() != 0;
+        e->ammo = r.i32();
+        const uint8_t partCount = r.u8();
+        for (uint8_t part = 0; part < partCount && r.ok; ++part) {
+            const int hp = r.i32();
+            const bool alive = r.u8() != 0;
+            if (part < e->tmpl->parts.size())
+                e->state.replicatePartState(part, hp, !alive);
+        }
+        (void)dead; // core-part replication implies it; kept on the wire for robustness
+    }
+}
+
+void Client::receive(const std::vector<uint8_t>& msg) {
+    ByteReader r(msg);
+    const MsgType type = static_cast<MsgType>(r.u8());
+
+    switch (type) {
+        case MsgType::Welcome: {
+            if (r.u32() != kProtocolVersion) return;
+            myEntityId = r.u32();
+            tick = r.u64();
+            const std::vector<uint8_t> mapBytes = r.bytes();
+            std::optional<LoadedMap> map = decodeMap(mapBytes);
+            if (!r.ok || !map) return;
+            replicaWorld.emplace(std::move(map->world));
+            replicaEntities.clear();
+            applySnapshot(r);
+            break;
+        }
+        case MsgType::TickUpdate: {
+            if (!joined()) return;
+            tick = r.u64();
+            applySnapshot(r);
+            events.clear();
+            const uint32_t eventCount = r.u32();
+            for (uint32_t i = 0; i < eventCount && r.ok; ++i) {
+                const SimEvent ev = readEvent(r);
+                // Terrain destruction is event-sourced: apply blasts locally,
+                // deterministically reproducing the server's world (§7.2).
+                if (ev.type == SimEvent::Type::Blast) replicaWorld->applyBlast(ev.blast);
+                events.push_back(ev);
+            }
+            replicaPickups.clear();
+            const uint32_t pickupCount = r.u32();
+            for (uint32_t i = 0; i < pickupCount && r.ok; ++i) {
+                Pickup p;
+                p.id = r.u32();
+                p.kind = static_cast<DropKind>(r.u8());
+                p.position = readVec3(r);
+                p.despawnTick = r.u64();
+                replicaPickups.push_back(p);
+            }
+            break;
+        }
+        case MsgType::Audit: {
+            if (!joined()) return;
+            const Int3 coord{ r.i32(), r.i32(), r.i32() };
+            const uint64_t serverHash = r.u64();
+            if (r.ok && replicaWorld->chunkHash(coord) != serverHash) desync = true;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+} // namespace vox
