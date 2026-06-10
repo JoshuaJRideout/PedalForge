@@ -16,6 +16,7 @@ add_library(voxfall_core
     src/world/gen.cpp
     src/vehicle/vehicle.cpp
     src/vehicle/templates.cpp
+    src/vehicle/voxformat.cpp
     src/vehicle/locomotion.cpp
     src/sim/sim.cpp
     src/net/net.cpp
@@ -59,6 +60,7 @@ add_executable(voxfall_tests
     tests/test_match.cpp
     tests/test_replay.cpp
     tests/test_udp.cpp
+    tests/test_voxformat.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
