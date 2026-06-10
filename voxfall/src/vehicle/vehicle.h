@@ -48,6 +48,7 @@ enum class TemplateId : uint8_t {
     KesselFighter, KesselTank, KesselMech, KesselPilot,
     MirageFighter, MirageTank, MirageMech, MiragePilot,
     ChoirFighter, ChoirTank, ChoirMech, ChoirPilot,
+    KesselPower, KesselHost, MiragePower, MirageHost, ChoirPower, ChoirHost,
     Count
 };
 
@@ -55,7 +56,16 @@ enum class TemplateId : uint8_t {
 // Vanguard = NATO-modern, Kessler = heavy eastern-bloc industry, Mirage =
 // faceted stealth drones, Choir = organic forward-swept bio-craft.
 enum class Faction : uint8_t { Vanguard = 0, Kessler, Mirage, Choir, Count };
-enum class UnitClass : uint8_t { Fighter = 0, Tank, Mech, PilotUnit, Count };
+enum class UnitClass : uint8_t { Fighter = 0, Tank, Mech, PilotUnit, Power, Host, Count };
+
+// Faction mechanics (DESIGN.md §4.6): Kessler pays more for tougher metal,
+// Mirage swarms cheap fragile units, Choir self-repairs but builds dear.
+struct FactionStats {
+    int tankCost = 80;
+    float repairCostMul = 1.0f; // host repair economy
+    int regenPerSecond = 0;     // passive part HP regen (Choir)
+};
+const FactionStats& factionStats(Faction f);
 
 struct VehicleTemplate;
 const VehicleTemplate& factionTemplate(Faction f, UnitClass c);

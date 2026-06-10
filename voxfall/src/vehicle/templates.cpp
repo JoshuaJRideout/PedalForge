@@ -444,6 +444,23 @@ VehicleTemplate makePowerStation() {
     t.fillBox({ 4, 7, 20 }, { 12, 9, 22 }, mast);  // crossbar
     t.corePart = core;
 
+    // Concrete-and-steel paint with a navy service band.
+    {
+        const uint8_t pal[][3] = { { 168, 166, 158 }, { 118, 122, 126 }, { 58, 92, 164 } };
+        for (int i = 0; i < 3; ++i)
+            for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = pal[i][k];
+        t.paint.assign(t.partIndex.size(), 0);
+        for (int z = 0; z < t.dims.z; ++z)
+            for (int y = 0; y < t.dims.y; ++y)
+                for (int x = 0; x < t.dims.x; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = part == mast ? 2 : 1;
+                    if (z >= 8 && z < 10) c = 3;
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    }
+
     t.finalize();
     return t;
 }
@@ -490,6 +507,27 @@ VehicleTemplate makeHostStation() {
     t.fillBox({ 36, 20, 12 }, { 44, 28, 17 }, gun);  // emplacement
     t.fillBox({ 44, 22, 13 }, { 48, 24, 15 }, gun);  // twin barrels
     t.fillBox({ 44, 25, 13 }, { 48, 27, 15 }, gun);
+
+    // Fortress paint: concrete tiers, navy trim, steel guns, glow reactor.
+    {
+        const uint8_t pal[][3] = { { 168, 166, 158 }, { 58, 92, 164 }, { 118, 122, 126 },
+                                   { 120, 200, 220 } };
+        for (int i = 0; i < 4; ++i)
+            for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = pal[i][k];
+        t.paint.assign(t.partIndex.size(), 0);
+        for (int z = 0; z < t.dims.z; ++z)
+            for (int y = 0; y < t.dims.y; ++y)
+                for (int x = 0; x < t.dims.x; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = 1;
+                    if (part == reactor) c = 4;
+                    else if (part == gun) c = 3;
+                    else if (part == sensor) c = 2;
+                    else if (z >= 5 && z < 7) c = 2; // trim band
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    }
 
     t.finalize();
     return t;
@@ -547,6 +585,12 @@ const VehicleTemplate& VehicleTemplate::byId(TemplateId id) {
         case TemplateId::ChoirTank: return factionTemplate(Faction::Choir, UnitClass::Tank);
         case TemplateId::ChoirMech: return factionTemplate(Faction::Choir, UnitClass::Mech);
         case TemplateId::ChoirPilot: return factionTemplate(Faction::Choir, UnitClass::PilotUnit);
+        case TemplateId::KesselPower: return factionTemplate(Faction::Kessler, UnitClass::Power);
+        case TemplateId::KesselHost: return factionTemplate(Faction::Kessler, UnitClass::Host);
+        case TemplateId::MiragePower: return factionTemplate(Faction::Mirage, UnitClass::Power);
+        case TemplateId::MirageHost: return factionTemplate(Faction::Mirage, UnitClass::Host);
+        case TemplateId::ChoirPower: return factionTemplate(Faction::Choir, UnitClass::Power);
+        case TemplateId::ChoirHost: return factionTemplate(Faction::Choir, UnitClass::Host);
         case TemplateId::Count: break;
     }
     return brickTank();

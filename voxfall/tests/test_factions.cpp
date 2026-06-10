@@ -51,6 +51,33 @@ TEST(faction_fighters_lose_wings_like_anyone) {
     }
 }
 
+TEST(faction_stats_and_choir_regen) {
+    CHECK(factionStats(Faction::Mirage).tankCost < factionStats(Faction::Vanguard).tankCost);
+    CHECK(factionStats(Faction::Kessler).tankCost > factionStats(Faction::Vanguard).tankCost);
+
+    VoxelWorld w({ 64, 32, 64 });
+    for (int x = 0; x < 64; ++x)
+        for (int z = 0; z < 64; ++z)
+            for (int y = 0; y < 10; ++y) w.set({ x, y, z }, Material::Rock);
+    Sim sim(std::move(w), 5);
+    // Team 3 = Choir, team 0 = Vanguard. Damage both hulls equally.
+    const uint32_t tide = sim.spawnVehicle(TemplateId::ChoirTank, 3, { 20.0f, 10.0f, 20.0f }, 0.0f);
+    const uint32_t brick = sim.spawnVehicle(TemplateId::Brick, 0, { 40.0f, 10.0f, 40.0f }, 0.0f);
+    Rng rng(1);
+    VehicleEntity* choir = sim.find(tide);
+    VehicleEntity* van = sim.find(brick);
+    const int choirCore = choir->tmpl->corePart;
+    const int vanCore = van->tmpl->corePart;
+    choir->state.applyHit({ choir->tmpl->dims.x / 2, choir->tmpl->dims.y / 2, 8 }, 50,
+                          DamageType::Energy, rng);
+    van->state.applyHit({ 20, 12, 10 }, 50, DamageType::Energy, rng);
+    const int choirHpAfter = choir->state.partHp(choirCore);
+    const int vanHpAfter = van->state.partHp(vanCore);
+    for (int t = 0; t < 600; ++t) sim.step(); // 10 s
+    CHECK(sim.find(tide)->state.partHp(choirCore) > choirHpAfter); // bio-regen
+    CHECK(sim.find(brick)->state.partHp(vanCore) == vanHpAfter);   // metal stays bent
+}
+
 TEST(faction_eject_spawns_faction_pilot) {
     VoxelWorld w({ 64, 32, 64 });
     for (int x = 0; x < 64; ++x)

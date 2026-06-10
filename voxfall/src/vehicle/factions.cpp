@@ -713,6 +713,179 @@ VehicleTemplate makeChoirMech() {
     return t;
 }
 
+
+// --------------------------------------------------------------- stations ---
+
+VehicleTemplate makeFactionPower(Faction f) {
+    VehicleTemplate t;
+    t.locomotion = LocomotionClass::Static;
+    t.voxelSize = 0.25f;
+    t.dims = { 16, 16, 24 };
+    initGrid(t);
+    const int core = t.addPart("power.core", PartType::Power, 300, 0.9f);
+    const int mast = t.addPart("mast", PartType::Sensor, 60);
+    t.corePart = core;
+
+    if (f == Faction::Kessler) {
+        // Twin cooling towers over a bunker plinth, pipework between.
+        t.name = "KesselPower";
+        t.id = TemplateId::KesselPower;
+        setPalette(t, { { 86, 98, 66 }, { 100, 102, 104 }, { 208, 170, 50 }, { 40, 40, 42 } });
+        t.fillBox({ 1, 1, 0 }, { 15, 15, 4 }, core);
+        for (int cx : { 4, 12 })
+            for (int z = 4; z < 18; ++z) {
+                const float r = z < 8 ? 3.4f : (z < 14 ? 2.6f : 3.2f); // waisted
+                for (int x = 0; x < 16; ++x)
+                    for (int y = 0; y < 16; ++y) {
+                        const float dx = x + 0.5f - cx, dy = y + 0.5f - 8.0f;
+                        if (dx * dx + dy * dy <= r * r) put(t, x, y, z, core, 1);
+                    }
+            }
+        t.fillBox({ 6, 7, 6 }, { 10, 9, 8 }, core);   // pipe bridge
+        t.fillBox({ 11, 7, 17 }, { 13, 9, 23 }, mast); // stack atop a tower
+        for (int z = 0; z < 24; ++z)
+            for (int y = 0; y < 16; ++y)
+                for (int x = 0; x < 16; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = 1;
+                    if (z < 4) c = 2;
+                    if (part == mast) c = z >= 21 ? 3 : 4;
+                    if (z >= 16 && z < 18 && part == core) c = 3; // rim stripe
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    } else if (f == Faction::Mirage) {
+        // Low faceted pyramid with an antenna farm.
+        t.name = "MiragePower";
+        t.id = TemplateId::MiragePower;
+        setPalette(t, { { 176, 162, 134 }, { 142, 132, 112 }, { 222, 122, 42 }, { 96, 92, 84 } });
+        for (int z = 0; z < 10; ++z) {
+            const int inset = z;
+            for (int x = inset; x < 16 - inset; ++x)
+                for (int y = inset; y < 16 - inset; ++y)
+                    put(t, x, y, z, core, ((x + y + z) / 5) % 2 == 0 ? 1 : 2);
+        }
+        for (int m = 0; m < 3; ++m) { // antenna cluster rooted in the apex
+            const int mx = 7 + m;
+            for (int z = 7; z < 11 + m * 3; ++z) put(t, mx, 8, z, mast, 4);
+            put(t, mx, 8, 11 + m * 3, mast, 3); // orange tips
+        }
+    } else {
+        // Choir: crystal spire on a coral base.
+        t.name = "ChoirPower";
+        t.id = TemplateId::ChoirPower;
+        setPalette(t, { { 44, 132, 140 }, { 116, 72, 160 }, { 214, 212, 200 }, { 90, 220, 210 } });
+        for (int z = 0; z < 22; ++z)
+            for (int x = 0; x < 16; ++x)
+                for (int y = 0; y < 16; ++y) {
+                    const float dx = x + 0.5f - 8.0f, dy = y + 0.5f - 8.0f;
+                    const float r = std::sqrt(dx * dx + dy * dy);
+                    const float taper = 6.0f - z * 0.32f;
+                    if (r <= taper && z < 18)
+                        put(t, x, y, z, core, z < 4 ? 3 : (r >= taper - 1.2f ? 1 : 2));
+                    // Floating crystal tip.
+                    if (z >= 18 && r <= 2.2f - (z - 18) * 0.4f) put(t, x, y, z, mast, 4);
+                }
+        t.fillBox({ 7, 7, 16 }, { 9, 9, 19 }, mast); // stem joins crystal
+    }
+    t.finalize();
+    return t;
+}
+
+VehicleTemplate makeFactionHost(Faction f) {
+    VehicleTemplate t;
+    t.locomotion = LocomotionClass::Static;
+    t.voxelSize = 0.25f;
+    t.dims = { 48, 48, 28 };
+    initGrid(t);
+    const int hull = t.addPart("hull", PartType::Hull, 1200, 0.7f);
+    const int reactor = t.addPart("reactor", PartType::Power, 400);
+    const int sensor = t.addPart("sensor.array", PartType::Sensor, 120);
+    const int gun = t.addPart("weapon.defense", PartType::Weapon, 150);
+
+    if (f == Faction::Kessler) {
+        // Fortress bunker: stepped casemates, smokestacks, flak tower.
+        t.name = "KesselHost";
+        t.id = TemplateId::KesselHost;
+        setPalette(t, { { 86, 98, 66 }, { 62, 72, 50 }, { 100, 102, 104 }, { 208, 170, 50 } });
+        t.fillBox({ 2, 2, 0 }, { 46, 46, 8 }, hull);
+        t.fillBox({ 6, 6, 8 }, { 42, 42, 14 }, hull);
+        t.fillBox({ 10, 10, 14 }, { 30, 38, 19 }, hull);
+        t.fillBox({ 14, 16, 19 }, { 26, 32, 24 }, reactor);
+        for (int cx : { 32, 38 })
+            t.fillBox({ cx, 8, 14 }, { cx + 3, 11, 26 }, sensor); // smokestacks
+        t.fillBox({ 30, 30, 14 }, { 44, 44, 20 }, gun);           // flak tower
+        t.fillBox({ 44, 34, 16 }, { 48, 36, 18 }, gun);
+        t.fillBox({ 44, 38, 16 }, { 48, 40, 18 }, gun);
+        for (size_t i = 0; i < t.partIndex.size(); ++i)
+            if (t.partIndex[i] != kEmptySubvoxel)
+                t.paint[i] = 1;
+        // quick banding
+        for (int z = 0; z < 28; ++z)
+            for (int y = 0; y < 48; ++y)
+                for (int x = 0; x < 48; ++x) {
+                    const int part = t.partAt({ x, y, z });
+                    if (part < 0) continue;
+                    uint8_t c = z < 8 ? 2 : 1;
+                    if (part == sensor) c = 3;
+                    if (part == gun) c = z >= 18 ? 4 : 2;
+                    if (part == reactor) c = 4;
+                    t.paint[t.index({ x, y, z })] = c;
+                }
+    } else if (f == Faction::Mirage) {
+        // Tiered faceted pyramid with a dish farm.
+        t.name = "MirageHost";
+        t.id = TemplateId::MirageHost;
+        setPalette(t, { { 176, 162, 134 }, { 142, 132, 112 }, { 222, 122, 42 }, { 96, 92, 84 } });
+        for (int z = 0; z < 16; ++z) {
+            const int inset = z;
+            if (inset * 2 >= 44) break;
+            for (int x = 2 + inset; x < 46 - inset; ++x)
+                for (int y = 2 + inset; y < 46 - inset; ++y)
+                    put(t, x, y, z, z < 12 ? hull : reactor,
+                        ((x + y) / 6 + z / 3) % 2 == 0 ? 1 : 2);
+        }
+        for (int d = 0; d < 3; ++d) { // dish masts rooted through the tiers
+            const int dx = 10 + d * 9;
+            t.fillBox({ dx, 6, 2 }, { dx + 2, 8, 20 + d }, sensor);
+            t.fillBox({ dx - 2, 2, 18 + d }, { dx + 4, 8, 20 + d }, sensor);
+        }
+        t.fillBox({ 34, 34, 6 }, { 44, 44, 14 }, gun); // emplacement in the flank
+        t.fillBox({ 44, 38, 8 }, { 48, 40, 10 }, gun);
+        for (size_t i = 0; i < t.partIndex.size(); ++i)
+            if (t.partIndex[i] != kEmptySubvoxel && t.paint[i] == 0) t.paint[i] = 4;
+    } else {
+        // Choir: dome with petal fins and a singing spire.
+        t.name = "ChoirHost";
+        t.id = TemplateId::ChoirHost;
+        setPalette(t, { { 44, 132, 140 }, { 116, 72, 160 }, { 214, 212, 200 }, { 90, 220, 210 } });
+        for (int z = 0; z < 20; ++z)
+            for (int x = 0; x < 48; ++x)
+                for (int y = 0; y < 48; ++y) {
+                    const float dx = x + 0.5f - 24.0f, dy = y + 0.5f - 24.0f;
+                    const float dz = (z + 0.5f) / 20.0f;
+                    const float r = std::sqrt(dx * dx + dy * dy);
+                    const float dome = 22.0f * std::sqrt(std::max(0.0f, 1.0f - dz * dz));
+                    if (r <= dome)
+                        put(t, x, y, z, z >= 14 ? reactor : hull,
+                            r >= dome - 1.5f ? (z % 5 < 2 ? 2 : 1) : 3);
+                }
+        for (int p = 0; p < 4; ++p) { // petal fins N/E/S/W
+            const float ang = p * 1.5707963f;
+            const int px = 24 + static_cast<int>(std::cos(ang) * 21.0f);
+            const int py = 24 + static_cast<int>(std::sin(ang) * 21.0f);
+            t.fillBox({ std::max(0, px - 2), std::max(0, py - 2), 4 },
+                      { std::min(48, px + 2), std::min(48, py + 2), 16 },
+                      p == 0 ? gun : sensor);
+        }
+        t.fillBox({ 22, 22, 20 }, { 26, 26, 27 }, sensor); // spire
+        for (size_t i = 0; i < t.partIndex.size(); ++i)
+            if (t.partIndex[i] != kEmptySubvoxel && t.paint[i] == 0) t.paint[i] = 4;
+    }
+    t.finalize();
+    return t;
+}
+
 // ----------------------------------------------------------------- pilots ---
 
 VehicleTemplate makeFactionPilot(TemplateId id, const char* name,
@@ -755,6 +928,16 @@ VehicleTemplate makeFactionPilot(TemplateId id, const char* name,
 
 } // namespace
 
+const FactionStats& factionStats(Faction f) {
+    static const FactionStats table[4] = {
+        { 80, 1.0f, 0 },  // Vanguard: baseline
+        { 110, 1.4f, 0 }, // Kessler: tougher metal, dearer everything
+        { 55, 1.0f, 0 },  // Mirage: cheap swarm
+        { 95, 1.2f, 2 },  // Choir: self-knitting bio-craft
+    };
+    return table[static_cast<int>(f) & 3];
+}
+
 const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
     static const VehicleTemplate kesselFighter = makeKesselFighter();
     static const VehicleTemplate kesselTank = makeKesselTank();
@@ -774,6 +957,12 @@ const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
     static const VehicleTemplate choirPilot = makeFactionPilot(
         TemplateId::ChoirPilot, "ChoirPilot",
         { { 214, 212, 200 }, { 44, 132, 140 }, { 90, 220, 210 } }, 3);
+    static const VehicleTemplate kesselPower = makeFactionPower(Faction::Kessler);
+    static const VehicleTemplate kesselHost = makeFactionHost(Faction::Kessler);
+    static const VehicleTemplate miragePower = makeFactionPower(Faction::Mirage);
+    static const VehicleTemplate mirageHost = makeFactionHost(Faction::Mirage);
+    static const VehicleTemplate choirPower = makeFactionPower(Faction::Choir);
+    static const VehicleTemplate choirHost = makeFactionHost(Faction::Choir);
 
     switch (f) {
         case Faction::Vanguard:
@@ -781,6 +970,8 @@ const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
                 case UnitClass::Fighter: return VehicleTemplate::waspFighter();
                 case UnitClass::Tank: return VehicleTemplate::brickTank();
                 case UnitClass::Mech: return VehicleTemplate::talonMech();
+                case UnitClass::Power: return VehicleTemplate::powerStation();
+                case UnitClass::Host: return VehicleTemplate::hostStation();
                 default: return VehicleTemplate::pilot();
             }
         case Faction::Kessler:
@@ -788,6 +979,8 @@ const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
                 case UnitClass::Fighter: return kesselFighter;
                 case UnitClass::Tank: return kesselTank;
                 case UnitClass::Mech: return kesselMech;
+                case UnitClass::Power: return kesselPower;
+                case UnitClass::Host: return kesselHost;
                 default: return kesselPilot;
             }
         case Faction::Mirage:
@@ -795,6 +988,8 @@ const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
                 case UnitClass::Fighter: return mirageFighter;
                 case UnitClass::Tank: return mirageTank;
                 case UnitClass::Mech: return mirageMech;
+                case UnitClass::Power: return miragePower;
+                case UnitClass::Host: return mirageHost;
                 default: return miragePilot;
             }
         default:
@@ -802,6 +997,8 @@ const VehicleTemplate& factionTemplate(Faction f, UnitClass c) {
                 case UnitClass::Fighter: return choirFighter;
                 case UnitClass::Tank: return choirTank;
                 case UnitClass::Mech: return choirMech;
+                case UnitClass::Power: return choirPower;
+                case UnitClass::Host: return choirHost;
                 default: return choirPilot;
             }
     }

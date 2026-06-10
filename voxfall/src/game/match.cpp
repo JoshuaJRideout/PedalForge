@@ -13,7 +13,8 @@ Match::Match(VoxelWorld world, const MapMeta& spawns, uint64_t seed, int startin
     for (const MapSpawn& s : spawns.spawns) {
         Vec3 pos{ static_cast<float>(s.position.x), static_cast<float>(s.position.y),
                   static_cast<float>(s.position.z) };
-        const uint32_t host = simulation.spawnVehicle(TemplateId::HostStation, s.team, pos, 0.0f);
+        const uint32_t host = simulation.spawnVehicle(
+            factionTemplate(factionOfTeam(s.team), UnitClass::Host).id, s.team, pos, 0.0f);
         simulation.addEnergy(s.team, startingEnergy);
         commanders.emplace_back(s.team, host, pos);
         eliminated.push_back(false);
@@ -43,13 +44,11 @@ void Match::checkElimination() {
         if (!commanders[i].alive(simulation)) {
             eliminated[i] = true;
             // Host down: the team's remaining forces detonate (§2.1).
-            Rng boom(simulation.tick());
+            // Direct core kill: hollow templates have no solid center voxel.
             for (const VehicleEntity& e : simulation.entities()) {
                 if (e.team != commanders[i].teamId() || e.state.destroyed()) continue;
                 VehicleEntity* doomed = simulation.find(e.id);
-                const Int3 core{ doomed->tmpl->dims.x / 2, doomed->tmpl->dims.y / 2,
-                                 doomed->tmpl->dims.z / 2 };
-                doomed->state.applyHit(core, 100000, DamageType::Explosive, boom);
+                doomed->state.replicatePartState(doomed->tmpl->corePart, 0, true);
             }
             continue;
         }
