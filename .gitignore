@@ -34,3 +34,4 @@ test_dijkstra
 *.vst3/
 *.component/
 *.app/
+build-asan/
