@@ -1,76 +1,44 @@
 #include "world/mapfile.h"
 #include <cstdio>
+#include "core/bytes.h"
 
 namespace vox {
 
 namespace {
-
 constexpr uint32_t kMagic = 0x314D5856; // "VXM1" little-endian
 constexpr uint32_t kVersion = 1;
-
-void putU32(std::vector<uint8_t>& out, uint32_t v) {
-    out.push_back(static_cast<uint8_t>(v));
-    out.push_back(static_cast<uint8_t>(v >> 8));
-    out.push_back(static_cast<uint8_t>(v >> 16));
-    out.push_back(static_cast<uint8_t>(v >> 24));
-}
-
-void putI32(std::vector<uint8_t>& out, int32_t v) { putU32(out, static_cast<uint32_t>(v)); }
-
-// Bounds-checked little-endian reader.
-struct Reader {
-    const std::vector<uint8_t>& data;
-    size_t pos = 0;
-    bool ok = true;
-
-    uint8_t u8() {
-        if (pos + 1 > data.size()) { ok = false; return 0; }
-        return data[pos++];
-    }
-    uint32_t u32() {
-        if (pos + 4 > data.size()) { ok = false; return 0; }
-        const uint32_t v = static_cast<uint32_t>(data[pos]) | (static_cast<uint32_t>(data[pos + 1]) << 8)
-                         | (static_cast<uint32_t>(data[pos + 2]) << 16)
-                         | (static_cast<uint32_t>(data[pos + 3]) << 24);
-        pos += 4;
-        return v;
-    }
-    int32_t i32() { return static_cast<int32_t>(u32()); }
-};
-
 } // namespace
 
 std::vector<uint8_t> encodeMap(const VoxelWorld& world, const MapMeta& meta) {
-    std::vector<uint8_t> out;
+    ByteWriter w;
     const Int3 dims = world.size();
 
-    putU32(out, kMagic);
-    putU32(out, kVersion);
-    putI32(out, dims.x);
-    putI32(out, dims.y);
-    putI32(out, dims.z);
-    putI32(out, world.seaLevel());
+    w.u32(kMagic);
+    w.u32(kVersion);
+    w.i32(dims.x);
+    w.i32(dims.y);
+    w.i32(dims.z);
+    w.i32(world.seaLevel());
 
-    putU32(out, static_cast<uint32_t>(meta.name.size()));
-    out.insert(out.end(), meta.name.begin(), meta.name.end());
-    putU32(out, static_cast<uint32_t>(meta.spawns.size()));
+    w.str(meta.name);
+    w.u32(static_cast<uint32_t>(meta.spawns.size()));
     for (const MapSpawn& s : meta.spawns) {
-        putI32(out, s.position.x);
-        putI32(out, s.position.y);
-        putI32(out, s.position.z);
-        out.push_back(s.team);
+        w.i32(s.position.x);
+        w.i32(s.position.y);
+        w.i32(s.position.z);
+        w.u8(s.team);
     }
 
     // RLE over canonical order (y-major, then z, then x — matches storage, so
     // runs follow horizontal rows). Each run: material byte + u32 length.
-    const size_t runCountPos = out.size();
-    putU32(out, 0); // patched below
+    const size_t runCountPos = w.data.size();
+    w.u32(0); // patched below
     uint32_t runCount = 0;
     Material current = world.at({ 0, 0, 0 });
     uint32_t runLength = 0;
     auto flush = [&] {
-        out.push_back(static_cast<uint8_t>(current));
-        putU32(out, runLength);
+        w.u8(static_cast<uint8_t>(current));
+        w.u32(runLength);
         ++runCount;
     };
     for (int y = 0; y < dims.y; ++y) {
@@ -88,15 +56,15 @@ std::vector<uint8_t> encodeMap(const VoxelWorld& world, const MapMeta& meta) {
         }
     }
     flush();
-    out[runCountPos] = static_cast<uint8_t>(runCount);
-    out[runCountPos + 1] = static_cast<uint8_t>(runCount >> 8);
-    out[runCountPos + 2] = static_cast<uint8_t>(runCount >> 16);
-    out[runCountPos + 3] = static_cast<uint8_t>(runCount >> 24);
-    return out;
+    w.data[runCountPos] = static_cast<uint8_t>(runCount);
+    w.data[runCountPos + 1] = static_cast<uint8_t>(runCount >> 8);
+    w.data[runCountPos + 2] = static_cast<uint8_t>(runCount >> 16);
+    w.data[runCountPos + 3] = static_cast<uint8_t>(runCount >> 24);
+    return std::move(w.data);
 }
 
 std::optional<LoadedMap> decodeMap(const std::vector<uint8_t>& bytes) {
-    Reader r{ bytes };
+    ByteReader r(bytes);
     if (r.u32() != kMagic) return std::nullopt;
     if (r.u32() != kVersion) return std::nullopt;
 
@@ -107,10 +75,7 @@ std::optional<LoadedMap> decodeMap(const std::vector<uint8_t>& bytes) {
     if (dims.x > 4096 || dims.y > 1024 || dims.z > 4096) return std::nullopt;
 
     MapMeta meta;
-    const uint32_t nameLen = r.u32();
-    if (!r.ok || r.pos + nameLen > bytes.size()) return std::nullopt;
-    meta.name.assign(reinterpret_cast<const char*>(bytes.data() + r.pos), nameLen);
-    r.pos += nameLen;
+    meta.name = r.str(1 << 16);
 
     const uint32_t spawnCount = r.u32();
     if (!r.ok || spawnCount > 1024) return std::nullopt;

@@ -16,6 +16,7 @@ add_library(voxfall_core
     src/vehicle/vehicle.cpp
     src/vehicle/templates.cpp
     src/vehicle/locomotion.cpp
+    src/sim/sim.cpp
 )
 target_include_directories(voxfall_core PUBLIC src)
 
@@ -29,6 +30,7 @@ add_executable(voxfall_tests
     tests/test_vehicle.cpp
     tests/test_locomotion.cpp
     tests/test_mapfile.cpp
+    tests/test_sim.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
