@@ -193,10 +193,22 @@ Image renderVehicle(const VehicleTemplate& tmpl, const Vehicle& state, int width
             if (part < 0 || !state.partAlive(part)) return -1;
             const float f = state.partHpFraction(part);
             const int shade = f >= 0.75f ? 0 : f >= 0.5f ? 1 : f >= 0.25f ? 2 : 3;
-            return part * 4 + shade;
+            // Painted voxels use the template palette (key 256+color);
+            // unpainted fall back to the per-part debug palette.
+            int key = part;
+            if (!tmpl.paint.empty()) {
+                const uint8_t c = tmpl.paint[tmpl.index({ gx, gy, cell.y })];
+                if (c != 0) key = 256 + c;
+            }
+            return key * 4 + shade;
         },
         [&](int id) {
-            const Rgb base = palette[(id / 4) % 8];
+            const int key = id / 4;
+            const Rgb base = key >= 256
+                ? Rgb{ static_cast<float>(tmpl.paletteRgb[key - 256][0]),
+                       static_cast<float>(tmpl.paletteRgb[key - 256][1]),
+                       static_cast<float>(tmpl.paletteRgb[key - 256][2]) }
+                : palette[key % 8];
             const float k = 1.0f - 0.22f * static_cast<float>(id % 4); // damage charring
             return Rgb{ base.r * k, base.g * k, base.b * k };
         }));

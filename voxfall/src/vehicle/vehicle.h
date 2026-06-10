@@ -56,10 +56,19 @@ struct VehicleTemplate {
     float voxelSize = 0.25f;
     Int3 dims;                       // sub-voxel grid dimensions
     std::vector<uint8_t> partIndex;  // per sub-voxel: kEmptySubvoxel or index into parts
+    // Optional per-voxel paint: 0 = unpainted (renderers fall back to part
+    // colors), else 1-based index into paletteRgb. The .vox import path can
+    // fill this from the model palette; code-authored templates paint directly.
+    std::vector<uint8_t> paint;
+    uint8_t paletteRgb[256][3] = {};
     std::vector<PartDef> parts;
     int corePart = -1;
 
     int addPart(std::string name, PartType type, int maxHp, float armorMul = 1.0f);
+    void setPaint(Int3 p, uint8_t color) {
+        if (paint.empty()) paint.assign(partIndex.size(), 0);
+        paint[index(p)] = color;
+    }
     // [min, max) box fill of a part's sub-voxels.
     void fillBox(Int3 min, Int3 max, int part);
     // [min, max) box clear — sculpting tool for template authoring.

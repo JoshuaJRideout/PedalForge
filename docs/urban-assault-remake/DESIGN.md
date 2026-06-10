@@ -166,7 +166,7 @@ Rules:
 ## 4. Vehicles: sub-voxel construction and parts
 
 ### 4.1 Resolution
-- Vehicle sub-voxel scale is **per template**: 0.25 m standard, **0.125 m for small
+- Vehicle sub-voxel scale is **per template**: 0.25 m standard, **0.125 m or 0.0625 m for small
   craft** (8× finer per axis than the world grid — concept-art density), coarser for
   huge units like the Colossus. A small fighter at 0.125 m ≈ 6×4×2 m = 48×32×16 grid
   = several thousand occupied sub-voxels; buildings stay at 0.25 m.

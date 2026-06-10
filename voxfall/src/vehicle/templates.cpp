@@ -15,16 +15,20 @@ namespace vox {
 namespace {
 
 VehicleTemplate makeWasp() {
-    // "Wasp" fighter: 6 x 4 x 2 m at 0.125 m voxels (48x32x16) — concept-art
-    // density. Tapered fuselage, 12-step delta wings, tip fences, dorsal fin,
-    // framed canopy, twin exhausts, cone nose cannon.
+    // "Wasp" fighter, concept-art pass: 6 x 4 x 2 m at 0.0625 m voxels
+    // (96x64x32), sculpted procedurally — superellipse fuselage with nose
+    // taper, LERX strakes into a bubble canopy, swept wings with wingtip
+    // missiles, canted twin tails, stabilators, twin nozzles — and painted:
+    // navy top / light underside / dark glass / white missiles and fin tips.
     VehicleTemplate t;
     t.name = "Wasp";
     t.id = TemplateId::Wasp;
     t.locomotion = LocomotionClass::Jet;
-    t.voxelSize = 0.125f;
-    t.dims = { 48, 32, 16 };
-    t.partIndex.assign(static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z, kEmptySubvoxel);
+    t.voxelSize = 0.0625f;
+    t.dims = { 96, 64, 32 };
+    const size_t volume = static_cast<size_t>(t.dims.x) * t.dims.y * t.dims.z;
+    t.partIndex.assign(volume, kEmptySubvoxel);
+    t.paint.assign(volume, 0);
 
     const int hull = t.addPart("hull", PartType::Hull, 180, 0.9f);
     const int wingL = t.addPart("wing.left", PartType::Wing, 60);
@@ -33,45 +37,156 @@ VehicleTemplate makeWasp() {
     const int cannon = t.addPart("weapon.cannon", PartType::Weapon, 40);
     const int sensor = t.addPart("sensor", PartType::Sensor, 25);
 
-    // Fuselage (keeps {24,16,8} hull), shoulder chamfers, dorsal fin.
-    t.fillBox({ 8, 12, 4 }, { 38, 20, 12 }, hull);
-    t.carveBox({ 8, 12, 10 }, { 14, 14, 12 });
-    t.carveBox({ 8, 18, 10 }, { 14, 20, 12 });
-    t.carveBox({ 8, 12, 4 }, { 12, 13, 6 });
-    t.carveBox({ 8, 19, 4 }, { 12, 20, 6 });
-    t.fillBox({ 8, 14, 12 }, { 15, 18, 13 }, hull); // fin root
-    t.fillBox({ 8, 15, 13 }, { 13, 17, 15 }, hull);
-    t.fillBox({ 8, 15, 15 }, { 11, 17, 16 }, hull); // fin tip
+    // Paint palette.
+    enum : uint8_t { Navy = 1, DarkBlue, Belly, Glass, White, Nozzle, Red };
+    const uint8_t colors[][3] = { { 58, 92, 164 },  { 38, 60, 116 }, { 158, 168, 184 },
+                                  { 26, 32, 46 },   { 214, 218, 224 }, { 66, 68, 74 },
+                                  { 182, 58, 48 } };
+    for (int i = 0; i < 7; ++i)
+        for (int k = 0; k < 3; ++k) t.paletteRgb[i + 1][k] = colors[i][k];
 
-    // Delta wings: swept leading edge, thin profile (keep {20,4,8} in left).
-    for (int step = 0; step < 12; ++step) {
-        const int x = 28 - step;
-        const int reach = std::max(0, 11 - step);
-        t.fillBox({ x, reach, 6 }, { x + 1, 12, 9 }, wingL);
-        t.fillBox({ x, 20, 6 }, { x + 1, 32 - reach, 9 }, wingR);
+    // Piecewise-linear profile sampler.
+    auto profile = [](std::initializer_list<std::pair<float, float>> pts, float x) {
+        const auto* prev = pts.begin();
+        for (const auto& pt : pts) {
+            if (x <= pt.first) {
+                if (pt.first == prev->first) return pt.second;
+                const float k = (x - prev->first) / (pt.first - prev->first);
+                return prev->second + (pt.second - prev->second) * k;
+            }
+            prev = &pt;
+        }
+        return prev->second;
+    };
+
+    for (int z = 0; z < 32; ++z) {
+        for (int y = 0; y < 64; ++y) {
+            for (int x = 0; x < 96; ++x) {
+                const float fx = static_cast<float>(x) + 0.5f;
+                const float yc = static_cast<float>(y) + 0.5f - 32.0f;
+                const float ay = std::abs(yc);
+                const float fz = static_cast<float>(z) + 0.5f;
+
+                int part = -1;
+                uint8_t color = 0;
+
+                // --- Twin nozzles (tail end) ---
+                if (fx < 7.0f) {
+                    for (float side : { -4.4f, 4.4f }) {
+                        const float dy = yc - side, dz = fz - 9.5f;
+                        const float r2 = dy * dy + dz * dz;
+                        if (r2 <= 3.3f * 3.3f && (fx > 2.5f || r2 >= 1.9f * 1.9f)) {
+                            part = engine;
+                            color = Nozzle;
+                        }
+                    }
+                }
+
+                // --- Fuselage (superellipse cross-section) ---
+                if (part < 0 && fx >= 6.0f) {
+                    const float hw = profile({ { 6, 6.2f }, { 26, 7.6f }, { 48, 8.0f },
+                                               { 62, 6.8f }, { 74, 4.9f }, { 86, 2.9f },
+                                               { 96, 0.9f } }, fx);
+                    const float top = profile({ { 6, 13.5f }, { 30, 14.0f }, { 56, 15.0f },
+                                                { 78, 13.0f }, { 96, 10.0f } }, fx);
+                    const float bot = profile({ { 6, 7.5f }, { 22, 6.4f }, { 64, 6.4f },
+                                                { 84, 7.6f }, { 96, 8.6f } }, fx);
+                    const float zc = (top + bot) * 0.5f, hh = (top - bot) * 0.5f;
+                    const float sy = ay / hw, sz = (fz - zc) / hh;
+                    if (sy * sy + sz * sz * sz * sz <= 1.0f) {
+                        part = fx >= 88.0f ? cannon : (fx < 28.0f ? engine : hull);
+                        color = fz <= 8.5f ? Belly : Navy;
+                        if (ay <= 1.6f && fz >= top - 1.6f) color = DarkBlue; // spine
+                        if (fx >= 93.0f) color = DarkBlue;                    // radome
+                    }
+                }
+
+                // --- Canopy bubble (dark glass, sensor part): elongated,
+                // sits forward, only the raised bubble shows above the spine ---
+                {
+                    const float ex = (fx - 71.5f) / 8.5f, ey = yc / 2.6f,
+                                ez = (fz - 13.5f) / 3.9f;
+                    const float d = ex * ex + ey * ey + ez * ez;
+                    if (d <= 1.0f && fz >= 14.0f) {
+                        part = sensor;
+                        color = d >= 0.78f ? White : Glass; // framed glass
+                    }
+                }
+
+                // --- LERX strakes (thin, sweep from wing root to canopy) ---
+                if (part < 0 && ay >= 4.5f && ay <= 8.5f) {
+                    const float xle = 58.0f + (8.5f - ay) * 4.6f;
+                    if (fx >= 52.0f && fx <= xle && std::abs(fz - 10.8f) <= 1.0f) {
+                        part = yc < 0 ? wingL : wingR;
+                        color = Navy;
+                    }
+                }
+
+                // --- Main wings (swept LE, tapered thickness) ---
+                if (part < 0 && ay >= 7.0f && ay <= 29.0f) {
+                    const float k = (ay - 7.0f) / 22.0f;
+                    const float xle = 58.0f - 19.0f * k;
+                    const float xte = 30.0f + 3.0f * k;
+                    const float halfTh = 1.8f - 0.8f * k;
+                    if (fx >= xte && fx <= xle && std::abs(fz - 10.0f) <= halfTh) {
+                        part = yc < 0 ? wingL : wingR;
+                        color = fz <= 9.2f ? Belly : Navy;
+                        if (fx >= xle - 1.8f) color = White;       // leading-edge stripe
+                        if (ay >= 23.5f && ay <= 26.5f) color = White; // tip band marking
+                    }
+                }
+
+                // --- Wingtip rails + missiles (white) ---
+                if (part < 0 && ay >= 28.6f && ay <= 31.4f) {
+                    const float dy = ay - 30.0f, dz = fz - 10.0f;
+                    float r = 1.45f;
+                    if (fx > 50.0f) r -= (fx - 50.0f) * 0.16f; // nose cone
+                    if (fx >= 28.0f && fx <= 58.0f && dy * dy + dz * dz <= r * r && r > 0.3f) {
+                        part = yc < 0 ? wingL : wingR;
+                        color = White;
+                        if (fx >= 54.0f) color = Red; // seeker tip
+                    }
+                }
+
+                // --- Twin canted vertical tails ---
+                if (part < 0 && fz >= 12.0f && fz <= 27.0f) {
+                    const float lean = 9.6f + (fz - 12.0f) * 0.22f; // canted outward
+                    if (std::abs(ay - lean) <= 1.1f) {
+                        const float xf = 25.0f - (fz - 12.0f) * 0.95f;
+                        const float xa = 3.0f + (fz - 12.0f) * 0.15f;
+                        if (fx >= xa && fx <= xf) {
+                            part = hull;
+                            color = fz >= 23.5f ? White : Navy;
+                            if (fz >= 23.5f && fx >= xf - 3.0f) color = Red; // tip flash
+                        }
+                    }
+                }
+
+                // --- Stabilators (small rear wings) ---
+                if (part < 0 && ay >= 7.0f && ay <= 19.0f && std::abs(fz - 9.0f) <= 1.0f) {
+                    const float k = (ay - 7.0f) / 12.0f;
+                    const float xle = 24.0f - 9.0f * k;
+                    const float xte = 5.0f + 3.0f * k;
+                    if (fx >= xte && fx <= xle) {
+                        part = hull;
+                        color = fz <= 8.8f ? Belly : Navy;
+                    }
+                }
+
+                // --- Intake scoops under the LERX ---
+                if (part < 0 && ay >= 6.5f && ay <= 10.0f && fx >= 40.0f && fx <= 58.0f
+                    && fz >= 6.0f && fz <= 9.0f) {
+                    part = engine;
+                    color = Belly;
+                }
+
+                if (part >= 0) {
+                    t.partIndex[t.index({ x, y, z })] = static_cast<uint8_t>(part);
+                    t.paint[t.index({ x, y, z })] = color;
+                }
+            }
+        }
     }
-    t.fillBox({ 17, 2, 7 }, { 25, 12, 8 }, wingL);  // trailing fill
-    t.fillBox({ 17, 20, 7 }, { 25, 30, 8 }, wingR);
-    t.fillBox({ 16, 0, 6 }, { 22, 2, 12 }, wingL);  // tip fences
-    t.fillBox({ 16, 30, 6 }, { 22, 32, 12 }, wingR);
-
-    // Engine: rear block, twin carved exhausts, vent slits (keeps {4,16,8}).
-    t.fillBox({ 0, 12, 4 }, { 8, 20, 12 }, engine);
-    t.carveBox({ 0, 13, 5 }, { 2, 15, 9 });
-    t.carveBox({ 0, 17, 5 }, { 2, 19, 9 });
-    t.carveBox({ 2, 12, 11 }, { 4, 13, 12 });
-    t.carveBox({ 2, 19, 11 }, { 4, 20, 12 });
-
-    // Nose cannon: stepped cone.
-    t.fillBox({ 38, 12, 4 }, { 41, 20, 12 }, cannon);
-    t.fillBox({ 41, 13, 5 }, { 44, 19, 11 }, cannon);
-    t.fillBox({ 44, 14, 6 }, { 46, 18, 10 }, cannon);
-    t.fillBox({ 46, 15, 7 }, { 48, 17, 9 }, cannon);
-
-    // Canopy (sensor): raked, with a frame step.
-    t.fillBox({ 22, 13, 12 }, { 33, 19, 13 }, sensor);
-    t.fillBox({ 23, 14, 13 }, { 31, 18, 14 }, sensor);
-    t.fillBox({ 25, 14, 14 }, { 29, 18, 15 }, sensor);
 
     t.finalize();
     return t;

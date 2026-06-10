@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     printPartStatus(wasp);
 
     // Walk 30mm cannon fire across the left wing until something gives.
-    const Int3 wingAim{ 20, 4, 8 };
+    const Int3 wingAim{ 40, 14, 10 };
     int shots = 0;
     while (!wasp.destroyed() && shots < 20) {
         ++shots;
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
 
     // Finish it with a missile into the hull.
     std::printf("\nMissile into the hull:\n");
-    const HitResult kill = wasp.applyHit({ 24, 16, 8 }, 400, DamageType::Explosive, combatRng);
+    const HitResult kill = wasp.applyHit({ 48, 32, 10 }, 400, DamageType::Explosive, combatRng);
     std::printf("  %d dmg -> %s%s\n", kill.damageApplied,
                 kill.partHit >= 0 ? wasp.tmpl().parts[static_cast<size_t>(kill.partHit)].name.c_str()
                                   : "miss",
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
     fly.throttle = 1.0f;
     for (int t = 0; t < 120; ++t) stepJet(jetBody, fly, glider, world);
     Rng locoRng(seed ^ 0x10C0ull);
-    glider.applyHit({ 4, 16, 8 }, 90, DamageType::Kinetic, locoRng); // engine out
+    glider.applyHit({ 8, 32, 10 }, 90, DamageType::Kinetic, locoRng); // engine out
     std::printf("Wasp engine destroyed at altitude %.1f, airspeed %.1f. Gliding:\n",
                 jetBody.position.y, jetBody.speed);
     for (int s = 1; s <= 4; ++s) {
