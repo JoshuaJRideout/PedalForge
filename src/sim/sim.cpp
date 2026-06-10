@@ -269,7 +269,8 @@ uint32_t Sim::buildPowerStation(uint8_t team, Vec3 position) {
 
     position.y = static_cast<float>(voxels.heightAt(static_cast<int>(std::floor(position.x)),
                                                     static_cast<int>(std::floor(position.z))));
-    const uint32_t id = spawnVehicle(TemplateId::PowerStation, team, position, 0.0f);
+    const uint32_t id = spawnVehicle(
+        factionTemplate(factionOfTeam(team), UnitClass::Power).id, team, position, 0.0f);
     sectors[{ sector.x, sector.z }] = team;
     stations[id] = { sector.x, sector.z };
     return id;
@@ -451,8 +452,17 @@ void Sim::step() {
     collectPickups();
 
     // Sector income (§2.2): owned sectors pay out once a second.
-    if (tickCount % kIncomeIntervalTicks == 0)
+    if (tickCount % kIncomeIntervalTicks == 0) {
         for (const auto& [sector, team] : sectors) energy[team & 3] += kSectorIncome;
+        // Choir bio-craft slowly knit themselves back together (§4.6).
+        for (VehicleEntity& e : vehicles) {
+            if (e.state.destroyed()) continue;
+            const int regen = factionStats(factionOfTeam(e.team)).regenPerSecond;
+            if (regen <= 0) continue;
+            const int part = e.state.lowestDamagedPart();
+            if (part >= 0) e.state.repairPart(part, regen);
+        }
+    }
 }
 
 uint64_t Sim::stateHash() const {

@@ -135,12 +135,55 @@ void cityPass(VoxelWorld& w, const ArenaParams& p) {
     const int cell = 26;
     for (int bz = 16; bz + 20 < size.z - 16; bz += cell) {
         for (int bx = 16; bx + 20 < size.x - 16; bx += cell) {
-            if ((hashCoords(p.seed ^ 0xB17Dull, bx / cell, 0, bz / cell) & 3) == 0)
-                continue; // empty lot
-            const int width = 8 + static_cast<int>(cityRng.range(9));
-            const int depth = 8 + static_cast<int>(cityRng.range(9));
-            const int floors = 2 + static_cast<int>(cityRng.range(4));
-            placeBuilding(w, cityRng, bx, bz, width, depth, floors);
+            const uint64_t lot = hashCoords(p.seed ^ 0xB17Dull, bx / cell, 0, bz / cell);
+            if ((lot & 3) == 0) continue; // empty lot (park: the tree pass fills it)
+            // Real-world block mix: slabs, setback towers, warehouses.
+            const int style = static_cast<int>((lot >> 2) % 10);
+            if (style < 5) { // residential slab
+                const int width = 8 + static_cast<int>(cityRng.range(9));
+                const int depth = 8 + static_cast<int>(cityRng.range(9));
+                const int floors = 2 + static_cast<int>(cityRng.range(4));
+                placeBuilding(w, cityRng, bx, bz, width, depth, floors);
+            } else if (style < 8) { // office tower with setback + antenna
+                const int width = 8 + static_cast<int>(cityRng.range(4));
+                const int depth = 8 + static_cast<int>(cityRng.range(4));
+                const int floors = 5 + static_cast<int>(cityRng.range(4));
+                placeBuilding(w, cityRng, bx, bz, width, depth, floors);
+                // Setback crown: a smaller block on top, then a mast.
+                const int ground = w.heightAt(bx + width / 2, bz + depth / 2);
+                const int crownBase = ground; // heightAt now includes the roof
+                const int cw = std::max(4, width - 4), cd = std::max(4, depth - 4);
+                for (int x = bx + 2; x < bx + 2 + cw; ++x)
+                    for (int z = bz + 2; z < bz + 2 + cd; ++z) {
+                        const bool wall = x == bx + 2 || x == bx + 1 + cw || z == bz + 2
+                                       || z == bz + 1 + cd;
+                        for (int y = crownBase; y < std::min(crownBase + 4, w.size().y - 3); ++y)
+                            if (wall || y == crownBase + 3)
+                                w.set({ x, y, z }, Material::Concrete);
+                    }
+                const int mastX = bx + width / 2, mastZ = bz + depth / 2;
+                for (int y = crownBase + 4; y < std::min(crownBase + 8, w.size().y - 1); ++y)
+                    w.set({ mastX, y, mastZ }, Material::Metal);
+            } else { // warehouse: wide, one tall hall, skylight strips
+                const int width = 14 + static_cast<int>(cityRng.range(5));
+                const int depth = 10 + static_cast<int>(cityRng.range(5));
+                const int ground = w.heightAt(bx + width / 2, bz + depth / 2);
+                const int top = std::min(ground + 6, w.size().y - 2);
+                for (int x = bx; x < bx + width; ++x)
+                    for (int z = bz; z < bz + depth; ++z) {
+                        const bool wall = x == bx || x == bx + width - 1 || z == bz
+                                       || z == bz + depth - 1;
+                        for (int y = ground; y < top; ++y)
+                            if (wall || y == top - 1) w.set({ x, y, z }, Material::Metal);
+                    }
+                for (int x = bx + 3; x < bx + width - 3; x += 4) // skylights
+                    for (int z = bz + 2; z < bz + depth - 2; ++z)
+                        w.set({ x, top - 1, z }, Material::Air);
+                // Big door.
+                for (int y = ground; y < ground + 4; ++y)
+                    for (int z = bz + depth / 2 - 2; z < bz + depth / 2 + 2; ++z)
+                        w.set({ bx, y, z }, Material::Air);
+            }
         }
     }
 }

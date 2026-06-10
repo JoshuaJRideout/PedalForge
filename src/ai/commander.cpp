@@ -61,9 +61,11 @@ void CommanderAi::think(Sim& sim, AiController& ai) {
         }
     }
 
-    // Production: keep the army topped up (§2.3 step 1).
-    if (sim.teamEnergy(team) >= kTankCost && armySize(sim) < kMaxArmy) {
-        sim.addEnergy(team, -kTankCost);
+    // Production: keep the army topped up (§2.3 step 1). Faction economics:
+    // Kessler pays more per (tougher) tank, Mirage swarms cheaply (§4.6).
+    const int tankCost = factionStats(factionOfTeam(team)).tankCost;
+    if (sim.teamEnergy(team) >= tankCost && armySize(sim) < kMaxArmy) {
+        sim.addEnergy(team, -tankCost);
         const float angle = 0.7853981f * static_cast<float>(spawnCounter++ % 8);
         const float radius = 12.0f;
         Vec3 pos{ hostPosition.x + std::cos(angle) * radius, 0.0f,

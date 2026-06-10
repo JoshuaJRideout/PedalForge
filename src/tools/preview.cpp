@@ -103,9 +103,9 @@ int main(int argc, char** argv) {
 
     // Faction lineups: fighter / tank / mech per culture.
     const char* factionNames[] = { "vanguard", "kessler", "mirage", "choir" };
-    const char* className[] = { "fighter", "tank", "mech", "pilot" };
+    const char* className[] = { "fighter", "tank", "mech", "pilot", "power", "host" };
     for (int f = 0; f < 4; ++f)
-        for (int c = 0; c < 4; ++c) {
+        for (int c = 0; c < 6; ++c) {
             const VehicleTemplate& ft =
                 factionTemplate(static_cast<Faction>(f), static_cast<UnitClass>(c));
             Vehicle unit(ft);
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
                                    + className[c] + ".png";
             writePng(path, renderVehicle(ft, unit, 480, 360));
         }
-    std::printf("wrote 16 faction renders\n");
+    std::printf("wrote 24 faction renders\n");
 
     renderBiome(Biome::ShatteredCity, "city", seed, outDir);
     renderBiome(Biome::Canyons, "canyons", seed, outDir);
