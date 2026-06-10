@@ -379,9 +379,12 @@ landmarks and shoutcaster vocabulary ("they're fighting at the freighter").
 
 ## 11. Technology choices
 
-### 11.1 Engine: custom-lean C++20 core + library stack (recommended)
+### 11.1 Engine: custom-lean C++20 core + library stack (decided)
 Rationale: the two technically defining systems — dual-resolution destructible voxels and
 deterministic-ish replication — are exactly the things general engines fight you on.
+General engines (Godot/Unity/Unreal) were considered and **rejected**: both core systems
+would live in native extensions anyway, the stock renderers fight per-frame voxel re-meshing,
+and engine abstraction overhead would constrain us exactly where the game is most demanding.
 
 - **Language/build**: C++20, CMake ≥ 3.22, vcpkg or FetchContent for deps (mirrors the team's existing PedalForge toolchain and skills).
 - **Rendering**: `bgfx` (or `wgpu-native`) → Vulkan/Metal/DX — one codepath, three OSes.
@@ -397,10 +400,9 @@ deterministic-ish replication — are exactly the things general engines fight y
 - **Serialization/replay**: every match is seed + event log → replays are nearly free and
   are also the desync-debugging tool.
 
-**Considered alternative**: Godot 4 + GDExtension C++ modules for voxel/netcode.
-Viable and faster to first-playable; rejected as primary because both core systems would
-live in extensions anyway, and the renderer’s instanced-voxel path would need replacing.
-Decision can be revisited at the M0 prototype gate if custom-stack velocity disappoints.
+To keep custom-stack velocity high in the early milestones: M0 uses Dear ImGui for *all*
+UI (no custom UI work until M1), debug-draw rendering is acceptable until the loop is fun,
+and the chunk mesher + vehicle damage re-mesher are the only renderer features M0 needs.
 
 ### 11.2 Cross-platform & Steam
 - CI builds all three OSes from day one (GitHub Actions: windows-latest, macos-14 arm64+x64
