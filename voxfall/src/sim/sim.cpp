@@ -169,6 +169,52 @@ std::optional<HitscanResult> Sim::fire(uint32_t shooter, Vec3 dir, const WeaponS
     return result; // flew off into the distance
 }
 
+uint32_t Sim::eject(uint32_t vehicleId) {
+    VehicleEntity* v = find(vehicleId);
+    if (!v || !v->hasPilot || v->state.destroyed()) return 0;
+    if (v->tmpl->id == TemplateId::Pilot) return 0; // can't eject from yourself
+
+    // Step out beside the left flank, snapped to the ground.
+    const float side = static_cast<float>(v->tmpl->dims.y) * kSubvoxelSize * 0.5f + 1.0f;
+    const float c = std::cos(v->body.yaw), s = std::sin(v->body.yaw);
+    Vec3 pos{ v->body.position.x - s * side, 0.0f, v->body.position.z + c * side };
+    pos.y = static_cast<float>(voxels.heightAt(static_cast<int>(std::floor(pos.x)),
+                                               static_cast<int>(std::floor(pos.z))));
+
+    v->hasPilot = false;
+    v->input = {};
+    const uint32_t pilotId = spawnVehicle(TemplateId::Pilot, v->team, pos, v->body.yaw);
+    return pilotId; // note: spawn may invalidate v
+}
+
+bool Sim::board(uint32_t pilotId, uint32_t vehicleId) {
+    VehicleEntity* pilot = find(pilotId);
+    VehicleEntity* target = find(vehicleId);
+    if (!pilot || !target || pilot->tmpl->id != TemplateId::Pilot) return false;
+    if (pilot->state.destroyed() || target->state.destroyed()) return false;
+    if (target->hasPilot) return false;
+    if (target->tmpl->id == TemplateId::Pilot) return false;
+    if (distance(pilot->body.position, target->body.position) > kBoardRange) return false;
+    // A shot-out cockpit means there is nowhere to sit until it's repaired (§4.7).
+    bool hasCockpit = false, cockpitAlive = false;
+    for (size_t i = 0; i < target->tmpl->parts.size(); ++i) {
+        if (target->tmpl->parts[i].type != PartType::Cockpit) continue;
+        hasCockpit = true;
+        cockpitAlive |= target->state.partAlive(static_cast<int>(i));
+    }
+    if (hasCockpit && !cockpitAlive) return false;
+
+    target->hasPilot = true;
+    target->input = {};
+    for (size_t i = 0; i < vehicles.size(); ++i) {
+        if (vehicles[i].id == pilotId) {
+            vehicles.erase(vehicles.begin() + static_cast<long>(i));
+            break;
+        }
+    }
+    return true;
+}
+
 void Sim::applyBlast(const BlastEvent& e) {
     voxels.applyBlast(e);
     SimEvent ev;
@@ -228,12 +274,13 @@ void Sim::step() {
     ++tickCount;
     for (VehicleEntity& e : vehicles) {
         if (e.state.destroyed()) continue;
+        const ControlInput in = e.hasPilot ? e.input : ControlInput{};
         switch (e.tmpl->locomotion) {
             case LocomotionClass::Tracked:
-                stepTracked(e.body, e.input, e.state, voxels);
+                stepTracked(e.body, in, e.state, voxels);
                 break;
             case LocomotionClass::Jet: {
-                const StepResult r = stepJet(e.body, e.input, e.state, voxels);
+                const StepResult r = stepJet(e.body, in, e.state, voxels);
                 if (r.collided) {
                     // Terrain crash: heavy core damage per tick in the dirt.
                     const HitResult hit = e.state.applyHit(
@@ -244,10 +291,10 @@ void Sim::step() {
                 break;
             }
             case LocomotionClass::Walker:
-                stepWalker(e.body, e.input, e.state, voxels);
+                stepWalker(e.body, in, e.state, voxels);
                 break;
             case LocomotionClass::Pilot:
-                stepPilot(e.body, e.input, e.state, voxels);
+                stepPilot(e.body, in, e.state, voxels);
                 break;
         }
     }
@@ -268,6 +315,7 @@ uint64_t Sim::stateHash() const {
         h = fnvF(h, e.body.yaw);
         h = fnvF(h, e.body.speed);
         h = fnv(h, e.body.grounded ? 1 : 0);
+        h = fnv(h, e.hasPilot ? 1 : 0);
         h = fnv(h, static_cast<uint64_t>(e.ammo));
         h = fnv(h, e.state.destroyed() ? 1 : 0);
         for (size_t i = 0; i < e.tmpl->parts.size(); ++i) {

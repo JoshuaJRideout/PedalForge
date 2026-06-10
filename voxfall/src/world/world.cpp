@@ -1,6 +1,8 @@
 #include "world/world.h"
 #include <algorithm>
 #include <cmath>
+#include <queue>
+#include <unordered_set>
 #include "core/noise.h"
 #include "core/rng.h"
 
@@ -126,7 +128,63 @@ BlastResult VoxelWorld::applyBlast(const BlastEvent& e) {
             }
         }
     }
+    collapseOrphans(result.destroyed, result);
     return result;
+}
+
+namespace {
+bool isStructural(Material m) { return m == Material::Concrete || m == Material::Metal; }
+} // namespace
+
+void VoxelWorld::collapseOrphans(const std::vector<Int3>& removed, BlastResult& result) {
+    if (removed.empty()) return;
+
+    // Search bound: clusters larger than this are treated as supported (cost
+    // cap; a whole intact skyscraper never collapses from one shell anyway).
+    constexpr size_t kMaxCluster = 8192;
+    const Int3 steps[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 },
+                            { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+
+    std::unordered_set<uint64_t> visited;
+    for (const Int3& gone : removed) {
+        for (const Int3& s : steps) {
+            const Int3 start = gone + s;
+            if (!inBounds(start) || !isStructural(at(start))) continue;
+            if (visited.count(static_cast<uint64_t>(index(start)))) continue;
+
+            // Flood the structural cluster; supported if any voxel touches a
+            // non-structural solid (terrain) or the world floor.
+            std::vector<Int3> cluster;
+            std::queue<Int3> frontier;
+            frontier.push(start);
+            visited.insert(static_cast<uint64_t>(index(start)));
+            bool supported = false;
+            while (!frontier.empty() && cluster.size() <= kMaxCluster) {
+                const Int3 p = frontier.front();
+                frontier.pop();
+                cluster.push_back(p);
+                if (p.y == 0) supported = true;
+                for (const Int3& d : steps) {
+                    const Int3 n = p + d;
+                    if (!inBounds(n)) continue;
+                    const Material m = at(n);
+                    if (isStructural(m)) {
+                        const uint64_t key = static_cast<uint64_t>(index(n));
+                        if (visited.insert(key).second) frontier.push(n);
+                    } else if (materialInfo(m).solid) {
+                        supported = true; // resting on/against terrain
+                    }
+                }
+            }
+            if (supported || cluster.size() > kMaxCluster) continue;
+
+            for (const Int3& p : cluster) {
+                voxels[index(p)] = p.y < seaLevelY ? Material::Water : Material::Air;
+                damage.erase(static_cast<uint64_t>(index(p)));
+                result.collapsed.push_back(p);
+            }
+        }
+    }
 }
 
 uint64_t VoxelWorld::contentHash() const {

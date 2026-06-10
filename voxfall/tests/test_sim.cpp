@@ -101,6 +101,65 @@ TEST(sim_is_deterministic) {
     CHECK(run() == run()); // identical commands -> identical state
 }
 
+TEST(sim_eject_and_board) {
+    Sim sim(flatWorld(), 7);
+    const uint32_t tank = sim.spawnVehicle(TemplateId::Brick, 0, { 30.0f, 10.0f, 48.0f }, 0.0f);
+
+    // Eject: pilot appears beside the tank; the tank goes inert.
+    const uint32_t pilot = sim.eject(tank);
+    CHECK(pilot != 0);
+    CHECK(!sim.find(tank)->hasPilot);
+    CHECK(sim.find(pilot)->tmpl->id == TemplateId::Pilot);
+    CHECK(distance(sim.find(pilot)->body.position, sim.find(tank)->body.position)
+          < Sim::kBoardRange);
+
+    ControlInput in;
+    in.throttle = 1.0f;
+    sim.setInput(tank, in);
+    const float tankX = sim.find(tank)->body.position.x;
+    for (int t = 0; t < 60; ++t) sim.step();
+    CHECK(sim.find(tank)->body.position.x == tankX); // no pilot, no movement
+
+    // Can't eject from a pilot, can't double-eject an empty vehicle.
+    CHECK(sim.eject(pilot) == 0);
+    CHECK(sim.eject(tank) == 0);
+
+    // Board it again and drive off.
+    CHECK(sim.board(pilot, tank));
+    CHECK(sim.find(pilot) == nullptr); // pilot entity consumed
+    CHECK(sim.find(tank)->hasPilot);
+    sim.setInput(tank, in);
+    for (int t = 0; t < 60; ++t) sim.step();
+    CHECK(sim.find(tank)->body.position.x > tankX);
+}
+
+TEST(sim_boarding_rules) {
+    Sim sim(flatWorld(), 8);
+    const uint32_t mech = sim.spawnVehicle(TemplateId::Talon, 0, { 30.0f, 10.0f, 48.0f }, 0.0f);
+    const uint32_t enemyTank = sim.spawnVehicle(TemplateId::Brick, 1, { 33.0f, 10.0f, 48.0f }, 0.0f);
+
+    const uint32_t pilot = sim.eject(mech);
+    CHECK(pilot != 0);
+
+    // Occupied vehicles can't be boarded — even enemy ones.
+    CHECK(!sim.board(pilot, enemyTank));
+    // The enemy bails out; now their tank is free real estate (stealing, §7.1).
+    const uint32_t enemyPilot = sim.eject(enemyTank);
+    CHECK(enemyPilot != 0);
+    CHECK(sim.board(pilot, enemyTank));
+    CHECK(sim.find(enemyTank)->team == 1); // captured hull keeps its paint (for now)
+
+    // A mech with a destroyed cockpit can't be re-boarded until repaired (§4.7).
+    Rng rng(1);
+    VehicleEntity* m = sim.find(mech);
+    int cockpit = -1;
+    for (size_t i = 0; i < m->tmpl->parts.size(); ++i)
+        if (m->tmpl->parts[i].name == "cockpit") cockpit = static_cast<int>(i);
+    m->state.applyHit({ 10, 5, 25 }, 50, DamageType::Kinetic, rng);
+    CHECK(!m->state.partAlive(cockpit));
+    CHECK(!sim.board(enemyPilot, mech));
+}
+
 TEST(sim_repair_kit_heals_lowest_part) {
     Sim sim(flatWorld(), 5);
     const uint32_t id = sim.spawnVehicle(TemplateId::Brick, 0, { 30.0f, 10.0f, 48.0f }, 0.0f);

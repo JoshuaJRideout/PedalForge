@@ -1,0 +1,2 @@
+/usr/bin/ar qc libvoxfall_core.a CMakeFiles/voxfall_core.dir/src/world/world.cpp.o CMakeFiles/voxfall_core.dir/src/world/mapfile.cpp.o CMakeFiles/voxfall_core.dir/src/vehicle/vehicle.cpp.o CMakeFiles/voxfall_core.dir/src/vehicle/templates.cpp.o CMakeFiles/voxfall_core.dir/src/vehicle/locomotion.cpp.o CMakeFiles/voxfall_core.dir/src/sim/sim.cpp.o CMakeFiles/voxfall_core.dir/src/net/net.cpp.o
+/usr/bin/ranlib libvoxfall_core.a

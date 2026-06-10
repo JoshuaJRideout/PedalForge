@@ -57,6 +57,8 @@ public:
     // Build an Input message for the server (works once joined).
     std::vector<uint8_t> makeInput(const ControlInput& input, bool fire = false,
                                    Vec3 fireDir = { 1.0f, 0.0f, 0.0f }) const;
+    // Eject from / board a vehicle; server answers with ControlAssign on success.
+    std::vector<uint8_t> makeAction(ActionKind action, uint32_t target = 0) const;
 
     bool joined() const { return replicaWorld.has_value(); }
     uint32_t myEntity() const { return myEntityId; }

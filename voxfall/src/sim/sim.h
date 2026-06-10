@@ -33,6 +33,10 @@ struct VehicleEntity {
     ControlInput input;
     int ammo = 200;
 
+    // Possession (§4.7): unified pilot model. Vehicles spawn piloted (strategy
+    // modes flavor this as remote-link); eject leaves them inert until boarded.
+    bool hasPilot = true;
+
     VehicleEntity(uint32_t entityId, uint8_t entityTeam, const VehicleTemplate& t)
         : id(entityId), team(entityTeam), tmpl(&t), state(t) {}
 };
@@ -92,6 +96,15 @@ public:
 
     // Server-authoritative terrain event (also what clients apply on receipt).
     void applyBlast(const BlastEvent& e);
+
+    // Eject the pilot from a vehicle (§4.7): spawns an on-foot pilot beside it
+    // and leaves the vehicle inert. Returns the pilot's entity id (0 = failed).
+    uint32_t eject(uint32_t vehicleId);
+    // Board a pilotless vehicle within reach (intact cockpit or none required).
+    // The pilot entity is consumed. Boarding ignores teams: stealing is a
+    // feature (§7.1 Scrap Pilots). Invalidates entity pointers.
+    bool board(uint32_t pilotId, uint32_t vehicleId);
+    static constexpr float kBoardRange = 4.0f;
 
     // Advance one fixed tick: locomotion, pickup magnetism, despawns.
     void step();

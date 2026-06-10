@@ -49,19 +49,41 @@ void Server::receive(uint32_t peerId, const std::vector<uint8_t>& msg) {
     if (!peer) return;
     ByteReader r(msg);
     const MsgType type = static_cast<MsgType>(r.u8());
-    if (type != MsgType::Input) return;
 
-    ControlInput input;
-    input.throttle = r.f32();
-    input.steer = r.f32();
-    input.pitch = r.f32();
-    input.jump = r.u8() != 0;
-    const bool fire = r.u8() != 0;
-    const Vec3 fireDir = readVec3(r);
-    if (!r.ok) return; // malformed input is dropped, never trusted
+    if (type == MsgType::Input) {
+        ControlInput input;
+        input.throttle = r.f32();
+        input.steer = r.f32();
+        input.pitch = r.f32();
+        input.jump = r.u8() != 0;
+        const bool fire = r.u8() != 0;
+        const Vec3 fireDir = readVec3(r);
+        if (!r.ok) return; // malformed input is dropped, never trusted
 
-    simulation.setInput(peer->entityId, input);
-    if (fire) simulation.fire(peer->entityId, fireDir);
+        simulation.setInput(peer->entityId, input);
+        if (fire) simulation.fire(peer->entityId, fireDir);
+        return;
+    }
+
+    if (type == MsgType::Action) {
+        const ActionKind action = static_cast<ActionKind>(r.u8());
+        const uint32_t target = r.u32();
+        if (!r.ok) return;
+
+        uint32_t newEntity = 0;
+        if (action == ActionKind::Eject) {
+            newEntity = simulation.eject(peer->entityId);
+        } else if (action == ActionKind::Board) {
+            if (simulation.board(peer->entityId, target)) newEntity = target;
+        }
+        if (newEntity != 0) {
+            peer->entityId = newEntity;
+            ByteWriter w;
+            w.u8(static_cast<uint8_t>(MsgType::ControlAssign));
+            w.u32(newEntity);
+            peer->outbox.push_back(std::move(w.data));
+        }
+    }
 }
 
 void Server::tick() {
@@ -136,10 +158,20 @@ std::vector<uint8_t> Client::makeInput(const ControlInput& input, bool fire, Vec
     return std::move(w.data);
 }
 
+std::vector<uint8_t> Client::makeAction(ActionKind action, uint32_t target) const {
+    ByteWriter w;
+    w.u8(static_cast<uint8_t>(MsgType::Action));
+    w.u8(static_cast<uint8_t>(action));
+    w.u32(target);
+    return std::move(w.data);
+}
+
 void Client::applySnapshot(ByteReader& r) {
     const uint32_t count = r.u32();
+    std::vector<uint32_t> seen;
     for (uint32_t i = 0; i < count && r.ok; ++i) {
         const uint32_t id = r.u32();
+        seen.push_back(id);
         const TemplateId tmplId = static_cast<TemplateId>(r.u8());
         const uint8_t team = r.u8();
         const bool dead = r.u8() != 0;
@@ -159,6 +191,7 @@ void Client::applySnapshot(ByteReader& r) {
         e->body.pitchAngle = r.f32();
         e->body.speed = r.f32();
         e->body.grounded = r.u8() != 0;
+        e->hasPilot = r.u8() != 0;
         e->ammo = r.i32();
         const uint8_t partCount = r.u8();
         for (uint8_t part = 0; part < partCount && r.ok; ++part) {
@@ -169,6 +202,12 @@ void Client::applySnapshot(ByteReader& r) {
         }
         (void)dead; // core-part replication implies it; kept on the wire for robustness
     }
+    if (!r.ok) return;
+    // Snapshots are full lists: anything we know that the server didn't send
+    // no longer exists (e.g. a pilot consumed by boarding).
+    std::erase_if(replicaEntities, [&](const VehicleEntity& e) {
+        return std::find(seen.begin(), seen.end(), e.id) == seen.end();
+    });
 }
 
 void Client::receive(const std::vector<uint8_t>& msg) {
@@ -211,6 +250,11 @@ void Client::receive(const std::vector<uint8_t>& msg) {
                 p.despawnTick = r.u64();
                 replicaPickups.push_back(p);
             }
+            break;
+        }
+        case MsgType::ControlAssign: {
+            const uint32_t id = r.u32();
+            if (r.ok) myEntityId = id;
             break;
         }
         case MsgType::Audit: {

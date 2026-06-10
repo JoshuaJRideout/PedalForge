@@ -32,6 +32,7 @@ struct BlastEvent {
 
 struct BlastResult {
     std::vector<Int3> destroyed; // voxels removed this blast (for VFX/debris/mesh updates)
+    std::vector<Int3> collapsed; // structural voxels that lost support and fell (§5.3)
 };
 
 // Fixed-size voxel world, 1 voxel = 1 m (DESIGN.md §3.1).
@@ -70,6 +71,10 @@ public:
     uint64_t chunkHash(Int3 chunkCoord) const;
 
 private:
+    // Structural integrity (§5.3): after voxels are removed, concrete/metal
+    // clusters that no longer touch terrain collapse. Deterministic, bounded.
+    void collapseOrphans(const std::vector<Int3>& removed, BlastResult& result);
+
     size_t index(Int3 p) const {
         return static_cast<size_t>(p.y) * static_cast<size_t>(dims.x) * static_cast<size_t>(dims.z)
              + static_cast<size_t>(p.z) * static_cast<size_t>(dims.x)
