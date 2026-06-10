@@ -1,6 +1,0 @@
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/voxfall_core.dir
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/voxfall_sim.dir
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/voxfall_tests.dir
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/test.dir
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/edit_cache.dir
-/home/user/PedalForge/voxfall/build-asan/CMakeFiles/rebuild_cache.dir
