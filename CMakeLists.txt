@@ -20,6 +20,7 @@ add_library(voxfall_core
     src/sim/sim.cpp
     src/net/net.cpp
     src/net/replay.cpp
+    src/net/udp.cpp
     src/render/mesh.cpp
     src/ai/orders.cpp
     src/ai/commander.cpp
@@ -34,6 +35,13 @@ target_link_libraries(voxfall_sim PRIVATE voxfall_core)
 
 add_executable(voxfall_preview src/tools/preview.cpp)
 target_link_libraries(voxfall_preview PRIVATE voxfall_core)
+
+add_executable(voxfall_server src/tools/server_main.cpp)
+target_link_libraries(voxfall_server PRIVATE voxfall_core)
+
+if(WIN32)
+    target_link_libraries(voxfall_core PUBLIC ws2_32)
+endif()
 
 enable_testing()
 add_executable(voxfall_tests
@@ -50,6 +58,7 @@ add_executable(voxfall_tests
     tests/test_gen.cpp
     tests/test_match.cpp
     tests/test_replay.cpp
+    tests/test_udp.cpp
 )
 target_link_libraries(voxfall_tests PRIVATE voxfall_core)
 add_test(NAME voxfall_unit COMMAND voxfall_tests)
